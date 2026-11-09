@@ -14,6 +14,6 @@
     "web:sync": "node web/sync.mjs",
     "web:deploy": "node web/sync.mjs && cd web && npx --yes wrangler@4.158.0 deploy"
   },
-  "repository": { "type": "git", "url": "https://github.com/dengyie/OneVideo.git" },
+  "repository": { "type": "git", "url": "https://github.com/dengyie/one-video.git" },
   "keywords": ["video", "remotion", "tts", "claude-code", "skill", "data-visualization"]
 }
