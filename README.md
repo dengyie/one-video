@@ -1,6 +1,22 @@
+<div align="center">
+
 # OneVideo
 
-用 Claude Code 生产带旁白视频（数据解说、纪录片、竖屏短视频）的流水线和 Skill。整个过程分阶段推进，每一步都有门控。
+**Staged, Gated AI Video Production Pipeline & Remotion Motion Graphics Engine**
+
+[![License](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE)
+[![Node Version](https://img.shields.io/badge/Node-20%2B-339933.svg?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Remotion](https://img.shields.io/badge/Engine-Remotion-0B84FF.svg?style=flat-square)](https://www.remotion.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg?style=flat-square)]()
+
+[English](./README.md) • [Workflow](#特性) • [Installation](#安装) • [Skill Usage](#在-claude-code--zcode-里当-skill-用)
+
+</div>
+
+---
+
+用 Claude Code / ZCode 生产带旁白视频（数据解说、纪录片、竖屏短视频）的工业级全自动流水线和 Skill。整个过程分阶段推进，每一步都有严格的机械门控（Mechanical Gates）。
 
 ```
 research → proposal → script → storyboard → assets → voice → compose → render → review → publish
