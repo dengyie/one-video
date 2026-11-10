@@ -2,7 +2,7 @@
 
 字幕显示 `text`，TTS 念 `speak`。默认 `speak = speakable(text, lexicon)`；需要时可以逐行覆盖。
 
-## 自动规则（`cli/lib/text.mjs`）
+## 自动规则（`cli/lib/core/text.mjs`）
 
 | 写法 | 读作 |
 |---|---|

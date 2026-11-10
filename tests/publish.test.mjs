@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { srtTime, chapterTime, toSrt, toVtt, chapterList, creditsText, buildPublishKit } from "../cli/lib/publish.mjs";
-import { compileTimeline } from "../cli/lib/timeline.mjs";
+import { chapterTime, chapterList, creditsText, buildPublishKit } from "../cli/lib/publish/kit.mjs";
+import { srtTime, toSrt, toVtt } from "../cli/lib/captions/index.mjs";
+import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { example } from "./helpers.mjs";
 
 test("srtTime / chapterTime formatting", () => {

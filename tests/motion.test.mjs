@@ -4,10 +4,11 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
-import { AUTO_SHOTS, MOTION_SFX, bestOffset, captionBand, compileShots, compileTimeline, hardCuts, motionCues, rampShots, resolveWhen, sfxVariants } from "../cli/lib/timeline.mjs";
-import { beatsFile, detectBeats, everyFourth, gridBeats, snapToBar, snapToBeat } from "../cli/lib/beats.mjs";
-import { rhythmGate, schemaGate } from "../cli/lib/gates.mjs";
-import { coverPoint, dodgeX, hexLuminance, nearCentroid, rampTime, scrimFor, subjectFocus } from "../cli/lib/subject.mjs";
+import { AUTO_SHOTS, MOTION_SFX, bestOffset, compileShots, compileTimeline, hardCuts, motionCues, rampShots, resolveWhen, sfxVariants } from "../cli/lib/timeline/index.mjs";
+import { captionBand } from "../cli/lib/captions/index.mjs";
+import { beatsFile, detectBeats, everyFourth, gridBeats, snapToBar, snapToBeat } from "../cli/lib/audio/beats.mjs";
+import { rhythmGate, schemaGate } from "../cli/lib/review/gates.mjs";
+import { coverPoint, dodgeX, hexLuminance, nearCentroid, rampTime, scrimFor, subjectFocus } from "../cli/lib/vision/subject.mjs";
 import { example } from "./helpers.mjs";
 
 const lines = [{ start: 0, end: 1.8 }, { start: 2, end: 3.9 }, { start: 4.1, end: 6 }];
@@ -258,7 +259,7 @@ test("rhythm: long stills and transition runs warn; a covered word leaves when t
 });
 
 test("depthStep: dense only for clips with a title cut out behind the subject", async () => {
-  const { depthStep } = await import("../cli/lib/assets.mjs");
+  const { depthStep } = await import("../cli/lib/assets/index.mjs");
   const sb = { scenes: [
     { type: "footage", props: { asset: "a", title: { text: "X", behind: true } } },
     { type: "footage", props: { asset: "b", title: { text: "Y" } } },

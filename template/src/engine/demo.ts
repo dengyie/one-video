@@ -98,7 +98,7 @@ export const DEMO_TIMELINE: Timeline = {
   sfx: [],
   chapters: [],
   assets: {},
-  // Inlined like the compiler does (cli/lib/icons.mjs), so the bundle never ships the icon set.
+  // Inlined like the compiler does (cli/lib/library/icons.mjs), so the bundle never ships the icon set.
   icons: {
     "user-round": { viewBox: "0 0 24 24", body: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></g>' },
   },

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, timingsGate, normalizeLicense, summarize, questionGate, echoGate } from "../cli/lib/gates.mjs";
-import { compileTimeline } from "../cli/lib/timeline.mjs";
+import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, timingsGate, normalizeLicense, summarize, questionGate, echoGate } from "../cli/lib/review/gates.mjs";
+import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { example } from "./helpers.mjs";
 
 const msgs = (issues, gate) => issues.filter((i) => !gate || i.gate === gate).map((i) => i.msg);

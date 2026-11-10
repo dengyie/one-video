@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { productsHash, stageStatus } from "../cli/lib/state.mjs";
+import { productsHash, stageStatus } from "../cli/lib/core/state.mjs";
 
 test("productsHash: missing or empty (dotfiles only) products are not done", () => {
   const root = mkdtempSync(join(tmpdir(), "ov-state-"));

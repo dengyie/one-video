@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { deflateSync } from "node:zlib";
-import { decodeGrayPng, runs, analyzeFrames, QC_DEFAULTS } from "../cli/lib/qc.mjs";
+import { decodeGrayPng, runs, analyzeFrames, QC_DEFAULTS } from "../cli/lib/vision/qc.mjs";
 
 function crcTable() {
   return Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });

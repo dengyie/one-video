@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // OneVideo CLI — a staged, gated pipeline for narrated data/documentary videos on Remotion.
-import { parseArgs } from "./lib/args.mjs";
-import { UserError } from "./lib/project.mjs";
+import { parseArgs } from "./lib/core/args.mjs";
+import { UserError } from "./lib/core/project.mjs";
 import * as plan from "./commands/plan.mjs";
 import * as media from "./commands/media.mjs";
 import * as render from "./commands/render.mjs";

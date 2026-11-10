@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { adoptLegacy, frameRange, readRenders, recordRender, resolveVideo, versionFile } from "../cli/lib/renders.mjs";
+import { adoptLegacy, frameRange, readRenders, recordRender, resolveVideo, versionFile } from "../cli/lib/publish/renders.mjs";
 
 const TL = { fps: 30, duration: 10, scenes: [{ id: "a", from: 0, durationInFrames: 90 }, { id: "b", from: 90, durationInFrames: 120 }, { id: "c", from: 210, durationInFrames: 90 }] };
 

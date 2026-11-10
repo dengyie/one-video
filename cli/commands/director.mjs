@@ -3,12 +3,13 @@
 // against the timeline.
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import { UserError, loadProject, readJson, writeJson, log, warn } from "../lib/project.mjs";
-import { ask, imagePart, llmConfig } from "../lib/llm.mjs";
-import { cellTime, sceneAt, sheetPlan, writeSheets } from "../lib/sheet.mjs";
-import { resolveVideo } from "../lib/renders.mjs";
+import { UserError, loadProject, readJson, writeJson, log, warn } from "../lib/core/project.mjs";
+import { ask, imagePart, llmConfig } from "../lib/llm/client.mjs";
+import { lookPrompt, sceneLine } from "../lib/prompts/index.mjs";
+import { cellTime, sceneAt, sheetPlan, writeSheets } from "../lib/vision/sheet.mjs";
+import { resolveVideo } from "../lib/publish/renders.mjs";
 import { videoPath } from "./render.mjs";
-import { buildHandoff, handoffPath, handoffRel } from "../lib/handoff.mjs";
+import { buildHandoff, handoffPath, handoffRel } from "../lib/publish/handoff.mjs";
 
 export { sceneAt, sheetPlan, writeSheets };
 
@@ -43,19 +44,6 @@ export async function sheet(args) {
   }
 }
 
-// One sheet per call: relays cap a reply's tokens (reasoning included), so a whole-video review
-// in one answer comes back cut off.
-const LOOK_PROMPT = (s, scenes, focus) => `You are reviewing a rendered narrated video as a film editor. The image is a contact sheet: each cell is one frame, read row by row, left to right, cell 0 first. ${s.cells} cells; cell i shows t = ${s.t0 + s.step / 2}s + i×${s.step}s.
-
-Timeline around this stretch (scene id, type, start–end seconds, narration lines with their times):
-${scenes}
-
-Judge what a viewer sees: stretches where nothing new happens on screen (more than ~4 s), text that is hard to read or collides with other text or covers the subject, awkward composition or cropping, a visual that does not match its narration line, jarring or repetitive transitions, blank/black/broken frames, inconsistent look between scenes. Ignore things that are fine. ${focus ? `Pay extra attention to: ${focus}.` : ""}
-Keep it short: at most 5 notes, the most important first, each issue and fix under 40 characters.
-Reply only JSON: {"score": <1-10 for this stretch>, "summary": "<one sentence, Chinese>", "notes": [{"cell": <i>, "severity": "high|medium|low", "issue": "<Chinese>", "fix": "<concrete change, Chinese>"}]}`;
-
-const sceneLine = (s) => `- ${s.id} (${s.type}) ${s.start.toFixed(1)}–${(s.start + s.duration).toFixed(1)}s: ${(s.lines ?? []).map((l) => `[${(s.start + l.start).toFixed(1)}s] ${l.text}`).join(" ")}`;
-
 export async function look(args) {
   const project = loadProject();
   const { file: video, offset } = target(project, args.video);
@@ -71,7 +59,7 @@ export async function look(args) {
     const end = s.t0 + s.cells * s.step;
     const scenes = (tl?.scenes ?? []).filter((sc) => sc.start < end && sc.start + sc.duration > s.t0).map(sceneLine).join("\n") || "(no timeline)";
     try {
-      const { data, model } = await ask({ prompt: LOOK_PROMPT(s, scenes, args.focus), images: [imagePart(s.file)], json: true, maxTokens: 4000, config });
+      const { data, model } = await ask({ prompt: lookPrompt({ sheet: s, scenes, focus: args.focus }), images: [imagePart(s.file)], json: true, maxTokens: 4000, config });
       reviews.push({ sheet: relative(project.root, s.file), model, score: Number(data.score) || null, summary: String(data.summary ?? ""), truncated: !!data.truncated });
       for (const n of Array.isArray(data.notes) ? data.notes : []) {
         const t = cellTime(s, Math.max(0, Math.min(s.cells - 1, Number(n.cell) || 0)));

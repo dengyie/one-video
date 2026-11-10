@@ -66,4 +66,5 @@ onevideo qc | publish [--stems] [--formats 9:16,1:1] | build [--draft] | doctor 
 - 场景与动效：`references/motion-rules.md`（先读）· `references/scene-catalog.md`
 - 数据与授权：`references/data-integrity.md` · `references/licensing.md`
 - 质检：`references/qc-thresholds.md`
+- 代码架构（改 CLI 前先读）：`references/architecture.md`
 - 示例：`examples/spacex-motion/`（动效引擎示范，36s）· `examples/spacex-ipo/`（数据图表版，85s）· `examples/promo-demo/`（promo 流水线：capture 截图 + device 场景，20s）；`onevideo init demo --example spacex-motion`

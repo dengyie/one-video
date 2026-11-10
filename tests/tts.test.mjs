@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { alignLines, sceneSpeech, timingHashes, ttsConfig } from "../cli/lib/tts.mjs";
+import { alignLines, sceneSpeech, timingHashes, ttsConfig } from "../cli/lib/voice/tts.mjs";
 
 test("alignLines snaps line boundaries to the pauses nearest their syllable share", () => {
   // Three equal lines over 9 s; pauses near 3 s and 6 s, plus a distracting short one at 4.5 s.

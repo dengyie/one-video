@@ -5,8 +5,8 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, cpSync } f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ROOT } from "./helpers.mjs";
-import { compileTimeline } from "../cli/lib/timeline.mjs";
-import { resolveApiKey, viaApiBase, requireApiKey } from "../cli/lib/http.mjs";
+import { compileTimeline } from "../cli/lib/timeline/index.mjs";
+import { resolveApiKey, viaApiBase, requireApiKey } from "../cli/lib/core/http.mjs";
 
 const CLI = join(ROOT, "cli", "onevideo.mjs");
 const ov = (cwd, ...args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: "utf8", env: { ...process.env, HOME: cwd } });

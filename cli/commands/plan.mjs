@@ -1,9 +1,9 @@
 // init / status / validate / approve
 import { cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve, basename } from "node:path";
-import { ONEVIDEO_ROOT, CONFIG_FILE, UserError, loadProject, pipelineDef, styleDef, writeJson, readJson, log } from "../lib/project.mjs";
-import { stageStatus, approveStage } from "../lib/state.mjs";
-import { checkProject, printIssues } from "../lib/check.mjs";
+import { ONEVIDEO_ROOT, CONFIG_FILE, UserError, loadProject, pipelineDef, styleDef, writeJson, readJson, log } from "../lib/core/project.mjs";
+import { stageStatus, approveStage } from "../lib/core/state.mjs";
+import { checkProject, printIssues } from "../lib/review/check.mjs";
 
 export async function init(args) {
   const dir = resolve(args._[0] ?? ".");

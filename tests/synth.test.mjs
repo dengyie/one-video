@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { synthMusic, synthSfx, SFX, MUSIC_PRESETS, SR } from "../cli/lib/synth.mjs";
+import { synthMusic, synthSfx, SFX, MUSIC_PRESETS, SR } from "../cli/lib/audio/synth.mjs";
 
 test("synthMusic: stereo, requested length, deterministic per seed, no clipping", () => {
   for (const preset of Object.keys(MUSIC_PRESETS)) {

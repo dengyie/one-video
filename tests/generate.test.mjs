@@ -4,12 +4,13 @@ import { createServer } from "node:http";
 import { mkdtempSync, readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { generateImage, generateVideo, fetchAsset, inspectClip } from "../cli/lib/assets.mjs";
-import { ask, parseJsonReply } from "../cli/lib/llm.mjs";
-import { request } from "../cli/lib/http.mjs";
-import { validateNamed } from "../cli/lib/schema.mjs";
+import { fetchAsset } from "../cli/lib/assets/index.mjs";
+import { generateImage, generateVideo, inspectClip } from "../cli/lib/generate/index.mjs";
+import { ask, parseJsonReply } from "../cli/lib/llm/client.mjs";
+import { request } from "../cli/lib/core/http.mjs";
+import { validateNamed } from "../cli/lib/core/schema.mjs";
 import { sheetPlan, sceneAt, writeSheets } from "../cli/commands/director.mjs";
-import { REMOTION_BIN, ffmpeg, ffprobe } from "../cli/lib/ffmpeg.mjs";
+import { REMOTION_BIN, ffmpeg, ffprobe } from "../cli/lib/core/ffmpeg.mjs";
 
 // A stand-in relay: `routes[path]` answers (req, body) → [status, json | Buffer]; calls are logged.
 async function relay(routes) {

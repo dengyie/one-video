@@ -1,0 +1,2 @@
+// Vision prompt: pick the best of N generated image takes for one shot.
+export const pickTakePrompt = ({ count, aspect, prompt, brief }) => `These are ${count} takes (in order, 0-based) for one shot of a narrated video, framed ${aspect}.\nBrief: ${prompt}${brief ? `\nWhat the shot must do: ${brief}` : ""}\nPick the take that best fits the brief: clear subject, believable detail, no garbled text, logos or watermarks, room for an on-screen title. Reply only JSON {"best": <index>, "reason": "<one sentence>"}.`;

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { validate, validateNamed } from "../cli/lib/schema.mjs";
+import { validate, validateNamed } from "../cli/lib/core/schema.mjs";
 import { ROOT } from "./helpers.mjs";
 
 test("validate: types, required, enum, ranges, patterns, oneOf and $ref", () => {
@@ -37,7 +37,7 @@ test("every pipeline stage points at an existing director and every style parses
 });
 
 test("every example passes the schemas and the pre-voice content gates", async () => {
-  const { schemaGate, numbersGate, storyboardGate, captionGate } = await import("../cli/lib/gates.mjs");
+  const { schemaGate, numbersGate, storyboardGate, captionGate } = await import("../cli/lib/review/gates.mjs");
   const dirs = readdirSync(join(ROOT, "examples"));
   assert.ok(dirs.includes("spacex-motion") && dirs.includes("spacex-ipo"));
   for (const name of dirs) {

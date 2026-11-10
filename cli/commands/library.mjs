@@ -1,7 +1,7 @@
 // lib list | search | import | merge | verify | recipe — the shared asset library (cli/lib/library.mjs).
 import { readFileSync } from "node:fs";
-import { UserError, log, warn } from "../lib/project.mjs";
-import { CATALOG, extRoot, fillRecipe, importCandidates, loadCatalog, loadRecipes, mergeCatalogs, recipeSlots, saveCatalog, searchCatalog, verifyCatalog, entryAvailable } from "../lib/library.mjs";
+import { UserError, log, warn } from "../lib/core/project.mjs";
+import { CATALOG, extRoot, fillRecipe, importCandidates, loadCatalog, loadRecipes, mergeCatalogs, recipeSlots, saveCatalog, searchCatalog, verifyCatalog, entryAvailable } from "../lib/library/catalog.mjs";
 
 const row = (e) => `${e.id.padEnd(24)} ${(e.store === "ext" ? "ext " : "repo")} ${entryAvailable(e) ? "✓" : "·"} ${String(e.audio?.duration ?? e.lottie?.duration ?? "").padStart(6)}s  ${e.provenance?.source ?? ""}${e.note ? ` — ${e.note}` : ""}`;
 

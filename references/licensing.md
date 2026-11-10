@@ -30,7 +30,7 @@
 
 ## 音乐
 
-- 默认背景音乐是 `cli/lib/synth.mjs` 程序化合成的，没有版权负担，片尾标“OneVideo 程序化合成”。
+- 默认背景音乐是 `cli/lib/audio/synth.mjs` 程序化合成的，没有版权负担，片尾标“OneVideo 程序化合成”。
 - 自带音乐：`music.file` 指向 `public/` 下的文件，并在 `music.credit` 写明曲名、作者和授权，否则 timeline 会警告，简介里也不会出现音乐署名。
 
 ## 署名去向

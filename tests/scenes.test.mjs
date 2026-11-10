@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { anchorNames, compileTimeline, motionCues, overlaySound } from "../cli/lib/timeline.mjs";
-import { findScreen } from "../cli/lib/screen.mjs";
-import { normRects, parseRects } from "../cli/lib/capture.mjs";
-import { isMonoDark, tintLottie } from "../cli/lib/library.mjs";
-import { deviceGate, schemaGate } from "../cli/lib/gates.mjs";
-import { resolveCountry } from "../cli/lib/geo.mjs";
-import { collectIcons, resolveIcon } from "../cli/lib/icons.mjs";
+import { anchorNames, compileTimeline, motionCues, overlaySound } from "../cli/lib/timeline/index.mjs";
+import { findScreen } from "../cli/lib/vision/screen.mjs";
+import { normRects, parseRects } from "../cli/lib/vision/capture.mjs";
+import { isMonoDark, tintLottie } from "../cli/lib/library/catalog.mjs";
+import { deviceGate, schemaGate } from "../cli/lib/review/gates.mjs";
+import { resolveCountry } from "../cli/lib/library/geo.mjs";
+import { collectIcons, resolveIcon } from "../cli/lib/library/icons.mjs";
 import { example } from "./helpers.mjs";
 
 const scenes = [

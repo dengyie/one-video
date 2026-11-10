@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { processSfx, resolveSfx, mergeCatalogs, searchCatalog, verifyCatalog, loadCatalog } from "../cli/lib/library.mjs";
-import { integratedLoudness } from "../cli/lib/loudness.mjs";
-import { transitionSfx, sfxFile, AUTO_TRANSITION_SFX } from "../cli/lib/timeline.mjs";
+import { processSfx, resolveSfx, mergeCatalogs, searchCatalog, verifyCatalog, loadCatalog } from "../cli/lib/library/catalog.mjs";
+import { integratedLoudness } from "../cli/lib/audio/loudness.mjs";
+import { transitionSfx, sfxFile, AUTO_TRANSITION_SFX } from "../cli/lib/timeline/index.mjs";
 
 const tone = (sec, amp, { lead = 0, sr = 48000 } = {}) => {
   const n = Math.round(sec * sr), l = Math.round(lead * sr), s = new Int16Array((n + l) * 2);
@@ -68,8 +68,8 @@ test("transition sfx: auto map, per-type map, synth: names map to safe files", (
 });
 
 test("cutClip trims a video window to silent ≤1080p H.264", async () => {
-  const { cutClip } = await import("../cli/lib/assets.mjs");
-  const { ffmpeg, ffprobe } = await import("../cli/lib/ffmpeg.mjs");
+  const { cutClip } = await import("../cli/lib/assets/index.mjs");
+  const { ffmpeg, ffprobe } = await import("../cli/lib/core/ffmpeg.mjs");
   const dir = mkdtempSync(join(tmpdir(), "ov-clip-"));
   const src = join(dir, "src.mp4"), out = join(dir, "out.mp4");
   await ffmpeg(["-y", "-f", "lavfi", "-i", "nullsrc=size=2560x1440:rate=25:duration=4", "-f", "lavfi", "-i", "sine=duration=4", "-shortest", "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac", src]);
@@ -82,8 +82,8 @@ test("cutClip trims a video window to silent ≤1080p H.264", async () => {
 });
 
 test("clipFrames extracts a 30fps JPEG sequence the timeline can count", async () => {
-  const { cutClip, clipFrames, countFrames, framesDir } = await import("../cli/lib/assets.mjs");
-  const { ffmpeg } = await import("../cli/lib/ffmpeg.mjs");
+  const { cutClip, clipFrames, countFrames, framesDir } = await import("../cli/lib/assets/index.mjs");
+  const { ffmpeg } = await import("../cli/lib/core/ffmpeg.mjs");
   const dir = mkdtempSync(join(tmpdir(), "ov-frames-"));
   const src = join(dir, "src.mp4"), out = join(dir, "clip.mp4"), seq = join(dir, framesDir("clip.mp4"));
   assert.equal(framesDir("assets/x.MP4"), "assets/x.frames");
@@ -97,8 +97,8 @@ test("clipFrames extracts a 30fps JPEG sequence the timeline can count", async (
 });
 
 test("recipes: every recipe fills to a valid storyboard", async () => {
-  const { loadRecipes, fillRecipe, recipeSlots } = await import("../cli/lib/library.mjs");
-  const { schemaGate } = await import("../cli/lib/gates.mjs");
+  const { loadRecipes, fillRecipe, recipeSlots } = await import("../cli/lib/library/catalog.mjs");
+  const { schemaGate } = await import("../cli/lib/review/gates.mjs");
   const recipes = loadRecipes();
   assert.ok(recipes.length >= 10);
   for (const r of recipes) {

@@ -2,8 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadProject } from "../cli/lib/project.mjs";
-import { buildHandoff, handoffPath, manualSections } from "../cli/lib/handoff.mjs";
+import { loadProject } from "../cli/lib/core/project.mjs";
+import { buildHandoff, handoffPath, manualSections } from "../cli/lib/publish/handoff.mjs";
 import { example } from "./helpers.mjs";
 
 function project() {

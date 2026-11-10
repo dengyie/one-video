@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { encodeWav, parseWav, toMono, trimSilence, concatWithGaps, findPauses } from "../cli/lib/wav.mjs";
+import { encodeWav, parseWav, toMono, trimSilence, concatWithGaps, findPauses } from "../cli/lib/audio/wav.mjs";
 
 test("encodeWav/parseWav round-trip", () => {
   const samples = Int16Array.from([0, 1000, -1000, 32767, -32768]);

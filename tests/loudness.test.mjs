@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { integratedLoudness, normalizeLoudness, samplePeak } from "../cli/lib/loudness.mjs";
+import { integratedLoudness, normalizeLoudness, samplePeak } from "../cli/lib/audio/loudness.mjs";
 
 const sine = (amp, sec = 3, sr = 48000, f = 997) => Float64Array.from({ length: sec * sr }, (_, i) => amp * Math.sin((2 * Math.PI * f * i) / sr));
 

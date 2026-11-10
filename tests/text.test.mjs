@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { visualLength, spokenLength, splitLines, speakable, extractNumbers, normalizeForMatch } from "../cli/lib/text.mjs";
+import { visualLength, spokenLength, speakable, extractNumbers, normalizeForMatch } from "../cli/lib/core/text.mjs";
+import { splitLines } from "../cli/lib/captions/index.mjs";
 
 test("visualLength counts CJK as 1 and ASCII as 0.55", () => {
   assert.equal(visualLength("市值"), 2);

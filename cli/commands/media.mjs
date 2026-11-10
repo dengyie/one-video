@@ -1,20 +1,21 @@
 // tts / music / timeline / assets / decide
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { download } from "../lib/http.mjs";
-import { UserError, loadProject, readJson, writeJson, log, warn, ONEVIDEO_ROOT } from "../lib/project.mjs";
-import { runTts, ttsConfig, sceneLines } from "../lib/tts.mjs";
-import { writeMusic, synthSfx, SFX, MUSIC_PRESETS } from "../lib/synth.mjs";
-import { writeWav } from "../lib/wav.mjs";
-import { checkProject, printIssues } from "../lib/check.mjs";
-import { search, fetchAsset, scoreCandidate, assetFileExists, depthPath, depthStep, lumaPath, framesDir, countFrames } from "../lib/assets.mjs";
-import { run } from "../lib/ffmpeg.mjs";
-import { AUTO_TRANSITION_SFX, DIMENSIONS, MOTION_SFX, overlaySound, sfxFile, sfxVariants } from "../lib/timeline.mjs";
-import { categories, entryPath, loadCatalog, resolveSfx } from "../lib/library.mjs";
-import { spokenLength } from "../lib/text.mjs";
-import { beatsFile, ensureBeats, everyFourth, gridBeats } from "../lib/beats.mjs";
-import { captureUi, parseRects } from "../lib/capture.mjs";
-import { findScreen, frameRgb } from "../lib/screen.mjs";
+import { download } from "../lib/core/http.mjs";
+import { UserError, loadProject, readJson, writeJson, log, warn, ONEVIDEO_ROOT } from "../lib/core/project.mjs";
+import { runTts, ttsConfig } from "../lib/voice/tts.mjs";
+import { sceneLines } from "../lib/captions/index.mjs";
+import { writeMusic, synthSfx, SFX, MUSIC_PRESETS } from "../lib/audio/synth.mjs";
+import { writeWav } from "../lib/audio/wav.mjs";
+import { checkProject, printIssues } from "../lib/review/check.mjs";
+import { search, fetchAsset, scoreCandidate, assetFileExists, depthPath, depthStep, lumaPath, framesDir, countFrames } from "../lib/assets/index.mjs";
+import { run } from "../lib/core/ffmpeg.mjs";
+import { AUTO_TRANSITION_SFX, DIMENSIONS, MOTION_SFX, overlaySound, sfxFile, sfxVariants } from "../lib/timeline/index.mjs";
+import { categories, entryPath, loadCatalog, resolveSfx } from "../lib/library/catalog.mjs";
+import { spokenLength } from "../lib/core/text.mjs";
+import { beatsFile, ensureBeats, everyFourth, gridBeats } from "../lib/audio/beats.mjs";
+import { captureUi, parseRects } from "../lib/vision/capture.mjs";
+import { findScreen, frameRgb } from "../lib/vision/screen.mjs";
 
 const list = (v) => (typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
 

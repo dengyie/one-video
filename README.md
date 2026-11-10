@@ -120,7 +120,7 @@ Invoke through natural language in your agent session: *"Help me create an anima
 
 | Path | Description |
 |---|---|
-| `cli/` | Zero-dependency Node.js CLI entry points |
+| `cli/` | Zero-dependency Node.js CLI: `commands/` plus domain modules in `lib/` (captions, voice, generate, prompts, assets, timeline, review, …; see `references/architecture.md`) |
 | `template/` | Core Remotion motion graphics engine (scenes, styles, transitions) |
 | `pipelines/` | Pipeline configurations for data-explainer, documentary, shorts, and promo |
 | `stages/` | Stage director guides and procedural checklists |
