@@ -1,6 +1,7 @@
 import React from "react";
 import { AbsoluteFill, Img, staticFile } from "remotion";
-import { useLayout, useRevealAt, useScene, useTheme, useTime, useTimeline } from "../engine/context";
+import { revealAt, useLayout, usePace, useScene, useTheme, useTime, useTimeline } from "../engine/context";
+import type { Scene } from "../engine/types";
 import { clamp01, easeInOut, easeOut, easeOutBack, lerp } from "../engine/motion";
 import { ClipVideo } from "../components/Media";
 
@@ -68,34 +69,16 @@ function cardTarget(s: Box, from: Box, to?: Rect): Box {
 }
 
 type View = { x: number; y: number; z: number };
+type Card = { i: number; open: number; close: number; from: Box; to: Box; asset?: string; rect: Rect };
 
-export const DeviceScene: React.FC<{ device?: Kind; screens: Screen[]; steps?: Step[]; url?: string; zoom?: number; color?: string; caption?: string }> = ({
-  device, screens, steps = [], url, zoom, color, caption,
-}) => {
-  const theme = useTheme();
-  const tl = useTimeline();
-  const scene = useScene();
-  const { u, width, height, portrait, pad } = useLayout();
-  const reveal = useRevealAt();
-  const t = useTime();
-  const kind: Kind = device ?? (portrait ? "phone" : "browser");
-  const { body, screen, radius } = deviceLayout(kind, width, height, u);
-  const idx = (s: number | string | undefined) => (typeof s === "number" ? s : Math.max(0, screens.findIndex((x) => x.id === s)));
-  const times = steps.map((st, i) => st.t ?? reveal(i, steps.length));
+const stepTimes = (scene: Scene, pace: number, steps: Step[]) => steps.map((st, i) => st.t ?? revealAt(scene, pace, i, steps.length));
+const screenIndex = (screens: Screen[], s: number | string | undefined) => (typeof s === "number" ? s : Math.max(0, screens.findIndex((x) => x.id === s)));
 
-  // Screen history and the scroll of each: a step with `screen` switches page, `scroll` moves it.
-  let cur = 0, prev = -1, switchAt = -Infinity, scroll = 0, scrollFrom = 0, scrollAt = -Infinity;
-  steps.forEach((st, i) => {
-    if (times[i] > t) return;
-    if (st.screen !== undefined && idx(st.screen) !== cur) { prev = cur; cur = idx(st.screen); switchAt = times[i]; scroll = scrollFrom = 0; }
-    if (st.scroll !== undefined) { scrollFrom = scroll; scroll = st.scroll; scrollAt = times[i]; }
-  });
-  const sw = easeInOut((t - switchAt) / 0.4);
-  const scrollNow = lerp(scrollFrom, scroll, easeInOut((t - scrollAt) / 0.8));
-
-  // Cards: each expand grows from its rect after the tap that opens it and folds back at the next
-  // collapse (or the next page switch).
-  const cards = steps.flatMap((st, i) => {
+// Cards: each expand grows from its rect after the tap that opens it and folds back at the next
+// collapse (or the next page switch).
+function deviceCards(steps: Step[], times: number[], screens: Screen[], screen: Box): Card[] {
+  const idx = (s: number | string | undefined) => screenIndex(screens, s);
+  return steps.flatMap((st, i) => {
     if (!st.expand) return [];
     const open = times[i] + (st.tap ? 0.25 : 0);
     const j = steps.findIndex((x, k) => k > i && (x.collapse || (x.screen !== undefined && idx(x.screen) !== idx(steps.slice(0, i + 1).reverse().find((y) => y.screen !== undefined)?.screen ?? 0))));
@@ -103,8 +86,14 @@ export const DeviceScene: React.FC<{ device?: Kind; screens: Screen[]; steps?: S
     const from = inScreen(screen, st.expand.rect);
     return [{ i, open, close, from, to: cardTarget(screen, from, st.expand.to), asset: st.expand.asset, rect: st.expand.rect }];
   });
+}
 
-  // Camera relay: keys at each step, eased one into the next.
+// Camera relay: keys at each step, eased one into the next, from `from` (the whole device unless
+// the scene continues another). A key due before the scene starts begins at 0 instead of joining
+// halfway, so the first frame never jumps.
+function deviceCamera({ steps, times, cards, screen, kind, zoom, width, height, portrait, t, from }: {
+  steps: Step[]; times: number[]; cards: Card[]; screen: Box; kind: Kind; zoom?: number; width: number; height: number; portrait: boolean; t: number; from?: View;
+}): View {
   const levelView = (level: Level, i: number): View => {
     const st = steps[i];
     if (level === "device") return { x: width / 2, y: height / 2, z: 1 };
@@ -126,21 +115,59 @@ export const DeviceScene: React.FC<{ device?: Kind; screens: Screen[]; steps?: S
     else if (st.screen !== undefined && !st.tap) keys.push({ t: at + 0.2, v: st.focus ? levelView("result", i) : levelView("device", i), dur: 0.6 });
   });
   keys.sort((a, b) => a.t - b.t);
-  let v: View = { x: width / 2, y: height / 2, z: 1 };
+  let v: View = from ?? { x: width / 2, y: height / 2, z: 1 };
   for (const k of keys) {
-    const p = easeInOut((t - k.t) / k.dur);
+    const p = easeInOut((t - Math.max(0, k.t)) / k.dur);
     if (p <= 0) break;
     v = { x: lerp(v.x, k.v.x, p), y: lerp(v.y, k.v.y, p), z: lerp(v.z, k.v.z, p) };
   }
+  return v;
+}
+
+export const DeviceScene: React.FC<{ device?: Kind; screens: Screen[]; steps?: Step[]; url?: string; zoom?: number; color?: string; caption?: string }> = ({
+  device, screens, steps = [], url, zoom, color, caption,
+}) => {
+  const theme = useTheme();
+  const tl = useTimeline();
+  const scene = useScene();
+  const { u, width, height, portrait, pad } = useLayout();
+  const pace = usePace();
+  const t = useTime();
+  const kind: Kind = device ?? (portrait ? "phone" : "browser");
+  const { body, screen, radius } = deviceLayout(kind, width, height, u);
+  const idx = (s: number | string | undefined) => screenIndex(screens, s);
+  const times = stepTimes(scene, pace, steps);
+
+  // The device arrives once; a device scene after another one picks up where it left off, the
+  // camera too: it starts from wherever the previous scene's camera ended.
+  const i0 = tl.scenes.findIndex((s) => s.id === scene.id);
+  const before = tl.scenes[i0 - 1];
+  const continued = before?.type === "device" && (before.props.device ?? (portrait ? "phone" : "browser")) === kind;
+  let startView: View | undefined;
+  if (continued) {
+    const bs = (before.props.steps ?? []) as Step[], bt = stepTimes(before, pace, bs);
+    const bcards = deviceCards(bs, bt, (before.props.screens ?? []) as Screen[], screen);
+    startView = deviceCamera({ steps: bs, times: bt, cards: bcards, screen, kind, zoom: before.props.zoom, width, height, portrait, t: before.duration });
+  }
+
+  // Screen history and the scroll of each: a step with `screen` switches page, `scroll` moves it.
+  let cur = 0, prev = -1, switchAt = -Infinity, scroll = 0, scrollFrom = 0, scrollAt = -Infinity;
+  steps.forEach((st, i) => {
+    if (times[i] > t) return;
+    if (st.screen !== undefined && idx(st.screen) !== cur) { prev = cur; cur = idx(st.screen); switchAt = times[i]; scroll = scrollFrom = 0; }
+    if (st.scroll !== undefined) { scrollFrom = scroll; scroll = st.scroll; scrollAt = times[i]; }
+  });
+  const sw = easeInOut((t - switchAt) / 0.4);
+  const scrollNow = lerp(scrollFrom, scroll, easeInOut((t - scrollAt) / 0.8));
+
+  const cards = deviceCards(steps, times, screens, screen);
+
+  const v = deviceCamera({ steps, times, cards, screen, kind, zoom, width, height, portrait, t, from: startView });
   // Keep the view inside the frame.
   const hx = width / 2 / v.z, hy = height / 2 / v.z;
   const cx = Math.min(width - hx, Math.max(hx, v.x)), cy = Math.min(height - hy, Math.max(hy, v.y));
   const camera = `translate(${width / 2 - cx * v.z}px, ${height / 2 - cy * v.z}px) scale(${v.z})`;
 
-  // The device arrives once; a device scene after another one picks up where it left off.
-  const i0 = tl.scenes.findIndex((s) => s.id === scene.id);
-  const before = tl.scenes[i0 - 1];
-  const continued = before?.type === "device" && (before.props.device ?? (portrait ? "phone" : "browser")) === kind;
   const enter = continued ? 1 : easeOut((t + 0.1) / 0.7);
   const bezel = color ?? "#111318";
   const activeLabel = steps.map((st, i) => ({ st, at: times[i] })).filter((x) => x.st.label && x.at <= t + 0.2).at(-1);

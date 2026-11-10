@@ -129,6 +129,8 @@ export function motionCues(sc) {
   if (sc.type === "footage") {
     let speed = 1;
     for (const r of sc.props.ramp ?? []) { if (speed < 1 && r.speed > 1.3) at((r.t ?? 0) - 0.15, "ramp"); speed = r.speed; }
+    // The inserted UI turning a page or scrolling.
+    for (const st of sc.props.screen?.steps ?? []) at(st.t, "page");
   }
   return out.sort((a, b) => a.at - b.at);
 }
@@ -222,7 +224,13 @@ function resolvePropTimes(type, props, ctx, errors, where) {
     fix(props.title, "title");
   }
   if (type === "parallax") fix(props.title, "title");
-  if (type === "footage") { fix(props.screen, "screen"); fix(props.windows, "windows"); }
+  if (type === "footage") {
+    fix(props.screen, "screen"); fix(props.windows, "windows");
+    // A step without a time comes 1.2s after the one before it.
+    let last = props.screen?.t ?? 0;
+    for (const [i, st] of (props.screen?.steps ?? []).entries()) { fix(st, `screen step ${i}`); st.t ??= r3(Math.min(ctx.duration, last + 1.2)); last = st.t; }
+    props.screen?.steps?.sort((a, b) => a.t - b.t);
+  }
   if (type === "device") {
     // Taps land on the beat; steps without a time spread over the first three quarters.
     const steps = props.steps ?? [];

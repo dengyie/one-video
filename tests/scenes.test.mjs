@@ -189,6 +189,22 @@ test("match-cut: stills on fixed spacing or on the beats, too few beats is an er
   assert.ok(res.errors.some((e) => /match-cut: 3 stills but only 0 beats/.test(e)));
 });
 
+test("footage screen steps: pages and scrolls get times, sound and count as something new", () => {
+  const ex = example();
+  const [a, b] = ex.fetchedAssets.items.map((x) => x.id);
+  const sb = structuredClone(ex.storyboard);
+  const corners = [[0.4, 0.2], [0.6, 0.2], [0.6, 0.8], [0.4, 0.8]];
+  sb.scenes[0] = { ...sb.scenes[0], type: "footage", backdrop: undefined, shots: undefined, overlays: undefined, props: { asset: a, screen: { asset: b, corners, at: 0.3, steps: [{ at: 2.5, asset: a }, { scroll: 1 }] } } };
+  const { timeline, errors } = compileTimeline({ ...ex, storyboard: sb, assets: ex.fetchedAssets });
+  assert.deepEqual(errors, []);
+  const steps = timeline.scenes[0].props.screen.steps;
+  assert.deepEqual(steps.map((st) => st.t), [2.5, Math.min(3.7, timeline.scenes[0].duration)]);
+  assert.deepEqual(motionCues(timeline.scenes[0]).map((c) => c.role), ["page", "page"]);
+  assert.ok(timeline.assets[a] && timeline.assets[b]);
+  assert.deepEqual(schemaGate("storyboard", { scenes: [{ id: "f", type: "footage", props: { asset: "a", screen: { asset: "ui", corners, steps: [{ at: 1, scroll: 0.5 }, { cue: "c", asset: "ui2" }] } } }] }), []);
+  assert.ok(schemaGate("storyboard", { scenes: [{ id: "f", type: "footage", props: { asset: "a", screen: { asset: "ui", corners, steps: [{ scroll: 2 }] } } }] }).length);
+});
+
 test("storyboard schema: device, match-cut, footage screen and windows", () => {
   const ok = [
     { id: "d", type: "device", props: { device: "browser", url: "x.com", screens: [{ asset: "a" }], steps: [{ at: 1, tap: "buy" }, { cue: "c", expand: { rect: [0, 0, 0.5, 0.5] } }, { at: 3, collapse: true, camera: "device" }] } },

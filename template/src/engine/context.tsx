@@ -44,15 +44,17 @@ export function usePace(): number {
 
 // When item i of n appears: its named cue if the storyboard gave one, otherwise a stagger
 // spread across the first ~55% of the scene so reveals follow the narration loosely.
+export function revealAt(scene: Scene, pace: number, i: number, n: number, cue?: string): number {
+  if (cue && scene.cues[cue] !== undefined) return scene.cues[cue];
+  const first = 0.35 * pace;
+  const span = Math.max(0, Math.min(scene.duration * 0.55, n * 1.4 * pace) - first);
+  return n <= 1 ? first : first + (span * i) / (n - 1);
+}
+
 export function useRevealAt() {
   const scene = useScene();
   const pace = usePace();
-  return (i: number, n: number, cue?: string): number => {
-    if (cue && scene.cues[cue] !== undefined) return scene.cues[cue];
-    const first = 0.35 * pace;
-    const span = Math.max(0, Math.min(scene.duration * 0.55, n * 1.4 * pace) - first);
-    return n <= 1 ? first : first + (span * i) / (n - 1);
-  };
+  return (i: number, n: number, cue?: string): number => revealAt(scene, pace, i, n, cue);
 }
 
 export function useReveal(at: number, dur = 0.6): number {

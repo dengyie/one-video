@@ -54,7 +54,20 @@ export function quadMatrix(q: [number, number][], w: number, h: number): string 
 // corners (onevideo screen finds them), blended with "screen" so the glass keeps its reflections,
 // and a finger or hand in front is drawn again on top — from a mask (white = in front) or the
 // depth matte. Holds for a static device; a moving one needs tracked corners.
-type ScreenInsert = { asset: string; corners: [number, number][]; t?: number; blend?: "screen" | "normal"; opacity?: number; occlude?: { asset?: string; matte?: Matte } };
+// `steps` move the UI on it: another capture slides in, or a tall one scrolls.
+type ScreenStep = { t?: number; asset?: string; scroll?: number };
+type ScreenInsert = { asset: string; corners: [number, number][]; t?: number; blend?: "screen" | "normal"; opacity?: number; occlude?: { asset?: string; matte?: Matte }; steps?: ScreenStep[] };
+
+// What the inserted screen shows at t: the current capture (and the one it is replacing), and scroll.
+function screenState(screen: ScreenInsert, t: number) {
+  let cur = screen.asset, prev: string | undefined, switchAt = -Infinity, scroll = 0, scrollFrom = 0, scrollAt = -Infinity;
+  for (const st of screen.steps ?? []) {
+    if ((st.t ?? 0) > t) break;
+    if (st.asset && st.asset !== cur) { prev = cur; cur = st.asset; switchAt = st.t ?? 0; scroll = scrollFrom = 0; }
+    if (st.scroll !== undefined) { scrollFrom = scroll; scroll = st.scroll; scrollAt = st.t ?? 0; }
+  }
+  return { cur, prev, sw: easeInOut((t - switchAt) / 0.4), scroll: lerp(scrollFrom, scroll, easeInOut((t - scrollAt) / 0.8)), scrolls: (screen.steps ?? []).some((st) => st.scroll !== undefined) };
+}
 
 // Background revealed through vertical windows that open behind the subject (depth matte).
 type Windows = { asset: string; count?: number; t?: number; stagger?: number; gap?: number; matte?: Matte };
@@ -84,7 +97,24 @@ export const FootageScene: React.FC<{ asset: string; startFrom?: number; ramp?: 
       {base()}
       {ins && insOn > 0 && (
         <div style={{ position: "absolute", left: 0, top: 0, width, height, transformOrigin: "0 0", transform: quadMatrix(screen.corners.map(([x, y]) => [x * width, y * height]), width, height), mixBlendMode: (screen.blend ?? "screen") === "screen" ? "screen" : "normal", opacity: (screen.opacity ?? 1) * insOn }}>
-          {ins.kind === "video" ? <ClipVideo a={ins} style={{ ...style, objectPosition: "top" }} time={Math.max(0, t - (screen.t ?? 0))} /> : <Img src={staticFile(ins.src)} style={{ ...style, objectFit: "fill" }} />}
+          {(() => {
+            const ss = screenState(screen, t);
+            const page = (id: string, scroll: number) => {
+              const p = tl.assets[id];
+              if (!p) throw new Error(`asset "${id}" not in timeline.assets`);
+              if (p.kind === "video") return <ClipVideo a={p} style={{ ...style, objectPosition: "top" }} time={Math.max(0, t - (screen.t ?? 0))} />;
+              // A tall capture is laid at the screen's width and slid up; a screen-sized one fills it.
+              return ss.scrolls
+                ? <Img src={staticFile(p.src)} style={{ position: "absolute", left: 0, width: "100%", top: `${scroll * 100}%`, transform: `translateY(${-scroll * 100}%)`, display: "block" }} />
+                : <Img src={staticFile(p.src)} style={{ ...style, objectFit: "fill" }} />;
+            };
+            return (
+              <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: "#000" }}>
+                {ss.prev && ss.sw < 1 && <div style={{ position: "absolute", inset: 0, transform: `translateX(${-ss.sw * 30}%)`, opacity: 1 - ss.sw * 0.6 }}>{page(ss.prev, 0)}</div>}
+                <div style={{ position: "absolute", inset: 0, overflow: "hidden", transform: ss.prev ? `translateX(${(1 - ss.sw) * 100}%)` : undefined }}>{page(ss.cur, ss.scroll)}</div>
+              </div>
+            );
+          })()}
         </div>
       )}
       {ins && insOn > 0 && mask && base({ maskImage: `url(${staticFile(mask.src)})`, WebkitMaskImage: `url(${staticFile(mask.src)})`, maskMode: "luminance", maskSize: "100% 100%", WebkitMaskSize: "100% 100%" } as React.CSSProperties)}
