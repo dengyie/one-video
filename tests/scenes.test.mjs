@@ -134,6 +134,7 @@ test("overlays pin to scene anchors with on: names per scene type, compile error
   assert.equal(anchorNames("kinetic", {}), null);
   assert.deepEqual(schemaGate("storyboard", { scenes: [{ id: "x", type: "kinetic", props: { lines: [{ text: "a" }] }, overlays: [{ type: "mark", on: "card1", place: "top-right" }] }] }), []);
   assert.ok(schemaGate("storyboard", { scenes: [{ id: "x", type: "kinetic", props: { lines: [{ text: "a" }] }, overlays: [{ type: "mark", on: "card1", place: "middle" }] }] }).length > 0);
+  assert.ok(schemaGate("storyboard", { scenes: [{ id: "x", type: "kinetic", props: { lines: [{ text: "a" }] }, overlays: [{ type: "lottie", on: "last", offset: [0] }] }] }).length > 0);
 
   const ex = example();
   const sb = structuredClone(ex.storyboard);
@@ -144,10 +145,11 @@ test("overlays pin to scene anchors with on: names per scene type, compile error
   sb.scenes[i] = { ...sb.scenes[i], type: "stat-cards", props: { cards: [{ value: 3, label: "a" }] }, overlays: [{ type: "stamp", text: "!", on: "card2" }, { type: "mark", on: "card1" }] };
   const out = compileTimeline({ ...ex, storyboard: sb, assets: ex.fetchedAssets });
   assert.ok(out.errors.some((e) => /on "card2" is not an element of this stat-cards scene \(card1\)/.test(e)), out.errors.join("\n"));
-  sb.scenes[i].overlays = [{ type: "mark", on: "card1", place: "center" }];
+  sb.scenes[i].overlays = [{ type: "mark", on: "card1", place: "center", offset: [0, 160] }];
   const ok = compileTimeline({ ...ex, storyboard: sb, assets: ex.fetchedAssets });
   assert.ok(!ok.errors.some((e) => /overlay/.test(e)), ok.errors.join("\n"));
-  assert.deepEqual([ok.timeline.scenes[i].overlays[0].on, ok.timeline.scenes[i].overlays[0].place], ["card1", "center"]);
+  const o = ok.timeline.scenes[i].overlays[0];
+  assert.deepEqual([o.on, o.place, o.offset], ["card1", "center", [0, 160]]);
 });
 
 test("overlaySound: explicit, auto, project default and silence", () => {

@@ -60,12 +60,12 @@ export const Overlays: React.FC = () => {
   );
 };
 
-// The point of `place` on a box, kept far enough inside the frame for a sticker centred on it.
-function placeAt(b: Box, place: string, width: number, height: number): [number, number] {
+// The point of `place` on a box, moved by `off` (px), kept far enough inside the frame for a sticker centred on it.
+function placeAt(b: Box, place: string, width: number, height: number, off: [number, number] = [0, 0]): [number, number] {
   const fx = place.includes("left") ? 0 : place.includes("right") ? 1 : 0.5;
   const fy = place.startsWith("top") ? 0 : place.startsWith("bottom") ? 1 : 0.5;
   const cl = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
-  return [cl(b.x + b.w * fx, width * 0.14, width * 0.86), cl(b.y + b.h * fy, height * 0.08, height * 0.92)];
+  return [cl(b.x + b.w * fx + off[0], width * 0.14, width * 0.86), cl(b.y + b.h * fy + off[1], height * 0.08, height * 0.92)];
 }
 
 const CORNER = new Set(["stamp", "icon", "lottie", "image"]);
@@ -76,7 +76,7 @@ const OverlayView: React.FC<{ o: Overlay; i: number; local: number; out: number 
   const { u, width, height } = useLayout();
   const color = o.color ?? (o.type === "mark" || o.type === "stamp" ? theme.colors.highlight : colorAt(theme, i));
   const box = useContext(Anchors)[o.on ?? ""];
-  const [x, y] = box ? placeAt(box, o.place ?? defaultPlace(o.type), width, height) : [(o.x ?? 0.5) * width, (o.y ?? 0.5) * height];
+  const [x, y] = box ? placeAt(box, o.place ?? defaultPlace(o.type), width, height, [(o.offset?.[0] ?? 0) * u, (o.offset?.[1] ?? 0) * u]) : [(o.x ?? 0.5) * width, (o.y ?? 0.5) * height];
   const size = (o.size ?? 160) * u;
   const at = (node: React.ReactNode, s = 1, extra: React.CSSProperties = {}) => (
     <div style={{ position: "absolute", left: x, top: y, transform: `translate(-50%, -50%) scale(${s})`, opacity: out, ...extra }}>{node}</div>

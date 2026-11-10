@@ -621,13 +621,20 @@
           }
         },
         "on": {
-          "description": "pin to a scene element instead of x/y/rect, so it follows the content in any aspect: stat-cards card1…/a card cue, compare left/right/left-value/right-value, share ring/seg1…/a segment cue, bar-compare bar1…/an item cue",
+          "description": "pin to a scene element instead of x/y/rect, so it follows the content in any aspect: stat-cards card1…/a card cue, compare left/right/left-value/right-value, share ring/seg1…/a segment cue, bar-compare bar1…/an item cue, bar-race bar1…/rank1…/period, line-chart point1…/last/s2-point1…/note1…/an annotation cue",
           "type": "string",
           "minLength": 1
         },
         "place": {
           "description": "where on the `on` element (default: top-right for stamp/icon/lottie/image/callout, centre otherwise)",
           "enum": ["center", "top", "bottom", "left", "right", "top-left", "top-right", "bottom-left", "bottom-right"]
+        },
+        "offset": {
+          "description": "[dx, dy] in layout units from the `place` point, for a sticker beside a small element (a chart point) instead of on it",
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2
         },
         "text": {
           "type": "string"
