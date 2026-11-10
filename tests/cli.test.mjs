@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ROOT } from "./helpers.mjs";
 import { compileTimeline } from "../cli/lib/timeline.mjs";
-import { resolveApiKey, requireApiKey } from "../cli/lib/http.mjs";
+import { resolveApiKey, viaApiBase, requireApiKey } from "../cli/lib/http.mjs";
 
 const CLI = join(ROOT, "cli", "onevideo.mjs");
 const ov = (cwd, ...args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: "utf8", env: { ...process.env, HOME: cwd } });
@@ -136,4 +136,25 @@ test("init --example spacex-motion compiles to a rhythm-clean timeline", () => {
   const t = json(join(dir, "plan", "timeline.json"));
   assert.deepEqual(t.scenes.map((s) => s.id).slice(0, 3), ["hook", "ipo", "revenue"]);
   assert.ok(t.duration > 30 && t.duration < 45, `duration ${t.duration}`);
+});
+
+test("ONEVIDEO_API_BASE moves the default relay and its key trust to another gateway", () => {
+  const saved = { ...process.env };
+  try {
+    delete process.env.ONEVIDEO_KEY_HOSTS;
+    process.env.MANGO_API_KEY = "sk-test-shared";
+    process.env.HOME = mkdtempSync(join(tmpdir(), "ov-home-"));
+    delete process.env.ONEVIDEO_API_BASE;
+    assert.equal(viaApiBase("https://api.mangoqwq.com/v1/audio/speech"), "https://api.mangoqwq.com/v1/audio/speech");
+    process.env.ONEVIDEO_API_BASE = "http://10.0.0.5:3000/v1/";
+    assert.equal(viaApiBase("https://api.mangoqwq.com/v1/audio/speech"), "http://10.0.0.5:3000/v1/audio/speech");
+    assert.equal(viaApiBase("https://example.com/v1/x"), "https://example.com/v1/x");
+    assert.equal(resolveApiKey("MANGO_API_KEY", "https://api.mangoqwq.com/v1").key, "sk-test-shared");
+    assert.equal(resolveApiKey("MANGO_API_KEY", "http://10.0.0.5:8317/v1").key, "sk-test-shared");
+    assert.equal(resolveApiKey("MANGO_API_KEY", "https://api.mangoqwq.com.evil.example/v1"), null);
+    assert.equal(resolveApiKey("MANGO_API_KEY", "http://10.0.0.6:3000/v1"), null);
+  } finally {
+    for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
+    Object.assign(process.env, saved);
+  }
 });

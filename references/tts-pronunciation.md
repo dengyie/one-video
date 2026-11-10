@@ -45,4 +45,4 @@
 
 ## 密钥
 
-TTS 和图片生成使用 OpenAI 兼容接口（默认 `https://api.mangoqwq.com/v1`）。key 的读取顺序：环境变量 `tts.keyEnv`（默认 `MANGO_API_KEY`），然后是本机 provider 配置（仅当显式导出 `ONEVIDEO_ZCODE_PROVIDER=1` 时读取 `~/.zcode`）。脚本从不打印 key；`onevideo doctor` 只显示它来自哪里。
+TTS 和图片生成使用 OpenAI 兼容接口（默认 `https://api.mangoqwq.com/v1`；环境变量 `ONEVIDEO_API_BASE` 可把它换成同一中继的其他入口，例如内网地址）。key 的读取顺序：环境变量 `tts.keyEnv`（默认 `MANGO_API_KEY`），然后是本机 provider 配置（仅当显式导出 `ONEVIDEO_ZCODE_PROVIDER=1` 时读取 `~/.zcode`）。脚本从不打印 key；`onevideo doctor` 只显示它来自哪里。

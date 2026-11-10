@@ -31,7 +31,7 @@ OneVideo 把“做一条视频”拆成 10 个阶段。每个阶段都有一份�
 
 - 旁白里的每个数字都要能在 `plan/research.json` 的 facts 里找到，facts 必须有来源（numbers 门控）。不要为了过门控而编造来源。
 - 素材只用白名单授权（`references/licensing.md`），CC BY 素材要写作者和来源。
-- API key 只从环境变量或本机配置读取，不打印、不写进项目文件。共享 key（`MANGO_API_KEY` 等）只发往 `api.mangoqwq.com`；换 `baseUrl` 必须配专用 `keyEnv`。`~/.zcode` 的 provider 配置仅在显式 `ONEVIDEO_ZCODE_PROVIDER=1` 时读取。
+- API key 只从环境变量或本机配置读取，不打印、不写进项目文件。共享 key（`MANGO_API_KEY` 等）只发往 `api.mangoqwq.com`（设了 `ONEVIDEO_API_BASE` 时，默认中继的请求改走该网关，key 只发往它的主机）；换 `baseUrl` 必须配专用 `keyEnv`。`~/.zcode` 的 provider 配置仅在显式 `ONEVIDEO_ZCODE_PROVIDER=1` 时读取。
 - 已审批的产物被改动后，该阶段显示 stale，需重新给用户看并 `approve`。改了 script 之后必须重跑 `tts`，否则 timings 门控报错、渲染被拦；不要手改 `timeline.json`。
 
 ## 命令

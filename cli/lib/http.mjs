@@ -8,17 +8,26 @@ import { UserError } from "./project.mjs";
 
 const UA = "OneVideo/0.1 (+https://github.com/dengyie/OneVideo)";
 
-// Shared keys (ONEVIDEO_API_KEY, MANGO_API_KEY) are only ever sent to
+// The relay every default endpoint (TTS, LLM, image, video) talks to. ONEVIDEO_API_BASE points them
+// all at another gateway of the same relay (a private network address, say): a URL under the
+// public base is rewritten to it, and that gateway's host replaces the public one as trusted.
+export const PUBLIC_API_BASE = "https://api.mangoqwq.com/v1";
+export const apiBase = () => (process.env.ONEVIDEO_API_BASE || PUBLIC_API_BASE).replace(/\/$/, "");
+export const viaApiBase = (url) => (typeof url === "string" && url.startsWith(PUBLIC_API_BASE) ? apiBase() + url.slice(PUBLIC_API_BASE.length) : url);
+
+// ONEVIDEO_API_BASE routes the default relay through another gateway (e.g. a private network
+// address of the same relay): requests to PUBLIC_API_BASE are rewritten to it, and its host becomes
+// the trusted one. Shared keys (ONEVIDEO_API_KEY, MANGO_API_KEY) are only ever sent to
 // trusted hosts; ONEVIDEO_KEY_HOSTS (comma list) extends the default. Any other baseUrl must name
 // its own key variable via keyEnv, so a project file cannot redirect the shared key elsewhere.
-export const DEFAULT_KEY_HOSTS = ["api.mangoqwq.com"];
+export const defaultKeyHosts = () => [new URL(apiBase()).hostname.toLowerCase()];
 const SHARED_KEY_ENVS = ["ONEVIDEO_API_KEY", "MANGO_API_KEY"];
 
 export function trustedKeyHost(baseUrl) {
   const extra = (process.env.ONEVIDEO_KEY_HOSTS ?? "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
   let host;
-  try { host = new URL(baseUrl).hostname.toLowerCase(); } catch { return false; }
-  return [...DEFAULT_KEY_HOSTS, ...extra].includes(host);
+  try { host = new URL(viaApiBase(baseUrl)).hostname.toLowerCase(); } catch { return false; }
+  return [...defaultKeyHosts(), ...extra].includes(host);
 }
 
 // Lookup order: keyEnv → ONEVIDEO_API_KEY → MANGO_API_KEY → ~/.zcode provider config
@@ -47,7 +56,7 @@ export function requireApiKey(envName, baseUrl) {
   if (k) return k.key;
   if (!trustedKeyHost(baseUrl)) {
     const host = (() => { try { return new URL(baseUrl).host; } catch { return String(baseUrl); } })();
-    throw new UserError(`no API key for ${host}: shared keys only go to ${DEFAULT_KEY_HOSTS.join(", ")}; set keyEnv to a dedicated variable (not ${SHARED_KEY_ENVS.join("/")}) and export it, or add the host to ONEVIDEO_KEY_HOSTS`);
+    throw new UserError(`no API key for ${host}: shared keys only go to ${defaultKeyHosts().join(", ")}; set keyEnv to a dedicated variable (not ${SHARED_KEY_ENVS.join("/")}) and export it, or add the host to ONEVIDEO_KEY_HOSTS`);
   }
   throw new UserError(`no API key: set ${envName ?? "MANGO_API_KEY"} (or ONEVIDEO_API_KEY)`);
 }
@@ -67,6 +76,7 @@ function runCurl(config, timeoutSec = 180) {
 
 // JSON payloads travel in the config as a quoted data-binary value.
 export async function request(url, { method = "GET", headers = {}, json, key, timeoutSec, retries = 3, accept } = {}) {
+  url = viaApiBase(url);
   const lines = [`url = ${quote(url)}`, `request = ${quote(method)}`, `user-agent = ${quote(UA)}`, "location"];
   if (key) lines.push(`header = ${quote(`Authorization: Bearer ${key}`)}`);
   if (accept) lines.push(`header = ${quote(`Accept: ${accept}`)}`);
