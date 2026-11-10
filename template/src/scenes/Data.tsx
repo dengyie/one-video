@@ -136,7 +136,7 @@ export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Fo
 }) => {
   const theme = useTheme();
   const scene = useScene();
-  const { u, portrait, width, height, top: headerBottom, bottom, pad } = useLayout();
+  const { u, portrait, narrow, width, height, top: headerBottom, bottom, pad } = useLayout();
   const t = useTime();
   const T = periodTimes(periods.length, scene.duration, (k) => {
     const name = periodCues[k];
@@ -162,18 +162,20 @@ export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Fo
   const max = Math.max(1e-9, ...rows.filter((r) => r.rank < top).map((r) => r.value));
   // Fill what the Stage leaves after the title/unit lines, never the caption band.
   const stageH = height - (scene.header ? headerBottom + 20 * u : pad) - bottom;
-  const areaH = Math.min((portrait ? 1100 : 700) * u, stageH - (title ? 62 * u : 0) - (unit ? 30 * u : 0) - 16 * u);
+  // 1:1 and 4:5 have no room beside the bars for the period label: it gets a strip below them.
+  const strip = narrow && !portrait ? 120 * u : 0;
+  const areaH = Math.min((portrait ? 1100 : 700) * u, stageH - (title ? 62 * u : 0) - (unit ? 30 * u : 0) - 16 * u - strip);
   const rowH = areaH / top;
   const labelW = (portrait ? 250 : 300) * u;
   const current = periods[pos - i >= 0.5 ? i + 1 : i];
   const groups = [...new Set(series.map((s) => s.group).filter(Boolean))] as string[];
   const valueFont = Math.min(26, rowH / u * 0.4) * u;
-  // Off portrait the period label sits in the chart's bottom-right corner. Rows beside it get
+  // On wide frames the period label sits in the chart's bottom-right corner. Rows beside it get
   // their bars shortened so the value text stops short of it; all bars share one scale so they
   // stay comparable, and each row counts by how much it overlaps the label so the scale eases.
   const barPct = (() => {
     const base = portrait ? 58 : 62;
-    if (portrait) return base;
+    if (narrow) return base;
     const rowW = width - pad * 2;
     const periodFont = 150 * u;
     const legendW = groups.reduce((w, g) => w + (16 + 8 + 20) * u + textEms(g) * 22 * u, 0);
@@ -210,8 +212,10 @@ export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Fo
         {Array.from({ length: Math.min(top, series.length) }, (_, k) => (
           <div key={`rank${k}`} data-anchor={`rank${k + 1}`} style={{ position: "absolute", top: k * rowH, left: 0, width: labelW, height: rowH }} />
         ))}
-        <div style={{ position: "absolute", right: 0, bottom: portrait ? -150 * u : 10 * u, textAlign: "right" }}>
-          <div data-anchor="period" style={{ fontFamily: theme.fonts.number, fontSize: (portrait ? 120 : 150) * u, fontWeight: 800, lineHeight: 1, opacity: 0.9 }}>{current}</div>
+        <div style={strip
+          ? { position: "absolute", left: 0, right: 0, top: areaH + 8 * u, display: "flex", flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "flex-end" }
+          : { position: "absolute", right: 0, bottom: portrait ? -150 * u : 10 * u, textAlign: "right" }}>
+          <div data-anchor="period" style={{ fontFamily: theme.fonts.number, fontSize: (strip ? 104 : portrait ? 120 : 150) * u, fontWeight: 800, lineHeight: 1, opacity: 0.9 }}>{current}</div>
           {groups.length > 0 && (
             <div style={{ display: "flex", gap: 20 * u, justifyContent: "flex-end", marginTop: 14 * u }}>
               {groups.map((g, k) => (
