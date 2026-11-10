@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { generateImage, generateVideo, fetchAsset, inspectClip } from "../cli/lib/assets.mjs";
 import { ask, parseJsonReply } from "../cli/lib/llm.mjs";
 import { request } from "../cli/lib/http.mjs";
+import { validateNamed } from "../cli/lib/schema.mjs";
 import { sheetPlan, sceneAt, writeSheets } from "../cli/commands/director.mjs";
 import { REMOTION_BIN, ffmpeg, ffprobe } from "../cli/lib/ffmpeg.mjs";
 
@@ -108,6 +109,7 @@ test("a clip from a still that fails to generate stands in as the still, and is 
     assert.equal(item.fallback.from, "pad");
     assert.match(item.fallback.reason, /429/);
     assert.match(warnings[0], /using still "pad"/);
+    assert.deepEqual(validateNamed("assets", { items: [pad, item] }), []);
     // Next fetch: generation is attempted again as a video; failing again keeps the still.
     up = true;
     const again = await fetchAsset(item, { publicDir, gen });

@@ -239,7 +239,7 @@ export function stillFallback(item, { publicDir, lookup = () => null, reason = "
   if (!src?.file || src.kind === "video" || src.fallback || !existsSync(join(publicDir, src.file))) return null;
   const { duration: _d, inspect: _i, ...rest } = item;
   return {
-    ...rest, file: src.file, kind: "image", via: "still", license: src.license, author: src.author, source: src.source, title: item.title ?? src.title,
+    ...rest, file: src.file, kind: "image", via: "still", license: src.license, author: src.author, source: src.source, title: item.title ?? src.title ?? String(item.generate.prompt ?? from).slice(0, 80),
     width: src.width, height: src.height, fallback: { from, reason: reason.split("\n")[0].slice(0, 200) }, fetchedAt: new Date().toISOString(),
   };
 }

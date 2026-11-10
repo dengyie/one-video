@@ -146,6 +146,10 @@
                   "type": "number",
                   "minimum": 1,
                   "description": "video: at most this many seconds of the take are kept"
+                },
+                "still": {
+                  "type": "boolean",
+                  "description": "video with from: when generation fails, stand in as the from still (default true)"
                 }
               },
               "description": "AI generation through the relay. kind image: /images/generations; kind video: /videos (text-to-video, or image-to-video with from). A failure falls back to query/url when present.",
@@ -194,7 +198,8 @@
             "wikimedia",
             "openverse",
             "pexels",
-            "capture"
+            "capture",
+            "still"
           ]
         },
         "takes": {
@@ -218,6 +223,22 @@
         "inspect": {
           "type": "object",
           "description": "generated video: the vision check of the take (score, issues by second, kept [start, seconds])"
+        },
+        "fallback": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "from"
+          ],
+          "description": "a still standing in for a clip whose generation failed; assets fetch tries the clip again",
+          "properties": {
+            "from": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
         },
         "capture": {
           "type": "object",
