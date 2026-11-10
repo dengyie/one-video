@@ -66,7 +66,7 @@ function screenState(screen: ScreenInsert, t: number) {
     if (st.asset && st.asset !== cur) { prev = cur; cur = st.asset; switchAt = st.t ?? 0; scroll = scrollFrom = 0; }
     if (st.scroll !== undefined) { scrollFrom = scroll; scroll = st.scroll; scrollAt = st.t ?? 0; }
   }
-  return { cur, prev, sw: easeInOut((t - switchAt) / 0.4), scroll: lerp(scrollFrom, scroll, easeInOut((t - scrollAt) / 0.8)), scrolls: (screen.steps ?? []).some((st) => st.scroll !== undefined) };
+  return { cur, prev, sw: easeInOut((t - switchAt) / 0.4), scroll: lerp(scrollFrom, scroll, easeInOut((t - scrollAt) / 0.8)) };
 }
 
 // Background revealed through vertical windows that open behind the subject (depth matte).
@@ -103,10 +103,9 @@ export const FootageScene: React.FC<{ asset: string; startFrom?: number; ramp?: 
               const p = tl.assets[id];
               if (!p) throw new Error(`asset "${id}" not in timeline.assets`);
               if (p.kind === "video") return <ClipVideo a={p} style={{ ...style, objectPosition: "top" }} time={Math.max(0, t - (screen.t ?? 0))} />;
-              // A tall capture is laid at the screen's width and slid up; a screen-sized one fills it.
-              return ss.scrolls
-                ? <Img src={staticFile(p.src)} style={{ position: "absolute", left: 0, width: "100%", top: `${scroll * 100}%`, transform: `translateY(${-scroll * 100}%)`, display: "block" }} />
-                : <Img src={staticFile(p.src)} style={{ ...style, objectFit: "fill" }} />;
+              // A full-page capture is `pages` screens tall and slides up as it scrolls.
+              const pages = Math.max(1, p.pages ?? 1);
+              return <Img src={staticFile(p.src)} style={{ position: "absolute", left: 0, top: `${-scroll * (pages - 1) * 100}%`, width: "100%", height: `${pages * 100}%`, objectFit: "fill" }} />;
             };
             return (
               <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: "#000" }}>

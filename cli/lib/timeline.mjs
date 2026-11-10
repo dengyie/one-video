@@ -450,6 +450,9 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       if (!a.file) { errors.push(`asset "${id}" not fetched yet; run: onevideo assets fetch`); continue; }
       if (root && !existsSync(join(root, "public", a.file))) errors.push(`asset "${id}" file missing: public/${a.file}; run: onevideo assets fetch`);
       usedAssets[id] = { src: a.file, kind: a.kind, credit: credit(a) };
+      // A full-page capture is this many of its viewport tall (what a scrolling screen slides over).
+      const vp = a.capture?.full && a.capture.viewport;
+      if (vp && a.width && a.height) usedAssets[id].pages = r3(a.height / a.width / (vp[1] / vp[0]));
       if (root && existsSync(join(root, "public", depthPath(a)))) {
         usedAssets[id].depth = depthPath(a);
         const meta = join(root, "public", depthPath(a), "meta.json");

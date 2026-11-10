@@ -201,6 +201,8 @@ test("footage screen steps: pages and scrolls get times, sound and count as some
   assert.deepEqual(steps.map((st) => st.t), [2.5, Math.min(3.7, timeline.scenes[0].duration)]);
   assert.deepEqual(motionCues(timeline.scenes[0]).map((c) => c.role), ["page", "page"]);
   assert.ok(timeline.assets[a] && timeline.assets[b]);
+  const tall = ex.fetchedAssets.items.map((x) => (x.id === b ? { ...x, width: 1170, height: 5064, capture: { url: "https://x.com", full: true, viewport: [390, 844] } } : x));
+  assert.equal(compileTimeline({ ...ex, storyboard: sb, assets: { items: tall } }).timeline.assets[b].pages, 2);
   assert.deepEqual(schemaGate("storyboard", { scenes: [{ id: "f", type: "footage", props: { asset: "a", screen: { asset: "ui", corners, steps: [{ at: 1, scroll: 0.5 }, { cue: "c", asset: "ui2" }] } } }] }), []);
   assert.ok(schemaGate("storyboard", { scenes: [{ id: "f", type: "footage", props: { asset: "a", screen: { asset: "ui", corners, steps: [{ scroll: 2 }] } } }] }).length);
 });

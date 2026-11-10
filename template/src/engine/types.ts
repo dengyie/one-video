@@ -78,7 +78,7 @@ export type Scene = {
 
 // Video assets carry a JPEG sequence (seq/0001.jpg…, `frames` long at `fps`) when one was extracted.
 // `depth` is a near-is-white depth map (an image, or a sequence dir for a video) when one was made.
-export type Asset = { src: string; kind: "image" | "video"; credit: string; seq?: string; frames?: number; fps?: number; depth?: string; depthStep?: number; depthFrames?: number; luma?: string };
+export type Asset = { src: string; kind: "image" | "video"; credit: string; seq?: string; frames?: number; fps?: number; depth?: string; depthStep?: number; depthFrames?: number; luma?: string; pages?: number };
 
 export type Timeline = {
   version: number;
