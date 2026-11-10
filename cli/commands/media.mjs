@@ -143,7 +143,7 @@ export async function assets(args) {
     for (const i of order) {
       const item = manifest.items[i];
       if (only.length && !only.includes(item.id)) continue;
-      if (assetFileExists(project.p("public"), item) && !args.force) continue;
+      if (assetFileExists(project.p("public"), item) && !args.force && !item.fallback) continue;
       try {
         const updated = await fetchAsset(item, { publicDir: project.p("public"), aspect: w / h, gen });
         manifest.items[i] = updated;

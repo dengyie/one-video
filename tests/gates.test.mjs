@@ -74,6 +74,15 @@ test("assetsGate requires attribution for CC BY and blocks unknown licenses", ()
   assert.ok(m.some((x) => /"c" is 640x480/.test(x)));
 });
 
+test("assetsGate flags a still standing in for a failed clip, not as duplicate media", () => {
+  const m = msgs(assetsGate({ items: [
+    { id: "pad", file: "assets/pad.png", license: "generated", source: "generated" },
+    { id: "liftoff", file: "assets/pad.png", kind: "image", license: "generated", source: "generated", fallback: { from: "pad", reason: "HTTP 429" } },
+  ] }));
+  assert.ok(m.some((x) => /"liftoff" is still "pad".*HTTP 429.*--only liftoff/.test(x)));
+  assert.ok(!m.some((x) => /same source media/.test(x)));
+});
+
 test("numbersGate matches whole number tokens, not substrings of fact numbers", () => {
   const research = { facts: [
     { id: "y", claim: "2025年营收翻倍", source: { title: "t" } },

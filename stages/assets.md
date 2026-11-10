@@ -24,7 +24,7 @@
   ```
 
   - 图片：模型按 `model` / `models` 的顺序依次尝试，默认 `gpt-image-2.5` → `grok-imagine-image-quality`；尺寸跟随项目画幅。`variants`（1–4）一次出多张，由视觉模型按 `brief` 挑一张；所有备选都保存为 `<id>.take<k>.*`，`picked` / `pickReason` 记录挑选结果，`pick: N` 可以直接指定。
-  - 视频：`kind: "video"`，走 `/videos` 任务接口（提交 → 轮询 → 下载），默认 `grok-imagine-video` → `grok-imagine-video-1.5`。`duration` 取 1–15 秒，`resolution` 默认 720p；`from` 指定一个图片素材，把它当首帧做成动态画面（这类条目会排在最后取）。取回后和下载的视频一样，裁成片段并抽出帧序列。
+  - 视频：`kind: "video"`，走 `/videos` 任务接口（提交 → 轮询 → 下载），默认 `grok-imagine-video` → `grok-imagine-video-1.5`。`duration` 取 1–15 秒，`resolution` 默认 720p；`from` 指定一个图片素材，把它当首帧做成动态画面（这类条目会排在最后取）。取回后和下载的视频一样，裁成片段并抽出帧序列。生视频失败时（中继常限流 429），带 `from` 的条目先用那张静帧顶上：`kind` 变成 `image`、记一个 `fallback`，footage 场景照样按镜头运动推它，片子能先渲出来；validate 会警告，下一次 `assets fetch` 自动重试生视频。不想要这个替身就写 `still: false`。
   - 生视频取回后会自动质检：把整段铺成一张联系表，交给视觉模型找人物重复、肢体变形、物体凭空出现、乱码、镜头跳变，再挑出最长的一段干净画面作为片段（`keep: 3` 限制最多保留几秒）。结果写进条目的 `inspect`（分数、问题时间点、保留区间）；评分 ≤4 会警告建议重生成。手写了 `clip` 或 `inspect: false` 时跳过。
   - 生成失败时会回落到同一条目的 `url` / `query`，并给出警告；两者都没有时报错。
 

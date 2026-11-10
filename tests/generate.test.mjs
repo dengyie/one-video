@@ -87,6 +87,40 @@ test("a failed generation falls back to the item's stock url", async () => {
   } finally { r.close(); }
 });
 
+test("a clip from a still that fails to generate stands in as the still, and is tried again next fetch", async () => {
+  let up = false;
+  const r = await relay({
+    "/v1/videos": () => (up ? [200, { id: "t1" }] : [429, { error: "rate limited" }]),
+    "/v1/videos/t1": () => [500, { error: "down" }],
+  });
+  try {
+    const publicDir = mkdtempSync(join(tmpdir(), "ov-gen-"));
+    mkdirSync(join(publicDir, "assets"), { recursive: true });
+    writeFileSync(join(publicDir, "assets/pad.png"), PNG);
+    const pad = { id: "pad", file: "assets/pad.png", kind: "image", license: "generated", author: "gpt-image-2.5", source: "generated", width: 1536, height: 1024 };
+    const warnings = [];
+    const gen = { video: { baseUrl: r.base, keyEnv: "OV_TEST_KEY", models: ["v1"], pollSec: 0.01 }, lookup: (id) => (id === "pad" ? pad : null), onWarn: (m) => warnings.push(m) };
+    const item = await fetchAsset({ id: "liftoff", kind: "video", generate: { prompt: "liftoff", from: "pad" } }, { publicDir, gen });
+    assert.equal(item.kind, "image");
+    assert.equal(item.file, "assets/pad.png");
+    assert.equal(item.via, "still");
+    assert.equal(item.license, "generated");
+    assert.equal(item.fallback.from, "pad");
+    assert.match(item.fallback.reason, /429/);
+    assert.match(warnings[0], /using still "pad"/);
+    // Next fetch: generation is attempted again as a video; failing again keeps the still.
+    up = true;
+    const again = await fetchAsset(item, { publicDir, gen });
+    assert.ok(r.calls.filter((c) => c.path === "/v1/videos").length >= 2);
+    assert.equal(again.kind, "image");
+    assert.equal(again.fallback.from, "pad");
+    // Opted out, or no still to stand in: the failure surfaces.
+    await assert.rejects(fetchAsset({ id: "x", kind: "video", generate: { prompt: "p", from: "pad", still: false } }, { publicDir, gen: { ...gen } }), /failed on every model/);
+    up = false;
+    await assert.rejects(fetchAsset({ id: "y", kind: "video", generate: { prompt: "p", from: "nope" } }, { publicDir, gen }), /not fetched yet/);
+  } finally { r.close(); }
+});
+
 test("ask walks the model list and parses JSON replies", async () => {
   const r = await relay({
     "/v1/chat/completions": (_, j) => (j.model === "gone" ? [500, { error: "no channel" }] : j.model === "blank" ? chat("⚠️ Upstream Gemini returned an empty response.") : chat('{"ok": true, "s": "a } b"}')),

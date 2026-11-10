@@ -168,6 +168,9 @@ export async function fetchAsset(item, { publicDir, aspect = 16 / 9, gen = {} })
   const dir = join(publicDir, "assets");
   mkdirSync(dir, { recursive: true });
 
+  // A still standing in for a failed clip goes back to being the clip it was meant to be.
+  if (item.fallback) { const { fallback: _f, file: _file, ...rest } = item; item = { ...rest, kind: "video" }; }
+
   // A UI capture re-shoots itself with the settings it was taken with.
   if (item.capture?.url) return (await import("../commands/media.mjs")).captureItem(item, publicDir);
 
@@ -176,6 +179,11 @@ export async function fetchAsset(item, { publicDir, aspect = 16 / 9, gen = {} })
     try {
       return item.kind === "video" ? await generateVideo(item, { ...opts, defaults: gen.video ?? {} }) : await generateImage(item, { ...opts, defaults: gen.image ?? {} });
     } catch (e) {
+      const still = item.kind === "video" && stillFallback(item, { publicDir, lookup: gen.lookup, reason: e.message });
+      if (still) {
+        opts.onWarn(`${item.id}: ${e.message.split("\n")[0].slice(0, 200)}; using still "${still.fallback.from}" (camera moves it; the next assets fetch tries the clip again)`);
+        return still;
+      }
       if (!item.query && !item.url) throw e;
       opts.onWarn(`${item.id}: ${e.message}; falling back to ${item.url ? "url" : `search "${item.query}"`}`);
     }
@@ -218,6 +226,21 @@ export async function fetchAsset(item, { publicDir, aspect = 16 / 9, gen = {} })
     height: chosen.height ?? item.height,
     ...(chosen.kind === "video" ? { duration: chosen.duration ?? null } : {}),
     fetchedAt: new Date().toISOString(),
+  };
+}
+
+// A clip animated from a still (generate.from) whose generation failed — the video relay is often
+// rate-limited — stands in as that still: footage scenes move an image with the same camera, so the
+// cut still plays. Marked `fallback`, it is generated again on the next assets fetch.
+// generate.still: false turns this off.
+export function stillFallback(item, { publicDir, lookup = () => null, reason = "" }) {
+  const from = typeof item.generate === "object" && item.generate.still !== false ? item.generate.from : null;
+  const src = from ? lookup(from) : null;
+  if (!src?.file || src.kind === "video" || src.fallback || !existsSync(join(publicDir, src.file))) return null;
+  const { duration: _d, inspect: _i, ...rest } = item;
+  return {
+    ...rest, file: src.file, kind: "image", via: "still", license: src.license, author: src.author, source: src.source, title: item.title ?? src.title,
+    width: src.width, height: src.height, fallback: { from, reason: reason.split("\n")[0].slice(0, 200) }, fetchedAt: new Date().toISOString(),
   };
 }
 
