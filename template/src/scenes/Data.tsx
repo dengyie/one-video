@@ -176,16 +176,16 @@ export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Fo
           const color = r.s.color ?? (r.s.group && groupColors[r.s.group]) ?? colorAt(theme, r.idx);
           const visible = clamp01(top - r.rank);
           return (
-            <div key={r.s.name} data-anchor={`bar${r.idx + 1}`} style={{ position: "absolute", top: r.rank * rowH, left: 0, right: 0, height: rowH, display: "flex", alignItems: "center", opacity: visible }}>
+            <div key={r.s.name} style={{ position: "absolute", top: r.rank * rowH, left: 0, right: 0, height: rowH, display: "flex", alignItems: "center", opacity: visible }}>
               <div style={{ width: labelW, flex: "none", textAlign: "right", paddingRight: 18 * u, fontSize: Math.min(30, rowH / u * 0.45) * u, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.s.name}</div>
-              <div style={{ width: `${Math.max(0.5, (r.value / max) * (portrait ? 58 : 62))}%`, height: rowH * 0.7, borderRadius: 6 * u, background: `linear-gradient(90deg, ${color}99, ${color})` }} />
+              <div data-anchor={`bar${r.idx + 1}`} style={{ width: `${Math.max(0.5, (r.value / max) * (portrait ? 58 : 62))}%`, height: rowH * 0.7, borderRadius: 6 * u, background: `linear-gradient(90deg, ${color}99, ${color})` }} />
               <div style={{ marginLeft: 14 * u, fontFamily: theme.fonts.number, fontSize: Math.min(26, rowH / u * 0.4) * u, color: theme.colors.muted, whiteSpace: "nowrap" }}>{fmt(r.value, format)}</div>
             </div>
           );
         })}
-        {/* Fixed slots, so an overlay can mark "the leader" whoever it is at that moment. */}
+        {/* Fixed name slots, so an overlay can mark "the leader" whoever it is at that moment. */}
         {Array.from({ length: Math.min(top, series.length) }, (_, k) => (
-          <div key={`rank${k}`} data-anchor={`rank${k + 1}`} style={{ position: "absolute", top: k * rowH, left: labelW, right: 0, height: rowH }} />
+          <div key={`rank${k}`} data-anchor={`rank${k + 1}`} style={{ position: "absolute", top: k * rowH, left: 0, width: labelW, height: rowH }} />
         ))}
         <div style={{ position: "absolute", right: 0, bottom: portrait ? -150 * u : 10 * u, textAlign: "right" }}>
           <div data-anchor="period" style={{ fontFamily: theme.fonts.number, fontSize: (portrait ? 120 : 150) * u, fontWeight: 800, lineHeight: 1, opacity: 0.9 }}>{current}</div>
