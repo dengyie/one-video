@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
-import { AUTO_SHOTS, MOTION_SFX, bestOffset, captionBand, compileShots, compileTimeline, hardCuts, motionCues, resolveWhen, sfxVariants } from "../cli/lib/timeline.mjs";
+import { AUTO_SHOTS, MOTION_SFX, bestOffset, captionBand, compileShots, compileTimeline, hardCuts, motionCues, rampShots, resolveWhen, sfxVariants } from "../cli/lib/timeline.mjs";
 import { beatsFile, detectBeats, everyFourth, gridBeats, snapToBar, snapToBeat } from "../cli/lib/beats.mjs";
 import { rhythmGate, schemaGate } from "../cli/lib/gates.mjs";
 import { coverPoint, dodgeX, hexLuminance, nearCentroid, rampTime, scrimFor, subjectFocus } from "../cli/lib/subject.mjs";
@@ -266,4 +266,20 @@ test("depthStep: dense only for clips with a title cut out behind the subject", 
   assert.equal(depthStep(sb, "a"), 2);
   assert.equal(depthStep(sb, "b"), 8);
   assert.equal(depthStep(null, "b"), 2);
+});
+
+test("a speed ramp on a still becomes camera moves that leave authored shots alone", () => {
+  const ramp = [{ t: 1.4, speed: 0.45 }, { t: 5.9, speed: 1.7 }, { t: 8.9, speed: 0.9 }];
+  const bare = rampShots(ramp, undefined, 10);
+  assert.deepEqual(bare.map((s) => s.t), [1.4, 3.65, 5.9, 8.9]);
+  assert.deepEqual(bare.map((s) => s.zoom), [1.06, 1.12, 1.22, 1.28]);
+  assert.equal(bare[2].ease, 0.35);
+  for (const [i, s] of bare.entries()) if (i) assert.ok(s.t - bare[i - 1].t <= 4.5, "keeps the frame changing");
+  // An authored push until 4.28 s: the slow push waits for it; a shot on the speed-up keeps that point.
+  const own = [{ t: 0, zoom: 1, x: 0.5, y: 0.5, rotate: 0, cut: false, ease: 0.6 }, { t: 0.28, zoom: 1.2, x: 0.47, y: 0.44, rotate: 0, cut: false, ease: 4 }, { t: 5.9, zoom: 1.04, x: 0.5, y: 0.5, rotate: 0, cut: true, ease: 0.6 }];
+  const mixed = rampShots(ramp, own, 10);
+  assert.deepEqual(mixed.map((s) => s.t), [0, 0.28, 4.28, 5.9, 8.9]);
+  assert.deepEqual(mixed[2], { t: 4.28, zoom: 1.26, x: 0.47, y: 0.44, rotate: 0, cut: false, ease: 1.62 });
+  assert.equal(mixed[3], own[2]);
+  assert.equal(rampShots([{ t: 0, speed: 1 }], own, 10), own);
 });

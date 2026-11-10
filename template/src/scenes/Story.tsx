@@ -1,5 +1,5 @@
 import React from "react";
-import { colorAt, useLayout, useRevealAt, useTheme, useTime } from "../engine/context";
+import { colorAt, fitFont, useLayout, useRevealAt, useTheme, useTime } from "../engine/context";
 import { fmtCount } from "../engine/format";
 import { clamp01, easeOut, lerp } from "../engine/motion";
 import type { Format } from "../engine/types";
@@ -95,7 +95,7 @@ export const MediaScene: React.FC<{ asset: string; caption?: string; title?: str
 
 type Side = { title: string; subtitle?: string; value?: number; format?: Format; items?: string[]; color?: string; asset?: string };
 
-const CompareSide: React.FC<{ side: Side; at: number; color: string }> = ({ side, at, color }) => {
+const CompareSide: React.FC<{ side: Side; at: number; color: string; valueSize: number }> = ({ side, at, color, valueSize }) => {
   const theme = useTheme();
   const tl = useTimeline();
   const { u } = useLayout();
@@ -108,7 +108,7 @@ const CompareSide: React.FC<{ side: Side; at: number; color: string }> = ({ side
       <div style={{ fontSize: 50 * u, fontWeight: 800, color }}>{side.title}</div>
       {side.subtitle && <div style={{ fontSize: 30 * u, color: theme.colors.muted }}>{side.subtitle}</div>}
       {side.value !== undefined && (
-        <div style={{ fontFamily: theme.fonts.number, fontSize: 112 * u, fontWeight: 800, lineHeight: 1.05 }}>{fmtCount(side.value * easeOut((t - at - 0.1) / 0.8), side.value, side.format)}</div>
+        <div style={{ fontFamily: theme.fonts.number, fontSize: valueSize, fontWeight: 800, lineHeight: 1.05, whiteSpace: "nowrap" }}>{fmtCount(side.value * easeOut((t - at - 0.1) / 0.8), side.value, side.format)}</div>
       )}
       {(side.items ?? []).map((it, i) => (
         <div key={i} style={{ fontSize: 32 * u, display: "flex", gap: 14 * u, opacity: easeOut((t - at - 0.5 - i * 0.35) / 0.4) }}>
@@ -122,17 +122,20 @@ const CompareSide: React.FC<{ side: Side; at: number; color: string }> = ({ side
 
 export const CompareScene: React.FC<{ title?: string; vs?: string; left: Side; right: Side }> = ({ title, vs = "VS", left, right }) => {
   const theme = useTheme();
-  const { u, portrait } = useLayout();
+  const { u, portrait, width, pad } = useLayout();
   const at = useRevealAt();
   const t = useTime();
   const a0 = at(0, 2), a1 = at(1, 2);
+  // Both values at one size that keeps the longer on one line in its card (1:1 / 4:5 cards are narrow).
+  const room = portrait ? width - 2 * pad - 88 * u : (width - 2 * pad - 80 * u - [...vs].length * 40 * u) / 2 - 88 * u;
+  const valueSize = Math.min(...[left, right].map((s) => (s.value === undefined ? 112 * u : fitFont(fmtCount(s.value, s.value, s.format), room, 112 * u))));
   return (
     <Stage center>
       <Title text={title} />
       <div style={{ display: "flex", flexDirection: portrait ? "column" : "row", gap: 40 * u, alignItems: "stretch" }}>
-        <CompareSide side={left} at={a0} color={left.color ?? colorAt(theme, 0)} />
+        <CompareSide side={left} at={a0} color={left.color ?? colorAt(theme, 0)} valueSize={valueSize} />
         <div style={{ alignSelf: "center", fontFamily: theme.fonts.number, fontSize: 56 * u, fontWeight: 900, color: theme.colors.muted, opacity: easeOut((t - a1 + 0.3) / 0.4) }}>{vs}</div>
-        <CompareSide side={right} at={a1} color={right.color ?? colorAt(theme, 1)} />
+        <CompareSide side={right} at={a1} color={right.color ?? colorAt(theme, 1)} valueSize={valueSize} />
       </div>
     </Stage>
   );

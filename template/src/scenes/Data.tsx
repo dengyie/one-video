@@ -1,5 +1,5 @@
 import React from "react";
-import { colorAt, useLayout, useRevealAt, useScene, useTheme, useTime, useTimeline, cueOr } from "../engine/context";
+import { colorAt, fitFont, useLayout, useRevealAt, useScene, useTheme, useTime, useTimeline, cueOr } from "../engine/context";
 import { fmt, fmtCount } from "../engine/format";
 import { Roll } from "../components/Roll";
 import { clamp01, easeInOut, easeOut, lerp } from "../engine/motion";
@@ -25,12 +25,15 @@ type StatCard = { value: number; from?: number; format?: Format; label: string; 
 
 export const StatCardsScene: React.FC<{ columns?: number; cards: StatCard[] }> = ({ columns, cards }) => {
   const theme = useTheme();
-  const { u, portrait } = useLayout();
+  const { u, portrait, width, pad } = useLayout();
   const at = useRevealAt();
   const t = useTime();
   const { fps } = useTimeline();
   const cols = columns ?? (portrait ? (cards.length > 3 ? 2 : 1) : Math.min(cards.length, cards.length === 4 ? 2 : 3));
   const big = cards.length <= 2 ? 1.4 : cards.length <= 4 ? 1.15 : 0.8;
+  // One value size for every card, small enough that the longest stays inside its card.
+  const room = (width - 2 * pad - (cols - 1) * 36 * u) / cols - 80 * u;
+  const valueSize = Math.min(...cards.map((c) => fitFont(fmtCount(c.value, c.value, c.format), room, 88 * u * big)));
   return (
     <Stage center>
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 36 * u }}>
@@ -42,7 +45,7 @@ export const StatCardsScene: React.FC<{ columns?: number; cards: StatCard[] }> =
           return (
             <Card key={i} o={o} accent={color} style={{ textAlign: "left", padding: `${34 * u}px ${40 * u}px` }}>
               <div style={{ fontSize: 28 * u * Math.max(0.85, big * 0.9), color: theme.colors.muted }}>{c.label}</div>
-              <div style={{ fontFamily: theme.fonts.number, fontSize: 88 * u * big, fontWeight: 800, color, marginTop: 10 * u, lineHeight: 1.05, whiteSpace: "nowrap" }}>
+              <div style={{ fontFamily: theme.fonts.number, fontSize: valueSize, fontWeight: 800, color, marginTop: 10 * u, lineHeight: 1.05, whiteSpace: "nowrap" }}>
                 {c.from === undefined && t - s < COUNT ? <Roll text={fmtCount(c.value, c.value, c.format)} p={easeOut((t - s) / COUNT)} was={easeOut((t - 1 / fps - s) / COUNT)} /> : fmtCount(v, c.value, c.format)}
               </div>
               {c.note && <div style={{ fontSize: 22 * u, color: theme.colors.muted, marginTop: 12 * u, lineHeight: 1.4 }}>{c.note}</div>}
@@ -303,14 +306,15 @@ type Segment = { label: string; value: number; color?: string; cue?: string };
 
 export const ShareScene: React.FC<{ title?: string; unit?: string; format?: Format; segments: Segment[] }> = ({ title, unit, format, segments }) => {
   const theme = useTheme();
-  const { u, portrait } = useLayout();
+  const { u, portrait, narrow, height, top, bottom } = useLayout();
   const at = useRevealAt();
   const t = useTime();
   const total = segments.reduce((s, x) => s + x.value, 0) || 1;
   // One precision for the whole chart: a decimal only when some slice is under 10%.
   const pctDecimals = segments.some((x) => x.value / total < 0.1) ? 1 : 0;
   const pct = (v: number) => `${((v / total) * 100).toFixed(pctDecimals)}%`;
-  const R = (portrait ? 320 : 300) * u, r = R * 0.62;
+  // Narrow frames stack the legend under the ring; a square one has to shrink the ring to fit it.
+  const R = portrait ? 320 * u : narrow ? Math.min(300 * u, (height - top - bottom - (180 + segments.length * 66) * u) / 2) : 300 * u, r = R * 0.62;
   // The whole ring sweeps in on the first reveal, so the chart never shows a broken circle;
   // each slice then lights up (and its legend row) on its own cue.
   const first = Math.min(...segments.map((s, i) => at(i, segments.length, s.cue)));
@@ -334,7 +338,7 @@ export const ShareScene: React.FC<{ title?: string; unit?: string; format?: Form
   return (
     <Stage center>
       <Title text={title} />
-      <div style={{ display: "flex", flexDirection: portrait ? "column" : "row", alignItems: "center", gap: 80 * u, justifyContent: "center" }}>
+      <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", alignItems: "center", gap: (narrow && !portrait ? 36 : 80) * u, justifyContent: "center" }}>
         <svg width={R * 2 + 20 * u} height={R * 2 + 20 * u} viewBox={`${-R - 10 * u} ${-R - 10 * u} ${R * 2 + 20 * u} ${R * 2 + 20 * u}`}>
           {arcs.map((a) => <path key={a.s.label} d={arc(a.a0, a.a1)} fill={a.color} opacity={0.3 + 0.7 * a.p} stroke={theme.colors.bg} strokeWidth={3 * u} />)}
           <text x={0} y={-6 * u} textAnchor="middle" fontSize={76 * u} fontWeight={800} fill={theme.colors.text} fontFamily={theme.fonts.number} opacity={lead.p}>

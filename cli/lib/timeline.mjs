@@ -192,6 +192,34 @@ export function compileShots(spec, ctx) {
   return { shots: out, errors };
 }
 
+// A speed ramp only moves footage that is a clip. On a still (a photo, or one standing in for a clip
+// that failed to generate) it becomes camera moves: slow-mo stretches a slow push (two when longer
+// than 3 s, so the frame keeps changing), a speed-up a quick push (its whoosh comes from the ramp). Authored shots win: a ramp move
+// waits until an authored move in progress has finished and skips points an authored shot claims.
+export function rampShots(ramp, shots, duration) {
+  const own = shots ?? [];
+  const keys = (ramp ?? []).filter((r) => Number.isFinite(r.t)).sort((a, b) => a.t - b.t);
+  const added = [];
+  const all = () => [...own, ...added].sort((a, b) => a.t - b.t);
+  const viewAt = (t) => [...all()].reverse().find((sh) => sh.t <= t) ?? { zoom: 1, x: 0.5, y: 0.5 };
+  const busyUntil = (t) => Math.max(t, ...own.filter((sh) => sh.t <= t).map((sh) => sh.t + (sh.cut ? 0 : sh.ease)));
+  const push = (t, dz, ease) => {
+    if (own.some((sh) => Math.abs(sh.t - t) < 0.3)) return;
+    const v = viewAt(t);
+    added.push({ t: r3(t), zoom: r3(Math.min(3, v.zoom + dz)), x: v.x, y: v.y, rotate: 0, cut: false, ease: r3(ease) });
+  };
+  for (const [i, r] of keys.entries()) {
+    const end = Math.min(duration, keys[i + 1]?.t ?? duration);
+    if (r.speed > 1.3) { push(r.t, 0.1, 0.35); continue; }
+    if (r.speed >= 1) continue;
+    const from = Math.min(end, busyUntil(r.t)), len = end - from;
+    if (len < 0.8) continue;
+    const parts = len > 3 ? 2 : 1;
+    for (let k = 0; k < parts; k++) push(from + (k * len) / parts, 0.06, len / parts);
+  }
+  return added.length ? all() : own;
+}
+
 // An inherited canvas item arrives in its final form: already shown, morphs applied.
 const settled = (it) => {
   const { morph = [], at: _a, cue: _c, ...rest } = it;
@@ -430,6 +458,10 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       const res = compileShots(sb.shots, ctx);
       res.errors.forEach((e) => errors.push(`scene "${sb.id}" ${e}`));
       if (res.shots.length) shots = res.shots;
+    }
+    if (sb.type === "footage" && props.ramp?.length && assetById.get(props.asset)?.kind === "image") {
+      const s2 = rampShots(props.ramp, shots, duration);
+      if (s2.length) shots = s2;
     }
     if (sb.type === "sources" && !props.items?.length && props.auto !== false) props.items = sourceList(research, assets, libraryCredits);
     if (sb.type === "map") for (const h of props.highlight ?? []) {

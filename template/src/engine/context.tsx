@@ -36,7 +36,16 @@ export function useLayout() {
   // Tall frames (9:16) stack; 4:5 is near square and keeps the 1:1 layout and caption band.
   const portrait = height >= width * 1.5;
   const pad = (portrait ? 64 : 96) * u;
-  return { width, height, u, portrait, pad, top: (portrait ? 220 : 190) * u, bottom: (portrait ? 420 : 170) * u };
+  // Narrow: 9:16, 1:1 and 4:5 — too little width for panels side by side at their 16:9 sizes.
+  const narrow = width < height * 1.5;
+  return { width, height, u, portrait, narrow, pad, top: (portrait ? 220 : 190) * u, bottom: (portrait ? 420 : 170) * u };
+}
+
+// The font size (px) at which text that must stay on one line fits `room` px, at most `max`.
+// Widths are estimated: CJK a full em, Latin and digits about 0.62 em in the bold faces used.
+export function fitFont(text: string, room: number, max: number): number {
+  const ems = [...text].reduce((n, c) => n + (c.charCodeAt(0) > 0x2e80 ? 1 : 0.62), 0);
+  return ems ? Math.min(max, room / ems) : max;
 }
 
 export function usePace(): number {
