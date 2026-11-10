@@ -38,6 +38,8 @@ export type Overlay = {
   icon?: string; label?: string; ring?: boolean; count?: number; origin?: "top" | "point";
   from?: [number, number]; to?: [number, number]; curve?: number;
   kind?: "circle" | "box" | "underline" | "highlight" | "strike"; rect?: [number, number, number, number];
+  // Pinned to a scene element (its data-anchor name) at `place`; x/y/rect are the fallback.
+  on?: string; place?: "center" | "top" | "bottom" | "left" | "right" | "top-left" | "top-right" | "bottom-left" | "bottom-right";
   text?: string; subtitle?: string; side?: "left" | "right"; rotate?: number;
   asset?: string; shape?: "circle" | "rounded"; style?: "slam" | "rise" | "type";
   // Word only: 0–1 strength of the backing that keeps it legible over bright or busy media.

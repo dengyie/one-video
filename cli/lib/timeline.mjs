@@ -196,6 +196,17 @@ export function compileShots(spec, ctx) {
 // that failed to generate) it becomes camera moves: slow-mo stretches a slow push (two when longer
 // than 3 s, so the frame keeps changing), a speed-up a quick push (its whoosh comes from the ramp). Authored shots win: a ramp move
 // waits until an authored move in progress has finished and skips points an authored shot claims.
+// Elements a scene marks with data-anchor, which an overlay can pin to with `on`; null when the
+// scene type has none. Numbered names follow the authored order, cue names the item's own cue.
+export function anchorNames(type, props = {}) {
+  const list = (key, items) => (items ?? []).flatMap((x, i) => [`${key}${i + 1}`, ...(x?.cue ? [x.cue] : [])]);
+  if (type === "stat-cards") return list("card", props.cards);
+  if (type === "bar-compare") return list("bar", props.items);
+  if (type === "share") return ["ring", ...list("seg", props.segments)];
+  if (type === "compare") return ["left", "right", ...["left", "right"].filter((k) => props[k]?.value !== undefined).map((k) => `${k}-value`)];
+  return null;
+}
+
 export function rampShots(ramp, shots, duration) {
   const own = shots ?? [];
   const keys = (ramp ?? []).filter((r) => Number.isFinite(r.t)).sort((a, b) => a.t - b.t);
@@ -408,6 +419,11 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       const where = `scene "${sb.id}" overlay ${k} (${ov.type})`;
       const res = resolveAt(ov.at ?? 0, lines, duration);
       if (res.error) { errors.push(`${where}: ${res.error}`); continue; }
+      if (ov.on !== undefined) {
+        const names = anchorNames(sb.type, sb.props);
+        if (!names) { errors.push(`${where}: on "${ov.on}": ${sb.type} scenes have no anchors (stat-cards, compare, share, bar-compare do)`); continue; }
+        if (!names.includes(ov.on)) { errors.push(`${where}: on "${ov.on}" is not an element of this ${sb.type} scene (${names.join(", ")})`); continue; }
+      }
       const t = clampT(res.t, duration);
       const { at, duration: d, sfx: _sfx, ...rest } = ov;
       const o = { ...structuredClone(rest), t: r3(t), end: r3(d ? Math.min(duration + 0.5, t + d) : duration + 0.5) };

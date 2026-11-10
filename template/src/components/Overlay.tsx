@@ -1,4 +1,4 @@
-import React from "react";
+import React, { createContext, useContext, useLayoutEffect, useRef, useState } from "react";
 import { AbsoluteFill, Img, Sequence, random, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { Lottie } from "@remotion/lottie";
 import { evolvePath, getLength, getPointAtLength, getTangentAtLength } from "@remotion/paths";
@@ -10,28 +10,73 @@ import { Icon } from "./Icon";
 // Overlay layer: motion graphics placed on top of any scene at a cue (compiled to `t`, seconds
 // scene-relative, and `end`). Positions are fractions of the frame; sizes are layout units.
 // They ride with the scene through transitions and its shot track, but ignore its slow camera drift.
+// An overlay with `on` is pinned to a scene element instead (its `data-anchor` name), measured
+// every frame, so it stays on the card or number it marks in any aspect, drift included.
 const FADE = 0.3;
+
+type Box = { x: number; y: number; w: number; h: number };
+const Anchors = createContext<Record<string, Box>>({});
+
+const sameBoxes = (a: Record<string, Box>, b: Record<string, Box>) => {
+  const ka = Object.keys(a), kb = Object.keys(b);
+  return ka.length === kb.length && ka.every((k) => b[k] && a[k].x === b[k].x && a[k].y === b[k].y && a[k].w === b[k].w && a[k].h === b[k].h);
+};
 
 export const Overlays: React.FC = () => {
   const scene = useScene();
   const t = useTime();
+  const { width } = useLayout();
+  const ref = useRef<HTMLDivElement>(null);
+  const [boxes, setBoxes] = useState<Record<string, Box>>({});
+  const names = [...new Set((scene.overlays ?? []).map((o) => o.on).filter(Boolean))] as string[];
+  // Element boxes in frame px, relative to this layer (it shares the scene content's transform
+  // parent); the state update lands before paint, so the frame renders with this frame's boxes.
+  useLayoutEffect(() => {
+    const me = ref.current, root = me?.parentElement;
+    if (!me || !root || !names.length) return;
+    const c = me.getBoundingClientRect();
+    const k = c.width / width || 1;
+    const r = (v: number) => Math.round(v * 10) / 10;
+    const next: Record<string, Box> = {};
+    for (const n of names) {
+      const el = root.querySelector(`[data-anchor~="${CSS.escape(n)}"]`);
+      if (!el) continue;
+      const b = el.getBoundingClientRect();
+      next[n] = { x: r((b.left - c.left) / k), y: r((b.top - c.top) / k), w: r(b.width / k), h: r(b.height / k) };
+    }
+    setBoxes((prev) => (sameBoxes(prev, next) ? prev : next));
+  });
   if (!scene.overlays?.length) return null;
   return (
-    <AbsoluteFill style={{ pointerEvents: "none" }}>
-      {scene.overlays.map((o, i) => {
-        if (t < o.t - 0.05 || t > o.end) return null;
-        const out = clamp01((o.end - t) / FADE);
-        return <OverlayView key={i} o={o} i={i} local={t - o.t} out={o.type === "flash" ? 1 : out} />;
-      })}
+    <AbsoluteFill ref={ref} style={{ pointerEvents: "none" }}>
+      <Anchors.Provider value={boxes}>
+        {scene.overlays.map((o, i) => {
+          if (t < o.t - 0.05 || t > o.end) return null;
+          const out = clamp01((o.end - t) / FADE);
+          return <OverlayView key={i} o={o} i={i} local={t - o.t} out={o.type === "flash" ? 1 : out} />;
+        })}
+      </Anchors.Provider>
     </AbsoluteFill>
   );
 };
+
+// The point of `place` on a box, kept far enough inside the frame for a sticker centred on it.
+function placeAt(b: Box, place: string, width: number, height: number): [number, number] {
+  const fx = place.includes("left") ? 0 : place.includes("right") ? 1 : 0.5;
+  const fy = place.startsWith("top") ? 0 : place.startsWith("bottom") ? 1 : 0.5;
+  const cl = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  return [cl(b.x + b.w * fx, width * 0.14, width * 0.86), cl(b.y + b.h * fy, height * 0.08, height * 0.92)];
+}
+
+const CORNER = new Set(["stamp", "icon", "lottie", "image"]);
+const defaultPlace = (type: Overlay["type"]) => (CORNER.has(type) ? "top-right" : type === "callout" ? "right" : "center");
 
 const OverlayView: React.FC<{ o: Overlay; i: number; local: number; out: number }> = ({ o, i, local, out }) => {
   const theme = useTheme();
   const { u, width, height } = useLayout();
   const color = o.color ?? (o.type === "mark" || o.type === "stamp" ? theme.colors.highlight : colorAt(theme, i));
-  const x = (o.x ?? 0.5) * width, y = (o.y ?? 0.5) * height;
+  const box = useContext(Anchors)[o.on ?? ""];
+  const [x, y] = box ? placeAt(box, o.place ?? defaultPlace(o.type), width, height) : [(o.x ?? 0.5) * width, (o.y ?? 0.5) * height];
   const size = (o.size ?? 160) * u;
   const at = (node: React.ReactNode, s = 1, extra: React.CSSProperties = {}) => (
     <div style={{ position: "absolute", left: x, top: y, transform: `translate(-50%, -50%) scale(${s})`, opacity: out, ...extra }}>{node}</div>
@@ -54,9 +99,9 @@ const OverlayView: React.FC<{ o: Overlay; i: number; local: number; out: number 
     }
     case "burst": return <Burst x={x} y={y} size={size} color={color} local={local} out={out} seed={`${i}`} count={o.count ?? 14} />;
     case "confetti": return <Confetti local={local} out={out} count={o.count ?? 90} seed={`c${i}`} origin={o.origin ?? "top"} x={x} y={y} />;
-    case "arrow": return <Arrow o={o} color={color} local={local} out={out} />;
-    case "mark": return <Mark o={o} color={color} local={local} out={out} />;
-    case "callout": return <Callout o={o} color={color} local={local} out={out} />;
+    case "arrow": return <Arrow o={o} color={color} local={local} out={out} to={box ? [x, y] : undefined} />;
+    case "mark": return <Mark o={o} color={color} local={local} out={out} box={box} />;
+    case "callout": return <Callout o={o} color={color} local={local} out={out} px={x} py={y} />;
     case "stamp": {
       const p = clamp01(local / 0.28);
       const s = lerp(2.2, 1, easeOut(p));
@@ -175,10 +220,11 @@ const Confetti: React.FC<{ local: number; out: number; count: number; seed: stri
 };
 
 // Hand-drawn arrow from → to (frame fractions), bowed by `curve`, drawn over 0.6s then the head pops.
-const Arrow: React.FC<{ o: Overlay; color: string; local: number; out: number }> = ({ o, color, local, out }) => {
+// Pinned (`on`), it points at the element instead of `to`.
+const Arrow: React.FC<{ o: Overlay; color: string; local: number; out: number; to?: [number, number] }> = ({ o, color, local, out, to }) => {
   const { u, width, height } = useLayout();
   const [fx, fy] = o.from ?? [0.3, 0.3], [tx, ty] = o.to ?? [0.5, 0.5];
-  const a = [fx * width, fy * height], b = [tx * width, ty * height];
+  const a = [fx * width, fy * height], b = to ?? [tx * width, ty * height];
   const bend = o.curve ?? 0.25;
   const c = [(a[0] + b[0]) / 2 - (b[1] - a[1]) * bend, (a[1] + b[1]) / 2 + (b[0] - a[0]) * bend];
   const d = `M ${a[0]} ${a[1]} Q ${c[0]} ${c[1]} ${b[0]} ${b[1]}`;
@@ -202,7 +248,7 @@ const Arrow: React.FC<{ o: Overlay; color: string; local: number; out: number }>
 
 // Hand-drawn mark around a rect [x, y, w, h] (frame fractions): an over-rotated ellipse, a
 // double-stroked box, a wavy underline, a strike, or a marker highlight. Paths are seeded, so the
-// same storyboard always draws the same wobble.
+// same storyboard always draws the same wobble. Pinned (`on`), the rect is the element's box.
 function markPaths(kind: string, x: number, y: number, w: number, h: number, seed: string, u: number): string[] {
   const j = (k: string, amt: number) => (random(`${seed}${k}`) - 0.5) * 2 * amt * u;
   if (kind === "circle") {
@@ -226,17 +272,17 @@ function markPaths(kind: string, x: number, y: number, w: number, h: number, see
   return [];
 }
 
-const Mark: React.FC<{ o: Overlay; color: string; local: number; out: number }> = ({ o, color, local, out }) => {
+const Mark: React.FC<{ o: Overlay; color: string; local: number; out: number; box?: Box }> = ({ o, color, local, out, box }) => {
   const scene = useScene();
   const { u, width, height } = useLayout();
   const [rx, ry, rw, rh] = o.rect ?? [0.4, 0.4, 0.2, 0.1];
-  const [x, y, w, h] = [rx * width, ry * height, rw * width, rh * height];
+  const [x, y, w, h] = box ? [box.x, box.y, box.w, box.h] : [rx * width, ry * height, rw * width, rh * height];
   const p = easeInOut(local / 0.6);
   const kind = o.kind ?? "circle";
   if (kind === "highlight") {
     return <div style={{ position: "absolute", left: x - 6 * u, top: y + h * 0.15, width: (w + 12 * u) * p, height: h * 0.75, background: color, opacity: out * 0.38, borderRadius: 6 * u, mixBlendMode: "screen", transform: "skewX(-6deg)" }} />;
   }
-  const paths = markPaths(kind, x, y, w, h, `${scene.id}${rx}${ry}`, u);
+  const paths = markPaths(kind, x, y, w, h, box ? `${scene.id}${o.on}` : `${scene.id}${rx}${ry}`, u);
   return (
     <svg width={width} height={height} style={{ position: "absolute", inset: 0, opacity: out, overflow: "visible" }}>
       {paths.map((d, k) => {
@@ -250,9 +296,8 @@ const Mark: React.FC<{ o: Overlay; color: string; local: number; out: number }> 
 };
 
 // Point marker with a leader line to a label box.
-const Callout: React.FC<{ o: Overlay; color: string; local: number; out: number }> = ({ o, color, local, out }) => {
+const Callout: React.FC<{ o: Overlay; color: string; local: number; out: number; px: number; py: number }> = ({ o, color, local, out, px, py }) => {
   const { u, width, height } = useLayout();
-  const [px, py] = [(o.x ?? 0.5) * width, (o.y ?? 0.5) * height];
   const right = (o.side ?? (px < width * 0.6 ? "right" : "left")) === "right";
   const lx = px + (right ? 1 : -1) * 160 * u, ly = py - 110 * u;
   const dot = easeOutBack(local / 0.35);

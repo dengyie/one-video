@@ -1,14 +1,15 @@
 import React from "react";
 import { useLayout, useScene, useTheme } from "../engine/context";
 
-// Entrance-aware surface: `o` is the reveal progress 0→1.
-export const Card: React.FC<{ o: number; children: React.ReactNode; style?: React.CSSProperties; accent?: string }> = ({ o, children, style, accent }) => {
+// Entrance-aware surface: `o` is the reveal progress 0→1; `anchor` names it for pinned overlays.
+export const Card: React.FC<{ o: number; children: React.ReactNode; style?: React.CSSProperties; accent?: string; anchor?: string }> = ({ o, children, style, accent, anchor }) => {
   const theme = useTheme();
   const { u } = useLayout();
   // Over a photo backdrop the card turns into frosted glass so numbers stay legible.
   const onMedia = Boolean(useScene().backdrop);
   return (
     <div
+      data-anchor={anchor}
       style={{
         opacity: o,
         transform: `translateY(${(1 - o) * 30 * u}px)`,

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compileTimeline, motionCues, overlaySound } from "../cli/lib/timeline.mjs";
+import { anchorNames, compileTimeline, motionCues, overlaySound } from "../cli/lib/timeline.mjs";
 import { findScreen } from "../cli/lib/screen.mjs";
 import { normRects, parseRects } from "../cli/lib/capture.mjs";
 import { isMonoDark, tintLottie } from "../cli/lib/library.mjs";
@@ -119,6 +119,30 @@ test("compileTimeline compiles overlays: timing, icons, auto sfx, lottie inlinin
   sb.scenes[1].overlays = [{ type: "lottie", src: "no-such-lottie" }];
   const bad = compileTimeline({ ...ex, storyboard: sb, assets: ex.fetchedAssets }).errors;
   assert.ok(bad.some((e) => /unknown lottie "no-such-lottie"/.test(e)));
+});
+
+test("overlays pin to scene anchors with on: names per scene type, compile errors for unknown ones", () => {
+  assert.deepEqual(anchorNames("stat-cards", { cards: [{ value: 1 }, { value: 2, cue: "rev" }] }), ["card1", "card2", "rev"]);
+  assert.deepEqual(anchorNames("compare", { left: { title: "a", value: 1 }, right: { title: "b" } }), ["left", "right", "left-value"]);
+  assert.deepEqual(anchorNames("share", { segments: [{ value: 1 }, { value: 2 }] }), ["ring", "seg1", "seg2"]);
+  assert.deepEqual(anchorNames("bar-compare", { items: [{ value: 1, cue: "x" }] }), ["bar1", "x"]);
+  assert.equal(anchorNames("kinetic", {}), null);
+  assert.deepEqual(schemaGate("storyboard", { scenes: [{ id: "x", type: "kinetic", props: { lines: [{ text: "a" }] }, overlays: [{ type: "mark", on: "card1", place: "top-right" }] }] }), []);
+  assert.ok(schemaGate("storyboard", { scenes: [{ id: "x", type: "kinetic", props: { lines: [{ text: "a" }] }, overlays: [{ type: "mark", on: "card1", place: "middle" }] }] }).length > 0);
+
+  const ex = example();
+  const sb = structuredClone(ex.storyboard);
+  const i = sb.scenes.findIndex((s) => s.type !== "stat-cards" && !anchorNames(s.type, s.props));
+  sb.scenes[i] = { ...sb.scenes[i], overlays: [{ type: "stamp", text: "!", on: "card1" }] };
+  const errs = compileTimeline({ ...ex, storyboard: sb, assets: ex.fetchedAssets }).errors;
+  assert.ok(errs.some((e) => /on "card1": .* scenes have no anchors/.test(e)), errs.join("\n"));
+  sb.scenes[i] = { ...sb.scenes[i], type: "stat-cards", props: { cards: [{ value: 3, label: "a" }] }, overlays: [{ type: "stamp", text: "!", on: "card2" }, { type: "mark", on: "card1" }] };
+  const out = compileTimeline({ ...ex, storyboard: sb, assets: ex.fetchedAssets });
+  assert.ok(out.errors.some((e) => /on "card2" is not an element of this stat-cards scene \(card1\)/.test(e)), out.errors.join("\n"));
+  sb.scenes[i].overlays = [{ type: "mark", on: "card1", place: "center" }];
+  const ok = compileTimeline({ ...ex, storyboard: sb, assets: ex.fetchedAssets });
+  assert.ok(!ok.errors.some((e) => /overlay/.test(e)), ok.errors.join("\n"));
+  assert.deepEqual([ok.timeline.scenes[i].overlays[0].on, ok.timeline.scenes[i].overlays[0].place], ["card1", "center"]);
 });
 
 test("overlaySound: explicit, auto, project default and silence", () => {

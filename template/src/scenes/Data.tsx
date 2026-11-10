@@ -43,7 +43,7 @@ export const StatCardsScene: React.FC<{ columns?: number; cards: StatCard[] }> =
           const v = lerp(c.from ?? 0, c.value, easeOut((t - s) / COUNT));
           const color = c.color ?? (i === 0 ? theme.colors.accent : colorAt(theme, i));
           return (
-            <Card key={i} o={o} accent={color} style={{ textAlign: "left", padding: `${34 * u}px ${40 * u}px` }}>
+            <Card key={i} o={o} accent={color} anchor={[`card${i + 1}`, c.cue].filter(Boolean).join(" ")} style={{ textAlign: "left", padding: `${34 * u}px ${40 * u}px` }}>
               <div style={{ fontSize: 28 * u * Math.max(0.85, big * 0.9), color: theme.colors.muted }}>{c.label}</div>
               <div style={{ fontFamily: theme.fonts.number, fontSize: valueSize, fontWeight: 800, color, marginTop: 10 * u, lineHeight: 1.05, whiteSpace: "nowrap" }}>
                 {c.from === undefined && t - s < COUNT ? <Roll text={fmtCount(c.value, c.value, c.format)} p={easeOut((t - s) / COUNT)} was={easeOut((t - 1 / fps - s) / COUNT)} /> : fmtCount(v, c.value, c.format)}
@@ -82,7 +82,7 @@ export const BarCompareScene: React.FC<{ title?: string; unit?: string; format?:
           const color = r.color ?? (r.highlight ? theme.colors.accent : anyHi ? theme.colors.muted : colorAt(theme, items.indexOf(r)));
           const w = Math.max(0.004, Math.abs(r.value) / top) * p;
           return (
-            <div key={r.label} style={{ height: rowH, display: "flex", alignItems: "center", opacity: clamp01((t - s) / 0.3) }}>
+            <div key={r.label} data-anchor={[`bar${items.indexOf(r) + 1}`, r.cue].filter(Boolean).join(" ")} style={{ height: rowH, display: "flex", alignItems: "center", opacity: clamp01((t - s) / 0.3) }}>
               <div style={{ width: labelW, flex: "none", textAlign: "right", paddingRight: 22 * u, fontSize: Math.min(32, rowH / u * 0.42) * u, fontWeight: r.highlight ? 700 : 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {r.label}
               </div>
@@ -339,7 +339,7 @@ export const ShareScene: React.FC<{ title?: string; unit?: string; format?: Form
     <Stage center>
       <Title text={title} />
       <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", alignItems: "center", gap: (narrow && !portrait ? 36 : 80) * u, justifyContent: "center" }}>
-        <svg width={R * 2 + 20 * u} height={R * 2 + 20 * u} viewBox={`${-R - 10 * u} ${-R - 10 * u} ${R * 2 + 20 * u} ${R * 2 + 20 * u}`}>
+        <svg data-anchor="ring" width={R * 2 + 20 * u} height={R * 2 + 20 * u} viewBox={`${-R - 10 * u} ${-R - 10 * u} ${R * 2 + 20 * u} ${R * 2 + 20 * u}`}>
           {arcs.map((a) => <path key={a.s.label} d={arc(a.a0, a.a1)} fill={a.color} opacity={0.3 + 0.7 * a.p} stroke={theme.colors.bg} strokeWidth={3 * u} />)}
           <text x={0} y={-6 * u} textAnchor="middle" fontSize={76 * u} fontWeight={800} fill={theme.colors.text} fontFamily={theme.fonts.number} opacity={lead.p}>
             {pct(lead.s.value)}
@@ -348,7 +348,7 @@ export const ShareScene: React.FC<{ title?: string; unit?: string; format?: Form
         </svg>
         <div style={{ display: "flex", flexDirection: "column", gap: 20 * u, minWidth: 420 * u }}>
           {arcs.map((a) => (
-            <div key={a.s.label} style={{ display: "flex", alignItems: "center", gap: 18 * u, opacity: Math.max(0.3, a.p), transform: `translateX(${(1 - a.p) * 12 * u}px)` }}>
+            <div key={a.s.label} data-anchor={[`seg${a.i + 1}`, a.s.cue].filter(Boolean).join(" ")} style={{ display: "flex", alignItems: "center", gap: 18 * u, opacity: Math.max(0.3, a.p), transform: `translateX(${(1 - a.p) * 12 * u}px)` }}>
               <div style={{ width: 26 * u, height: 26 * u, borderRadius: 6 * u, background: a.color }} />
               <div style={{ flex: 1, fontSize: 38 * u }}>{a.s.label}</div>
               <div style={{ fontFamily: theme.fonts.number, fontSize: 40 * u, fontWeight: 700 }}>{pct(a.s.value)}</div>

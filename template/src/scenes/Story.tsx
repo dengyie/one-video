@@ -95,7 +95,7 @@ export const MediaScene: React.FC<{ asset: string; caption?: string; title?: str
 
 type Side = { title: string; subtitle?: string; value?: number; format?: Format; items?: string[]; color?: string; asset?: string };
 
-const CompareSide: React.FC<{ side: Side; at: number; color: string; valueSize: number }> = ({ side, at, color, valueSize }) => {
+const CompareSide: React.FC<{ side: Side; at: number; color: string; valueSize: number; anchor: string }> = ({ side, at, color, valueSize, anchor }) => {
   const theme = useTheme();
   const tl = useTimeline();
   const { u } = useLayout();
@@ -103,12 +103,12 @@ const CompareSide: React.FC<{ side: Side; at: number; color: string; valueSize: 
   const o = easeOut((t - at) / 0.45);
   const a = side.asset ? tl.assets[side.asset] : null;
   return (
-    <Card o={o} accent={color} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16 * u, padding: `${40 * u}px ${44 * u}px` }}>
+    <Card o={o} accent={color} anchor={anchor} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16 * u, padding: `${40 * u}px ${44 * u}px` }}>
       {a && a.kind === "image" && <Img src={staticFile(a.src)} style={{ width: "100%", height: 220 * u, objectFit: "cover", borderRadius: 10 * u }} />}
       <div style={{ fontSize: 50 * u, fontWeight: 800, color }}>{side.title}</div>
       {side.subtitle && <div style={{ fontSize: 30 * u, color: theme.colors.muted }}>{side.subtitle}</div>}
       {side.value !== undefined && (
-        <div style={{ fontFamily: theme.fonts.number, fontSize: valueSize, fontWeight: 800, lineHeight: 1.05, whiteSpace: "nowrap" }}>{fmtCount(side.value * easeOut((t - at - 0.1) / 0.8), side.value, side.format)}</div>
+        <div data-anchor={`${anchor}-value`} style={{ fontFamily: theme.fonts.number, fontSize: valueSize, fontWeight: 800, lineHeight: 1.05, whiteSpace: "nowrap", alignSelf: "flex-start" }}>{fmtCount(side.value * easeOut((t - at - 0.1) / 0.8), side.value, side.format)}</div>
       )}
       {(side.items ?? []).map((it, i) => (
         <div key={i} style={{ fontSize: 32 * u, display: "flex", gap: 14 * u, opacity: easeOut((t - at - 0.5 - i * 0.35) / 0.4) }}>
@@ -133,9 +133,9 @@ export const CompareScene: React.FC<{ title?: string; vs?: string; left: Side; r
     <Stage center>
       <Title text={title} />
       <div style={{ display: "flex", flexDirection: portrait ? "column" : "row", gap: 40 * u, alignItems: "stretch" }}>
-        <CompareSide side={left} at={a0} color={left.color ?? colorAt(theme, 0)} valueSize={valueSize} />
+        <CompareSide side={left} at={a0} color={left.color ?? colorAt(theme, 0)} valueSize={valueSize} anchor="left" />
         <div style={{ alignSelf: "center", fontFamily: theme.fonts.number, fontSize: 56 * u, fontWeight: 900, color: theme.colors.muted, opacity: easeOut((t - a1 + 0.3) / 0.4) }}>{vs}</div>
-        <CompareSide side={right} at={a1} color={right.color ?? colorAt(theme, 1)} valueSize={valueSize} />
+        <CompareSide side={right} at={a1} color={right.color ?? colorAt(theme, 1)} valueSize={valueSize} anchor="right" />
       </div>
     </Stage>
   );
