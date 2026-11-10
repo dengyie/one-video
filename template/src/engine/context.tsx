@@ -33,7 +33,8 @@ export function useTime(): number {
 export function useLayout() {
   const { width, height } = useVideoConfig();
   const u = Math.min(width, height) / 1080;
-  const portrait = height > width;
+  // Tall frames (9:16) stack; 4:5 is near square and keeps the 1:1 layout and caption band.
+  const portrait = height >= width * 1.5;
   const pad = (portrait ? 64 : 96) * u;
   return { width, height, u, portrait, pad, top: (portrait ? 220 : 190) * u, bottom: (portrait ? 420 : 170) * u };
 }

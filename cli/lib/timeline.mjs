@@ -550,7 +550,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       if (c.scene !== sc.id) continue;
       const t = (c.start + c.end) / 2 - sc.start;
       const d = depthAt(root, sc, usedAssets, fps, t);
-      if (d && subjectShare(d, captionBand(sc.shots, t, height > width), width, height) > 0.25) c.top = true;
+      if (d && subjectShare(d, captionBand(sc.shots, t, height >= width * 1.5), width, height) > 0.25) c.top = true;
     }
   }
   const last = scenes[scenes.length - 1];

@@ -5,9 +5,12 @@ import { Stage } from "./Stage";
 
 export const TitleScene: React.FC<{ kicker?: string; title: string; subtitle?: string; date?: string }> = ({ kicker, title, subtitle, date }) => {
   const theme = useTheme();
-  const { u, portrait } = useLayout();
+  const { u, portrait, width, pad } = useLayout();
   const k = useReveal(0.1, 0.5);
   const tt = useReveal(0.3, 0.8);
+  // A long unbreakable word (a URL, a ticker run) cannot wrap: shrink it to one line of the frame.
+  const longest = Math.max(0, ...title.split(/\s+/).map((w) => [...w].reduce((n, c) => n + (c.charCodeAt(0) > 0x2e80 ? 1 : 0.62), 0)));
+  const titleSize = Math.min((portrait ? 100 : 104) * u, longest ? ((width - 2 * pad) * 0.92) / longest : Infinity);
   const s = useReveal(0.9, 0.7);
   const t = useTime();
   return (
@@ -17,7 +20,7 @@ export const TitleScene: React.FC<{ kicker?: string; title: string; subtitle?: s
         style={{
           opacity: tt,
           transform: `scale(${0.94 + 0.06 * tt + t * 0.002})`,
-          fontSize: (portrait ? 100 : 104) * u,
+          fontSize: titleSize,
           fontWeight: 800,
           lineHeight: 1.15,
           letterSpacing: 2 * u,

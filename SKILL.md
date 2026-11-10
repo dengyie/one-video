@@ -46,14 +46,15 @@ onevideo depth [asset ids] [--step N]               # 深度图 + 亮度网格�
 onevideo capture <url> --id x [--device phone|tablet|desktop] [--click sel] [--rects name=sel,…] [--full] [--dark]   # 真实界面截图（自起无头 Chrome）
 onevideo screen <asset> [--at s] [--threshold 40]   # 找实拍里黑屏的四角 → footage.screen 片段
 onevideo stems                                     # 按 stem 分组导出分轨 wav → out/publish/stems/
-onevideo timeline | stills [--scene id] [--at 0.3,0.7] | studio
+onevideo timeline | stills [--scene id] [--at 0.3,0.7] [--aspect 9:16] | studio
 onevideo render [--draft] [--scenes a,b | --from s --to s] [--note …]   # 每次一个版本 → out/versions/vN
+onevideo render --aspect 9:16|1:1|4:5               # 同一剪辑的其他尺寸 → out/<name>.9x16.mp4（字幕按画幅重排，配音复用缓存）
 onevideo versions                                   # 渲染记录：版本、范围、时间轴哈希、备注
 onevideo handoff [--lock …] [--next …]              # 交接页 → plan/handoff.md
 onevideo lib list|search|recipe <name> --id x --set k=v   # 音效 / Lottie / 镜头配方
 onevideo sheet [--fps 1] [--from s] [--to s] [--video v3] [--vs prev]   # 联系表 → out/qc/sheet-NN.jpg；--vs 新旧对比
 onevideo look [--focus "字幕可读性"] [--models a,b]   # 视觉模型看片 → out/qc/look.json
-onevideo qc | publish [--stems] | build [--draft] | doctor | decide <category> <subject> --selected X
+onevideo qc | publish [--stems] [--formats 9:16,1:1] | build [--draft] | doctor | decide <category> <subject> --selected X
 ```
 
 未全局安装时，用 `node <repo>/cli/onevideo.mjs …` 调用。

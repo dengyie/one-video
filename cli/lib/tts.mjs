@@ -224,7 +224,7 @@ export async function runTts(project, script, { force = false, only = [], dry = 
     }
     const joined = joinedById[s.id];
     const samples = Number.isFinite(measured) ? normalizeLoudness(joined.samples, t.sampleRate, { target, measuredOverride: measured, fullScale: 32768 }).samples : joined.samples;
-    const rel = `audio/${s.id}.wav`;
+    const rel = `${paths.audioRel ?? "audio"}/${s.id}.wav`;
     writeWav(join(paths.audioDir, `${s.id}.wav`), { samples, sampleRate: t.sampleRate, channels: 1 });
     out.scenes[s.id] = {
       file: rel,

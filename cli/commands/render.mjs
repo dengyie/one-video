@@ -1,5 +1,5 @@
 // render / stills / studio / qc / publish / build / doctor
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { availableParallelism, tmpdir, totalmem } from "node:os";
 import { execFileSync } from "node:child_process";
@@ -8,9 +8,11 @@ import { stageStatus } from "../lib/state.mjs";
 import { checkProject, printIssues } from "../lib/check.mjs";
 import { REMOTION_BIN, TEMPLATE_DIR, requireRemotion, run, ffmpeg } from "../lib/ffmpeg.mjs";
 import { runQc } from "../lib/qc.mjs";
-import { buildPublishKit, stemGroups } from "../lib/publish.mjs";
+import { DIMENSIONS } from "../lib/timeline.mjs";
+import { buildPublishKit, stemGroups, toSrt, toVtt } from "../lib/publish.mjs";
 import { resolveApiKey, trustedKeyHost } from "../lib/http.mjs";
-import { ttsConfig } from "../lib/tts.mjs";
+import { runTts, ttsConfig } from "../lib/tts.mjs";
+import { timingsGate } from "../lib/gates.mjs";
 import * as media from "./media.mjs";
 import { assetFileExists, clipFrames, countFrames, framesDir, IMAGE_DEFAULTS, VIDEO_DEFAULTS } from "../lib/assets.mjs";
 import { llmConfig } from "../lib/llm.mjs";
@@ -56,15 +58,44 @@ function freshTimeline(project, { force = false } = {}) {
   return res.timeline;
 }
 
+// The same cut in another frame (--aspect 9:16 for a vertical feed, 1:1, 4:5): layouts are in units
+// of the short edge, so the plan compiles as is into its own timeline (plan/timeline.9x16.json) and
+// renders beside the main cut (out/<name>.9x16.mp4) without touching its versions.
+export const aspectTag = (aspect) => String(aspect).replace(":", "x");
+export function withAspect(project, aspect) {
+  if (!aspect || aspect === true) return project;
+  if (!DIMENSIONS[aspect]) throw new UserError(`--aspect "${aspect}": one of ${Object.keys(DIMENSIONS).join(", ")}`);
+  if (aspect === (project.config.aspect ?? "16:9") && !project.config.width) return project;
+  const { width: _w, height: _h, ...config } = project.config;
+  const tag = aspectTag(aspect);
+  return {
+    ...project, config: { ...config, aspect }, aspect,
+    paths: { ...project.paths, timeline: project.p("plan", `timeline.${tag}.json`), timings: project.p("plan", `timings.${tag}.json`), audioDir: project.p("public", "audio", tag), audioRel: `audio/${tag}` },
+  };
+}
+
+// Captions wrap shorter in a narrow frame, so a variant has its own caption timings: the same voice
+// audio (cached by content in public/audio/lines, no new synthesis in scene unit) with the lines
+// placed again on its pauses.
+async function ensureAspectTimings(project) {
+  if (!project.aspect || !existsSync(project.paths.script)) return;
+  const script = readJson(project.paths.script);
+  const timings = existsSync(project.paths.timings) ? readJson(project.paths.timings) : null;
+  if (timings && !timingsGate(script, timings, project.config).length) return;
+  log(`caption timings for ${project.aspect} → ${relative(project.root, project.paths.timings)}`);
+  writeJson(project.paths.timings, await runTts(project, script));
+}
+
 function commonFlags(project) {
   return [`--props=${project.paths.timeline}`, `--public-dir=${project.p("public")}`];
 }
 
 export async function render(args) {
   requireRemotion();
-  const project = loadProject();
+  const project = withAspect(loadProject(), args.aspect);
   await ensureClipFrames(project);
   await ensureMusicBeats(project);
+  await ensureAspectTimings(project);
   const tl = freshTimeline(project, { force: Boolean(args.force) });
   mkdirSync(join(project.paths.out, "versions"), { recursive: true });
   const draft = Boolean(args.draft);
@@ -72,12 +103,13 @@ export async function render(args) {
   // without paying for the whole cut.
   const range = args.frames ? String(args.frames).split("-").map(Number) : frameRange(tl, { scenes: args.scenes, from: args.from, to: args.to });
   const part = Boolean(range) && !(range[0] === 0 && range[1] >= Math.round(tl.duration * tl.fps) - 1);
-  const alias = args.out ? null : part ? join(project.paths.out, `${project.config.name}.part.mp4`) : draft ? join(project.paths.out, `${project.config.name}.draft.mp4`) : videoPath(project);
+  const variant = project.aspect && !args.out ? join(project.paths.out, `${project.config.name}.${aspectTag(project.aspect)}${draft ? ".draft" : ""}${part ? ".part" : ""}.mp4`) : null;
+  const alias = args.out || variant ? null : part ? join(project.paths.out, `${project.config.name}.part.mp4`) : draft ? join(project.paths.out, `${project.config.name}.draft.mp4`) : videoPath(project);
   if (alias) {
     const old = adoptLegacy(project, alias, { draft, part });
     if (old) log(`kept the unversioned ${relative(project.root, alias)} as v${old.v} (${old.file})`);
   }
-  const { v, file } = args.out ? { v: null, file: args.out } : versionFile(project, { draft, part });
+  const { v, file } = args.out || variant ? { v: null, file: args.out ?? variant } : versionFile(project, { draft, part });
   const flags = [
     "render", ENTRY, COMPOSITION, file, ...commonFlags(project),
     "--codec=h264", "--audio-codec=aac", "--audio-bitrate=192k",
@@ -126,11 +158,12 @@ export async function versions(args) {
 
 export async function stills(args) {
   requireRemotion();
-  const project = loadProject();
+  const project = withAspect(loadProject(), args.aspect);
   await ensureClipFrames(project);
   await ensureMusicBeats(project);
+  await ensureAspectTimings(project);
   const tl = freshTimeline(project, { force: Boolean(args.force) });
-  const dir = join(project.paths.out, "stills");
+  const dir = join(project.paths.out, "stills", ...(project.aspect ? [aspectTag(project.aspect)] : []));
   mkdirSync(dir, { recursive: true });
   const only = typeof args.scene === "string" ? args.scene.split(",") : null;
   // --at 0.7 or a list (--at 0.3,0.6,0.9): fractions of each scene; a list adds the fraction to the file name.
@@ -189,10 +222,34 @@ export async function publish(args = {}) {
   const dir = join(project.paths.out, "publish");
   mkdirSync(dir, { recursive: true });
   for (const [name, content] of Object.entries(kit.files)) writeFileSync(join(dir, name), content);
+  kit.publish.formats = await publishFormats(project, dir, args.formats);
   writeJson(project.paths.publish, kit.publish);
   for (const w of kit.publish.warnings) warn(w);
   log(`publish kit → ${dir} (${Object.keys(kit.files).join(", ")})`);
   if (args.stems) await stems({ _: [] });
+}
+
+// Other sizes of the same cut for other platforms (9:16 for short-video apps, 1:1 / 4:5 for feeds).
+// --formats renders the ones missing or older than the timeline; any variant already rendered
+// (out/<name>.<w>x<h>.mp4) goes into the kit with captions wrapped for its own frame.
+async function publishFormats(project, dir, spec) {
+  const main = project.config.aspect ?? "16:9";
+  const asked = spec && spec !== true ? String(spec).split(",").map((s) => s.trim()).filter(Boolean) : [];
+  for (const a of asked) if (!DIMENSIONS[a]) throw new UserError(`--formats "${a}": one of ${Object.keys(DIMENSIONS).join(", ")}`);
+  const out = [];
+  for (const aspect of Object.keys(DIMENSIONS).filter((a) => a !== main)) {
+    const tag = aspectTag(aspect), file = join(project.paths.out, `${project.config.name}.${tag}.mp4`);
+    const stale = !existsSync(file) || statSync(file).mtimeMs < statSync(project.paths.timeline).mtimeMs;
+    if (asked.includes(aspect) && stale) await render({ _: [], aspect });
+    else if (!existsSync(file)) continue;
+    else if (stale) warn(`${relative(project.root, file)} is older than the timeline; publish --formats ${aspect} renders it again`);
+    const tl = readJson(withAspect(project, aspect).paths.timeline);
+    writeFileSync(join(dir, `captions.${tag}.srt`), toSrt(tl.captions.items));
+    writeFileSync(join(dir, `captions.${tag}.vtt`), toVtt(tl.captions.items));
+    out.push({ aspect, file: relative(project.root, file), width: tl.width, height: tl.height, captions: `captions.${tag}.srt` });
+    log(`${aspect} → ${relative(project.root, file)} (captions.${tag}.srt)`);
+  }
+  return out;
 }
 
 // Voice, music and sound effects as separate WAVs at the mix's own levels (ducking included),

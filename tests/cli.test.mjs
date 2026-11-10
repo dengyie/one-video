@@ -114,6 +114,24 @@ test("render concurrency defaults by cores and memory", async () => {
   assert.equal(autoConcurrency(8, 4e9), 2);
 });
 
+test("render --aspect keeps a variant's timeline, caption timings and voice files apart", async () => {
+  const { withAspect, aspectTag } = await import("../cli/commands/render.mjs");
+  const root = "/p";
+  const project = { root, config: { name: "demo", aspect: "16:9", width: 1920 }, p: (...xs) => join(root, ...xs), paths: { timeline: "/p/plan/timeline.json", timings: "/p/plan/timings.json", audioDir: "/p/public/audio" } };
+  assert.equal(withAspect(project, undefined), project);
+  assert.equal(aspectTag("9:16"), "9x16");
+  const v = withAspect(project, "9:16");
+  assert.equal(v.aspect, "9:16");
+  assert.equal(v.config.aspect, "9:16");
+  assert.equal(v.config.width, undefined);
+  assert.equal(v.paths.timeline, join(root, "plan", "timeline.9x16.json"));
+  assert.equal(v.paths.timings, join(root, "plan", "timings.9x16.json"));
+  assert.equal(v.paths.audioDir, join(root, "public", "audio", "9x16"));
+  assert.equal(v.paths.audioRel, "audio/9x16");
+  assert.equal(project.paths.timings, "/p/plan/timings.json");
+  assert.throws(() => withAspect(project, "3:2"), /one of 16:9, 9:16, 1:1, 4:5/);
+});
+
 // The baseline a fresh project starts from: the motion example compiles with recorded voice
 // timings, stand-in media and no rhythm warnings — no TTS, network or render needed.
 test("init --example spacex-motion compiles to a rhythm-clean timeline", () => {
