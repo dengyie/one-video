@@ -176,15 +176,19 @@ export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Fo
           const color = r.s.color ?? (r.s.group && groupColors[r.s.group]) ?? colorAt(theme, r.idx);
           const visible = clamp01(top - r.rank);
           return (
-            <div key={r.s.name} style={{ position: "absolute", top: r.rank * rowH, left: 0, right: 0, height: rowH, display: "flex", alignItems: "center", opacity: visible }}>
+            <div key={r.s.name} data-anchor={`bar${r.idx + 1}`} style={{ position: "absolute", top: r.rank * rowH, left: 0, right: 0, height: rowH, display: "flex", alignItems: "center", opacity: visible }}>
               <div style={{ width: labelW, flex: "none", textAlign: "right", paddingRight: 18 * u, fontSize: Math.min(30, rowH / u * 0.45) * u, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.s.name}</div>
               <div style={{ width: `${Math.max(0.5, (r.value / max) * (portrait ? 58 : 62))}%`, height: rowH * 0.7, borderRadius: 6 * u, background: `linear-gradient(90deg, ${color}99, ${color})` }} />
               <div style={{ marginLeft: 14 * u, fontFamily: theme.fonts.number, fontSize: Math.min(26, rowH / u * 0.4) * u, color: theme.colors.muted, whiteSpace: "nowrap" }}>{fmt(r.value, format)}</div>
             </div>
           );
         })}
+        {/* Fixed slots, so an overlay can mark "the leader" whoever it is at that moment. */}
+        {Array.from({ length: Math.min(top, series.length) }, (_, k) => (
+          <div key={`rank${k}`} data-anchor={`rank${k + 1}`} style={{ position: "absolute", top: k * rowH, left: labelW, right: 0, height: rowH }} />
+        ))}
         <div style={{ position: "absolute", right: 0, bottom: portrait ? -150 * u : 10 * u, textAlign: "right" }}>
-          <div style={{ fontFamily: theme.fonts.number, fontSize: (portrait ? 120 : 150) * u, fontWeight: 800, lineHeight: 1, opacity: 0.9 }}>{current}</div>
+          <div data-anchor="period" style={{ fontFamily: theme.fonts.number, fontSize: (portrait ? 120 : 150) * u, fontWeight: 800, lineHeight: 1, opacity: 0.9 }}>{current}</div>
           {groups.length > 0 && (
             <div style={{ display: "flex", gap: 20 * u, justifyContent: "flex-end", marginTop: 14 * u }}>
               {groups.map((g, k) => (
@@ -202,6 +206,12 @@ export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Fo
 };
 
 type Point = [number | string, number | string];
+// Anchor names of a line-chart point: series 1 is `point<k>` / `last`, series n is `s<n>-point<k>` / `s<n>-last`.
+// Mirrors anchorNames in cli/lib/timeline/anchors.mjs.
+export const pointAnchors = (si: number, k: number, n: number) => {
+  const pre = si ? `s${si + 1}-` : "";
+  return [`${pre}point${k + 1}`, ...(k === n - 1 ? [`${pre}last`] : [])];
+};
 type LineSeries = { name: string; color?: string; points: Point[] };
 type Annotation = { x: number | string; label: string; series?: number; cue?: string };
 
@@ -256,6 +266,9 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
             const annotated = new Set(annotations.filter((a) => (a.series ?? 0) === si).map((a) => String(a.x)));
             return (
               <g key={s.name}>
+                {pts.map(([x, y], k) => (
+                  <circle key={`a${k}`} data-anchor={pointAnchors(si, k, pts.length).join(" ")} cx={x} cy={y} r={10 * u} fill="none" />
+                ))}
                 {pts.map(([x, y], k) => {
                   const o = clamp01((drawP * (pts.length - 1) - k + 0.15) / 0.3);
                   if (o <= 0) return null;
@@ -290,7 +303,7 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
               <g key={k} opacity={o}>
                 <circle cx={x} cy={y} r={9 * u * o} fill={theme.colors.highlight} />
                 <line x1={x} x2={x} y1={y - 14 * u} y2={y - 70 * u} stroke={theme.colors.highlight} strokeWidth={2 * u} />
-                <text x={x} y={y - 80 * u} textAnchor="middle" fontSize={24 * u} fontWeight={600} fill={theme.colors.text}>{a.label}</text>
+                <text data-anchor={[`note${k + 1}`, a.cue].filter(Boolean).join(" ")} x={x} y={y - 80 * u} textAnchor="middle" fontSize={24 * u} fontWeight={600} fill={theme.colors.text}>{a.label}</text>
               </g>
             );
           })}

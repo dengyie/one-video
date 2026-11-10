@@ -126,6 +126,11 @@ test("overlays pin to scene anchors with on: names per scene type, compile error
   assert.deepEqual(anchorNames("compare", { left: { title: "a", value: 1 }, right: { title: "b" } }), ["left", "right", "left-value"]);
   assert.deepEqual(anchorNames("share", { segments: [{ value: 1 }, { value: 2 }] }), ["ring", "seg1", "seg2"]);
   assert.deepEqual(anchorNames("bar-compare", { items: [{ value: 1, cue: "x" }] }), ["bar1", "x"]);
+  assert.deepEqual(anchorNames("bar-race", { top: 2, periods: ["a", "b"], series: [{ name: "x" }, { name: "y" }, { name: "z" }] }), ["bar1", "bar2", "bar3", "rank1", "rank2", "period"]);
+  assert.deepEqual(
+    anchorNames("line-chart", { series: [{ points: [[1, 1], [2, 2]] }, { points: [[1, 3]] }], annotations: [{ x: 2, label: "peak", cue: "pk" }] }),
+    ["point1", "point2", "last", "s2-point1", "s2-last", "note1", "pk"],
+  );
   assert.equal(anchorNames("kinetic", {}), null);
   assert.deepEqual(schemaGate("storyboard", { scenes: [{ id: "x", type: "kinetic", props: { lines: [{ text: "a" }] }, overlays: [{ type: "mark", on: "card1", place: "top-right" }] }] }), []);
   assert.ok(schemaGate("storyboard", { scenes: [{ id: "x", type: "kinetic", props: { lines: [{ text: "a" }] }, overlays: [{ type: "mark", on: "card1", place: "middle" }] }] }).length > 0);

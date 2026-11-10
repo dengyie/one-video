@@ -106,7 +106,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       if (res.error) { errors.push(`${where}: ${res.error}`); continue; }
       if (ov.on !== undefined) {
         const names = anchorNames(sb.type, sb.props);
-        if (!names) { errors.push(`${where}: on "${ov.on}": ${sb.type} scenes have no anchors (stat-cards, compare, share, bar-compare do)`); continue; }
+        if (!names) { errors.push(`${where}: on "${ov.on}": ${sb.type} scenes have no anchors (stat-cards, compare, share, bar-compare, bar-race, line-chart do)`); continue; }
         if (!names.includes(ov.on)) { errors.push(`${where}: on "${ov.on}" is not an element of this ${sb.type} scene (${names.join(", ")})`); continue; }
       }
       const t = clampT(res.t, duration);
