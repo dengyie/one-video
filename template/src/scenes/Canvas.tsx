@@ -260,7 +260,7 @@ export const CanvasScene: React.FC<{ items?: Item[]; path?: Stop[]; links?: Link
         // The plate wipes open from its accent edge before the content lands on it.
         const wipe = lay === undefined ? 1 : easeOut(clamp01(lay / 0.4));
         return (
-          <div key={it.id} style={{
+          <div key={it.id} data-anchor={it.id} style={{
             position: "absolute", left: c.x - w / 2, top: c.y - h / 2, width: w, height: h,
             transform: `${card ? tilt + " " : ""}scale(${pop})`, opacity: e * (s.opacity ?? 1),
           }}>

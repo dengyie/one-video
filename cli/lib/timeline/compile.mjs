@@ -105,8 +105,10 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       const res = resolveAt(ov.at ?? 0, lines, duration);
       if (res.error) { errors.push(`${where}: ${res.error}`); continue; }
       if (ov.on !== undefined) {
-        const names = anchorNames(sb.type, sb.props);
-        if (!names) { errors.push(`${where}: on "${ov.on}": ${sb.type} scenes have no anchors (stat-cards, compare, share, bar-compare, bar-race, line-chart do)`); continue; }
+        // An inheriting canvas also shows the previous canvas's items.
+        const inherited = sb.type === "canvas" && sb.props?.inherit && lastCanvas ? lastCanvas.items : [];
+        const names = anchorNames(sb.type, inherited.length ? { ...sb.props, items: [...inherited, ...(sb.props.items ?? [])] } : sb.props);
+        if (!names) { errors.push(`${where}: on "${ov.on}": ${sb.type} scenes have no anchors (stat-cards, compare, share, bar-compare, bar-race, line-chart, canvas do)`); continue; }
         if (!names.includes(ov.on)) { errors.push(`${where}: on "${ov.on}" is not an element of this ${sb.type} scene (${names.join(", ")})`); continue; }
       }
       const t = clampT(res.t, duration);

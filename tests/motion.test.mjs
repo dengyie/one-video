@@ -107,7 +107,7 @@ test("compileTimeline: shot track, prop times, beats, canvas inherit", () => {
     ...sb.scenes[0], type: "canvas", backdrop: undefined, shots: "auto",
     props: { items: [{ id: "cap", type: "stat", value: 1.75, at: 0.5, morph: [{ at: 1.5, type: "bar", value: 1.75, max: 2 }] }], path: [{ focus: "cap" }, { at: { beat: 2 }, focus: { x: 2400, y: 540 } }] },
   };
-  sb.scenes[1] = { ...sb.scenes[1], type: "canvas", backdrop: undefined, props: { inherit: true, items: [{ id: "next", type: "dot", x: 2400, y: 540 }] } };
+  sb.scenes[1] = { ...sb.scenes[1], type: "canvas", backdrop: undefined, props: { inherit: true, items: [{ id: "next", type: "dot", x: 2400, y: 540 }] }, overlays: [{ type: "stamp", text: "!", on: "cap" }, { type: "mark", on: "next" }] };
   const { timeline, errors } = compileTimeline({ ...ex, storyboard: sb, assets: ex.fetchedAssets });
   assert.deepEqual(errors, []);
   const [a, b] = timeline.scenes;

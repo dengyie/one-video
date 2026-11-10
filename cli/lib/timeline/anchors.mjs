@@ -18,6 +18,7 @@ export function anchorNames(type, props = {}) {
     const n = props.series?.length ?? 0;
     return [...Array.from({ length: n }, (_, k) => `bar${k + 1}`), ...Array.from({ length: Math.min(props.top ?? 10, n) }, (_, k) => `rank${k + 1}`), "period"];
   }
+  if (type === "canvas") return [...new Set((props.items ?? []).map((it) => it.id).filter(Boolean))];
   if (type === "compare") return ["left", "right", ...["left", "right"].filter((k) => props[k]?.value !== undefined).map((k) => `${k}-value`)];
   return null;
 }

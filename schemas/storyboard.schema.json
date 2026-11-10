@@ -621,7 +621,7 @@
           }
         },
         "on": {
-          "description": "pin to a scene element instead of x/y/rect, so it follows the content in any aspect: stat-cards card1…/a card cue, compare left/right/left-value/right-value, share ring/seg1…/a segment cue, bar-compare bar1…/an item cue, bar-race bar1…/rank1…/period, line-chart point1…/last/s2-point1…/note1…/an annotation cue",
+          "description": "pin to a scene element instead of x/y/rect, so it follows the content in any aspect: stat-cards card1…/a card cue, compare left/right/left-value/right-value, share ring/seg1…/a segment cue, bar-compare bar1…/an item cue, bar-race bar1…/rank1…/period, line-chart point1…/last/s2-point1…/note1…/an annotation cue, canvas an item id",
           "type": "string",
           "minLength": 1
         },

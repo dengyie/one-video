@@ -131,6 +131,7 @@ test("overlays pin to scene anchors with on: names per scene type, compile error
     anchorNames("line-chart", { series: [{ points: [[1, 1], [2, 2]] }, { points: [[1, 3]] }], annotations: [{ x: 2, label: "peak", cue: "pk" }] }),
     ["point1", "point2", "last", "s2-point1", "s2-last", "note1", "pk"],
   );
+  assert.deepEqual(anchorNames("canvas", { items: [{ id: "rev" }, { id: "cost" }] }), ["rev", "cost"]);
   assert.equal(anchorNames("kinetic", {}), null);
   assert.deepEqual(schemaGate("storyboard", { scenes: [{ id: "x", type: "kinetic", props: { lines: [{ text: "a" }] }, overlays: [{ type: "mark", on: "card1", place: "top-right" }] }] }), []);
   assert.ok(schemaGate("storyboard", { scenes: [{ id: "x", type: "kinetic", props: { lines: [{ text: "a" }] }, overlays: [{ type: "mark", on: "card1", place: "middle" }] }] }).length > 0);

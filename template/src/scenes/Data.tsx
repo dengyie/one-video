@@ -1,5 +1,5 @@
 import React from "react";
-import { colorAt, fitFont, useLayout, useRevealAt, useScene, useTheme, useTime, useTimeline, cueOr } from "../engine/context";
+import { colorAt, fitFont, textEms, useLayout, useRevealAt, useScene, useTheme, useTime, useTimeline, cueOr } from "../engine/context";
 import { fmt, fmtCount } from "../engine/format";
 import { Roll } from "../components/Roll";
 import { clamp01, easeInOut, easeOut, lerp } from "../engine/motion";
@@ -136,7 +136,7 @@ export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Fo
 }) => {
   const theme = useTheme();
   const scene = useScene();
-  const { u, portrait, height, top: headerBottom, bottom, pad } = useLayout();
+  const { u, portrait, width, height, top: headerBottom, bottom, pad } = useLayout();
   const t = useTime();
   const T = periodTimes(periods.length, scene.duration, (k) => {
     const name = periodCues[k];
@@ -167,6 +167,29 @@ export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Fo
   const labelW = (portrait ? 250 : 300) * u;
   const current = periods[pos - i >= 0.5 ? i + 1 : i];
   const groups = [...new Set(series.map((s) => s.group).filter(Boolean))] as string[];
+  const valueFont = Math.min(26, rowH / u * 0.4) * u;
+  // Off portrait the period label sits in the chart's bottom-right corner. Rows beside it get
+  // their bars shortened so the value text stops short of it; all bars share one scale so they
+  // stay comparable, and each row counts by how much it overlaps the label so the scale eases.
+  const barPct = (() => {
+    const base = portrait ? 58 : 62;
+    if (portrait) return base;
+    const rowW = width - pad * 2;
+    const periodFont = 150 * u;
+    const legendW = groups.reduce((w, g) => w + (16 + 8 + 20) * u + textEms(g) * 22 * u, 0);
+    const blockW = Math.max(...periods.map((p) => textEms(p) * periodFont), legendW) + 24 * u;
+    const blockTop = areaH - 10 * u - periodFont - (groups.length ? 50 * u : 0);
+    let pct = base;
+    for (const r of rows) {
+      if (r.rank >= top || r.value <= 0) continue;
+      const w = clamp01((r.rank * rowH + rowH - blockTop) / rowH);
+      if (w <= 0) continue;
+      const room = rowW - blockW - labelW - 14 * u - textEms(fmt(r.value, format)) * valueFont;
+      const fit = Math.max(20, (room / ((r.value / max) * rowW)) * 100);
+      pct = Math.min(pct, lerp(base, Math.min(base, fit), w));
+    }
+    return pct;
+  })();
   return (
     <Stage>
       <Title text={title} />
@@ -178,8 +201,8 @@ export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Fo
           return (
             <div key={r.s.name} style={{ position: "absolute", top: r.rank * rowH, left: 0, right: 0, height: rowH, display: "flex", alignItems: "center", opacity: visible }}>
               <div style={{ width: labelW, flex: "none", textAlign: "right", paddingRight: 18 * u, fontSize: Math.min(30, rowH / u * 0.45) * u, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.s.name}</div>
-              <div data-anchor={`bar${r.idx + 1}`} style={{ width: `${Math.max(0.5, (r.value / max) * (portrait ? 58 : 62))}%`, height: rowH * 0.7, borderRadius: 6 * u, background: `linear-gradient(90deg, ${color}99, ${color})` }} />
-              <div style={{ marginLeft: 14 * u, fontFamily: theme.fonts.number, fontSize: Math.min(26, rowH / u * 0.4) * u, color: theme.colors.muted, whiteSpace: "nowrap" }}>{fmt(r.value, format)}</div>
+              <div data-anchor={`bar${r.idx + 1}`} style={{ width: `${Math.max(0.5, (r.value / max) * barPct)}%`, height: rowH * 0.7, borderRadius: 6 * u, background: `linear-gradient(90deg, ${color}99, ${color})` }} />
+              <div style={{ marginLeft: 14 * u, fontFamily: theme.fonts.number, fontSize: valueFont, color: theme.colors.muted, whiteSpace: "nowrap" }}>{fmt(r.value, format)}</div>
             </div>
           );
         })}
