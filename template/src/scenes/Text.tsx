@@ -142,7 +142,8 @@ export const SourcesScene: React.FC<{ title?: string; items?: string[] }> = ({ t
     return h;
   };
   let fs = 30 * u;
-  while (fs > 18 * u && listH(fs) > room) fs -= u;
+  // 1.15: word wrapping of Latin titles leaves ragged line ends the em estimate doesn't see.
+  while (fs > 18 * u && listH(fs) * 1.15 > room) fs -= u;
   return (
     <Stage center>
       <div style={{ fontSize: 44 * u, fontWeight: 700, marginBottom: 32 * u, opacity: o }}>{title}</div>
