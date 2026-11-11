@@ -1,5 +1,5 @@
 import React from "react";
-import { fitFont, textEms, useLayout, useReveal, useRevealAt, useTheme, useTime } from "../engine/context";
+import { fitFont, textEms, useLayout, useScene, useReveal, useRevealAt, useTheme, useTime } from "../engine/context";
 import { MediaFill } from "../components/Media";
 import { Stage } from "./Stage";
 
@@ -128,11 +128,14 @@ export const BulletsScene: React.FC<{ title?: string; items: Bullet[] }> = ({ ti
 export const SourcesScene: React.FC<{ title?: string; items?: string[] }> = ({ title = "资料来源", items = [] }) => {
   const theme = useTheme();
   const { u, portrait, width, height, pad, top, bottom } = useLayout();
+  const scene = useScene();
+  // A silent credits card has no caption band to keep clear: the list may run down to the margin.
+  const floor = scene.lines?.length ? bottom : pad;
   const o = useReveal(0.1, 0.6);
   const t = useTime();
   const cols = !portrait && items.length > 8 ? 2 : 1;
   // The largest size (30u down to 18u) at which the list, wrapped to its column width, fits the safe area.
-  const colW = (width - pad * 2 - 48 * u * (cols - 1)) / cols, room = height - top - bottom - 110 * u;
+  const colW = (width - pad * 2 - 48 * u * (cols - 1)) / cols, room = height - (scene.header ? top + 20 * u : pad) - floor - 110 * u;
   const listH = (fs: number) => {
     let h = 0;
     for (let i = 0; i < items.length; i += cols) {
@@ -145,7 +148,7 @@ export const SourcesScene: React.FC<{ title?: string; items?: string[] }> = ({ t
   // 1.15: word wrapping of Latin titles leaves ragged line ends the em estimate doesn't see.
   while (fs > 18 * u && listH(fs) * 1.15 > room) fs -= u;
   return (
-    <Stage center>
+    <Stage center style={{ bottom: floor }}>
       <div style={{ fontSize: 44 * u, fontWeight: 700, marginBottom: 32 * u, opacity: o }}>{title}</div>
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, columnGap: 48 * u, rowGap: 14 * u }}>
         {items.map((s, i) => {
