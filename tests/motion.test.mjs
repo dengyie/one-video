@@ -245,6 +245,8 @@ test("rhythm: long stills and transition runs warn; a covered word leaves when t
   const quote = (captions) => ({ duration: 8, scenes: [sc("q", 0, 8, { type: "quote", captions, transitionIn: { type: "cut" }, lines: [{ start: 0.1 }, { start: 4 }] })] });
   assert.equal(rhythmGate(quote(true), {}).length, 1); // a still quote under its caption
   assert.deepEqual(rhythmGate(quote(false), {}), []); // read along: each spoken line lights up
+  const chart = { duration: 9, scenes: [sc("c", 0, 9, { type: "line-chart", transitionIn: { type: "cut" }, cues: { a: 1, b: 8 }, props: { pointCues: ["a", "b"] } })] };
+  assert.deepEqual(rhythmGate(chart, {}), []); // the line sets off for b at 5s
 
   const ex = example({ media: ["sfx/whoosh.wav", "sfx/pop.wav", "music/bgm.wav"] });
   const sb = structuredClone(ex.storyboard);

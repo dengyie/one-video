@@ -205,6 +205,11 @@ export function rhythmGate(timeline, config) {
     propTimes(sc.props, at);
     // A quote read aloud lights up line by line as it is spoken (its caption is dropped for that).
     if (sc.type === "quote" && sc.captions === false) for (const l of sc.lines ?? []) at(l.start);
+    // A cued line chart sets off toward each point well before it lands (same travel as LineChartScene).
+    if (sc.type === "line-chart" && Array.isArray(sc.props?.pointCues)) {
+      const T = sc.props.pointCues.map((c) => sc.cues?.[c]);
+      for (let k = 1; k < T.length; k++) if (Number.isFinite(T[k]) && Number.isFinite(T[k - 1])) at(T[k] - Math.min(3, Math.max(0.3, (T[k] - T[k - 1]) * 0.8)));
+    }
   }
   events.sort((a, b) => a.t - b.t);
   const end = { t: timeline.duration, scene: timeline.scenes.at(-1)?.id };
