@@ -358,7 +358,8 @@ export const ShareScene: React.FC<{ title?: string; unit?: string; format?: Form
   const R = portrait ? 320 * u : narrow ? Math.min(300 * u, (height - top - bottom - (180 + (segments.length + (totalRow ? 1.4 : 0)) * 66) * u) / 2) : 300 * u, r = R * 0.62;
   // The whole ring sweeps in on the first reveal, so the chart never shows a broken circle;
   // each slice then lights up (and its legend row) on its own cue.
-  const first = Math.min(...segments.map((s, i) => at(i, segments.length, s.cue)));
+  // A total read out first brings the whole ring with it.
+  const first = Math.min(...segments.map((s, i) => at(i, segments.length, s.cue)), ...(totalRow?.cue && scene.cues[totalRow.cue] !== undefined ? [scene.cues[totalRow.cue]] : []));
   const sweep = easeInOut((t - first + 0.3) / 1.1) * Math.PI * 2;
   let acc = 0;
   const arcs = segments.map((s, i) => {
@@ -376,6 +377,8 @@ export const ShareScene: React.FC<{ title?: string; unit?: string; format?: Form
     return `M${x0},${y0} A${R},${R} 0 ${big} 1 ${x1},${y1} L${x2},${y2} A${r},${r} 0 ${big} 0 ${x3},${y3} Z`;
   };
   const lead = arcs.reduce((m, a) => (a.s.value > m.s.value ? a : m), arcs[0]);
+  // The centre text shrinks with a squeezed ring (square frames); the label goes when it won't fit the hole.
+  const pctFont = Math.min(76 * u, 0.6 * R), showLabel = textEms(lead.s.label) * 26 * u <= 1.15 * r;
   // The whole the slices add up to, as the legend's headline: on its cue, else with the ring.
   const totalP = totalRow ? easeOut((t - cueOr(scene, totalRow.cue, first)) / 0.5) : 0;
   return (
@@ -384,10 +387,10 @@ export const ShareScene: React.FC<{ title?: string; unit?: string; format?: Form
       <div style={{ display: "flex", flexDirection: narrow ? "column" : "row", alignItems: "center", gap: (narrow && !portrait ? 36 : 80) * u, justifyContent: "center" }}>
         <svg data-anchor="ring" width={R * 2 + 20 * u} height={R * 2 + 20 * u} viewBox={`${-R - 10 * u} ${-R - 10 * u} ${R * 2 + 20 * u} ${R * 2 + 20 * u}`}>
           {arcs.map((a) => <path key={a.s.label} d={arc(a.a0, a.a1)} fill={a.color} opacity={0.3 + 0.7 * a.p} stroke={theme.colors.bg} strokeWidth={3 * u} />)}
-          <text x={0} y={-6 * u} textAnchor="middle" fontSize={76 * u} fontWeight={800} fill={theme.colors.text} fontFamily={theme.fonts.number} opacity={lead.p}>
+          <text x={0} y={showLabel ? -6 * u : pctFont * 0.35} textAnchor="middle" fontSize={pctFont} fontWeight={800} fill={theme.colors.text} fontFamily={theme.fonts.number} opacity={lead.p}>
             {pct(lead.s.value)}
           </text>
-          <text x={0} y={40 * u} textAnchor="middle" fontSize={26 * u} fill={theme.colors.muted} opacity={lead.p}>{lead.s.label}</text>
+          {showLabel && <text x={0} y={40 * u} textAnchor="middle" fontSize={26 * u} fill={theme.colors.muted} opacity={lead.p}>{lead.s.label}</text>}
         </svg>
         <div style={{ display: "flex", flexDirection: "column", gap: 20 * u, minWidth: 420 * u }}>
           {totalRow && (
