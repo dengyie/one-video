@@ -52,8 +52,8 @@ research → proposal → script → storyboard → assets → voice → compose
 Requires Node.js ≥ 20.
 
 ```bash
-git clone https://github.com/dengyie/one-video.git
-cd one-video
+git clone https://github.com/dengyie/OneVideo.git
+cd OneVideo
 
 npm run setup            # Install Remotion engine dependencies in template/
 npm link                 # Register global onevideo CLI
