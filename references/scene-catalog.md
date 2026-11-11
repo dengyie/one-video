@@ -15,7 +15,7 @@
 | `share` | 构成、占比（环形图） | `segments[{label,value}]` | 每段 `cue`、`unit`、`total{label,cue}`（图例上方的合计大字，旁白先报总数时用） |
 | `timeline` | 事件序列 | `events[{date,title}]`（2–10 个） | `note`、`highlight`、`cue` |
 | `compare` | A vs B | `left`、`right` | `vs` |
-| `quote` | 引语 | `text` | `author`、`source`、`asset` |
+| `quote` | 引语 | `text` | `author`、`source`、`asset`；`text` 与旁白逐字相同（忽略标点）时随朗读逐字点亮，并自动关掉该场景字幕（场景级 `captions: true` 可强制保留） |
 | `bullets` | 要点总结 | `items` | `title` |
 | `media` | 照片、视频素材 | `asset` | `motion`（in/out/left/right/up/none）、`fit`、`dim`、`caption` |
 | `sources` | 片尾来源 | — | `auto`（默认从 research + assets 生成） |

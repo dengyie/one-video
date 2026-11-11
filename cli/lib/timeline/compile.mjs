@@ -13,6 +13,7 @@ import { countFrames, depthPath, framesDir, lumaPath } from "../assets/media.mjs
 import { beatsFile } from "../audio/beats.mjs";
 import { boxMean, depthAt, dodgeX, hexLuminance, lumaAt, scrimFor, subjectFocus, wordBox } from "../vision/subject.mjs";
 import { placeCaptions } from "../captions/layout.mjs";
+import { normalizeForMatch } from "../core/text.mjs";
 import { resolveAt } from "./cues.mjs";
 import { CAMERA_DEFAULT, boundaryTransition, normTransition } from "./transitions.mjs";
 import { MOTION_GAIN, MOTION_SFX, motionCues, overlaySound, sfxFile, sfxVariants, slamWord, transitionSfx } from "./sfx.mjs";
@@ -31,6 +32,9 @@ const normCamera = (c) => (c == null ? null : typeof c === "string" ? { move: c 
 // Scene types that paint the whole frame themselves (no theme background shows through).
 const OPAQUE_TYPES = new Set(["media", "focus", "split", "footage", "parallax", "match-cut"]);
 
+// A quote whose text is exactly what the narrator says is read along on screen (QuoteScene lights it
+// up as it is spoken), so a caption under it would only print the same sentence twice.
+const readAloud = (sb, lines) => sb.type === "quote" && typeof sb.props?.text === "string" && lines.length > 0 && normalizeForMatch(sb.props.text) === normalizeForMatch(lines.map((l) => l.text).join(""));
 const overlaps = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
 
 export function compileTimeline({ config, script, storyboard, timings, assets, research, root }) {
@@ -225,7 +229,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       header: sb.header ?? null,
       background: sb.background ?? null,
       backdrop: sb.backdrop ? { dim: 0.62, blur: 0, motion: "in", startFrom: 0, ...sb.backdrop } : null,
-      captions: sb.captions !== false,
+      captions: sb.captions ?? !readAloud(sb, lines),
       cues,
       lines: lines.map((l) => ({ text: l.text, start: l.start, end: l.end })),
       props,

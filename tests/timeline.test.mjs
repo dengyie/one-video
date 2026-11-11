@@ -70,6 +70,20 @@ test("compileTimeline on the SpaceX example: frames, captions, cues, chapters, m
   assert.equal(synth.timeline.music.credit, "OneVideo 程序化合成");
 });
 
+test("compileTimeline drops the caption under a quote the narrator reads aloud", () => {
+  const ex = example();
+  const quote = ex.storyboard.scenes.find((s) => s.type === "quote");
+  const line = ex.timings.scenes[quote.id].lines.map((l) => l.text).join("，") + "。";
+  const run = (patch) => {
+    const sb = structuredClone(ex.storyboard);
+    Object.assign(sb.scenes.find((s) => s.id === quote.id), patch(sb.scenes.find((s) => s.id === quote.id)));
+    return compileTimeline({ ...ex, storyboard: sb, assets: null }).timeline.scenes.find((s) => s.id === quote.id).captions;
+  };
+  assert.equal(run((s) => ({ props: { ...s.props, text: line } })), false, "same words, different punctuation");
+  assert.equal(run((s) => ({ props: { ...s.props, text: "另一句话" } })), true);
+  assert.equal(run((s) => ({ props: { ...s.props, text: line }, captions: true })), true, "an explicit captions flag wins");
+});
+
 test("compileTimeline reports a cue phrase missing from narration", () => {
   const ex = example();
   const sb = structuredClone(ex.storyboard);

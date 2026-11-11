@@ -52,17 +52,41 @@ export const ChapterScene: React.FC<{ index?: number | string; title: string; su
   );
 };
 
+const isWordChar = (c: string) => /[\p{L}\p{N}]/u.test(c);
+
+// When the quote is what the narrator reads, each character's spoken time: the line's letters are
+// spread evenly over its span, punctuation takes the time of the letter before it. Null otherwise.
+function spokenTimes(text: string, lines: { text: string; start: number; end: number }[] | undefined): number[] | null {
+  if (!lines?.length) return null;
+  const said = lines.flatMap((l) => {
+    const cs = [...l.text].filter(isWordChar);
+    return cs.map((c, k) => ({ c, t: l.start + ((k + 0.5) / cs.length) * (l.end - l.start) }));
+  });
+  const chars = [...text];
+  if (chars.filter(isWordChar).join("") !== said.map((s) => s.c).join("")) return null;
+  let k = 0, last = lines[0].start;
+  return chars.map((c) => (isWordChar(c) ? (last = said[k++].t) : last));
+}
+
 export const QuoteScene: React.FC<{ text: string; author?: string; source?: string; asset?: string }> = ({ text, author, source, asset }) => {
   const theme = useTheme();
   const { u, portrait } = useLayout();
+  const scene = useScene();
+  const t = useTime();
   const q = useReveal(0.2, 0.9);
   const a = useReveal(1.0, 0.6);
+  // A quote read aloud lights up as it is spoken (and the timeline drops its caption).
+  const times = spokenTimes(text, scene.lines);
   return (
     <>
       {asset && <MediaFill asset={asset} dim={0.65} motion="in" />}
       <Stage center style={{ alignItems: "center", textAlign: "center" }}>
         <div style={{ fontSize: 180 * u, lineHeight: 0.6, color: theme.colors.accent, opacity: q * 0.8, fontFamily: "Georgia, serif" }}>“</div>
-        <div style={{ fontSize: (portrait ? 58 : 60) * u, fontWeight: 700, lineHeight: 1.45, maxWidth: "86%", opacity: q, transform: `translateY(${(1 - q) * 20 * u}px)` }}>{text}</div>
+        <div style={{ fontSize: (portrait ? 58 : 60) * u, fontWeight: 700, lineHeight: 1.45, maxWidth: "86%", opacity: q, transform: `translateY(${(1 - q) * 20 * u}px)` }}>
+          {times
+            ? [...text].map((c, i) => <span key={i} style={{ opacity: 0.3 + 0.7 * Math.min(1, Math.max(0, (t - times[i] + 0.1) / 0.25)) }}>{c}</span>)
+            : text}
+        </div>
         {(author || source) && (
           <div style={{ marginTop: 40 * u, fontSize: 30 * u, color: theme.colors.muted, opacity: a }}>
             {author && <span style={{ color: theme.colors.text, fontWeight: 600 }}>— {author}</span>}
