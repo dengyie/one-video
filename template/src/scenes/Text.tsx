@@ -137,7 +137,7 @@ export const SourcesScene: React.FC<{ title?: string; items?: string[] }> = ({ t
   const o = useReveal(0.1, 0.6);
   const t = useTime();
   const cols = !portrait && items.length > 8 ? 2 : 1;
-  // The largest size (30u down to 18u) at which the list, wrapped to its column width, fits the safe area.
+  // The largest size (30u down to 16u) at which the list, wrapped to its column width, fits the safe area.
   const colW = (width - pad * 2 - 48 * u * (cols - 1)) / cols, room = height - (scene.header ? top + 20 * u : pad) - floor - 110 * u;
   const listH = (fs: number) => {
     let h = 0;
@@ -149,7 +149,7 @@ export const SourcesScene: React.FC<{ title?: string; items?: string[] }> = ({ t
   };
   let fs = 30 * u;
   // 1.15: word wrapping of Latin titles leaves ragged line ends the em estimate doesn't see.
-  while (fs > 18 * u && listH(fs) * 1.15 > room) fs -= u;
+  while (fs > 16 * u && listH(fs) * 1.15 > room) fs -= u;
   return (
     <Stage center style={{ bottom: floor }}>
       <div style={{ fontSize: 44 * u, fontWeight: 700, marginBottom: 32 * u, opacity: o }}>{title}</div>
