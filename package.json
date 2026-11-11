@@ -1,6 +1,6 @@
 {
   "name": "onevideo",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Staged, gated pipeline for narrated data & documentary videos: research → script → storyboard → TTS-driven timeline → Remotion render → QC → publish.",
   "type": "module",
   "license": "MIT",
