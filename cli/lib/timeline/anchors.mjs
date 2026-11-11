@@ -5,7 +5,7 @@ export function anchorNames(type, props = {}) {
   const list = (key, items) => (items ?? []).flatMap((x, i) => [`${key}${i + 1}`, ...(x?.cue ? [x.cue] : [])]);
   if (type === "stat-cards") return list("card", props.cards);
   if (type === "bar-compare") return list("bar", props.items);
-  if (type === "share") return ["ring", ...list("seg", props.segments)];
+  if (type === "share") return ["ring", ...list("seg", props.segments), ...(props.total ? ["total", ...(props.total.cue ? [props.total.cue] : [])] : [])];
   if (type === "line-chart") {
     const points = (props.series ?? []).flatMap((s, si) => {
       const pre = si ? `s${si + 1}-` : "";

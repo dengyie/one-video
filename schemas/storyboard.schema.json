@@ -1251,6 +1251,21 @@
               }
             }
           }
+        },
+        "total": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "a headline row above the legend with the sum of all segments",
+          "properties": {
+            "label": {
+              "type": "string",
+              "description": "defaults to 合计"
+            },
+            "cue": {
+              "type": "string",
+              "description": "name of a cue in scene.cues; the row appears when it resolves (default: with the ring)"
+            }
+          }
         }
       }
     },

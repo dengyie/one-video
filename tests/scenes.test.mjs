@@ -125,6 +125,7 @@ test("overlays pin to scene anchors with on: names per scene type, compile error
   assert.deepEqual(anchorNames("stat-cards", { cards: [{ value: 1 }, { value: 2, cue: "rev" }] }), ["card1", "card2", "rev"]);
   assert.deepEqual(anchorNames("compare", { left: { title: "a", value: 1 }, right: { title: "b" } }), ["left", "right", "left-value"]);
   assert.deepEqual(anchorNames("share", { segments: [{ value: 1 }, { value: 2 }] }), ["ring", "seg1", "seg2"]);
+  assert.deepEqual(anchorNames("share", { segments: [{ value: 1 }, { value: 2 }], total: { cue: "sum" } }), ["ring", "seg1", "seg2", "total", "sum"]);
   assert.deepEqual(anchorNames("bar-compare", { items: [{ value: 1, cue: "x" }] }), ["bar1", "x"]);
   assert.deepEqual(anchorNames("bar-race", { top: 2, periods: ["a", "b"], series: [{ name: "x" }, { name: "y" }, { name: "z" }] }), ["bar1", "bar2", "bar3", "rank1", "rank2", "period"]);
   assert.deepEqual(
@@ -136,6 +137,9 @@ test("overlays pin to scene anchors with on: names per scene type, compile error
   assert.deepEqual(schemaGate("storyboard", { scenes: [{ id: "x", type: "kinetic", props: { lines: [{ text: "a" }] }, overlays: [{ type: "mark", on: "card1", place: "top-right" }] }] }), []);
   assert.ok(schemaGate("storyboard", { scenes: [{ id: "x", type: "kinetic", props: { lines: [{ text: "a" }] }, overlays: [{ type: "mark", on: "card1", place: "middle" }] }] }).length > 0);
   assert.ok(schemaGate("storyboard", { scenes: [{ id: "x", type: "kinetic", props: { lines: [{ text: "a" }] }, overlays: [{ type: "lottie", on: "last", offset: [0] }] }] }).length > 0);
+  const seg = [{ label: "a", value: 1 }, { label: "b", value: 2 }];
+  assert.deepEqual(schemaGate("storyboard", { scenes: [{ id: "x", type: "share", props: { segments: seg, total: { label: "收入", cue: "sum" } } }] }), []);
+  assert.ok(schemaGate("storyboard", { scenes: [{ id: "x", type: "share", props: { segments: seg, total: { value: 3 } } }] }).length > 0);
 
   const ex = example();
   const sb = structuredClone(ex.storyboard);

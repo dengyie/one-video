@@ -344,8 +344,9 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
 
 type Segment = { label: string; value: number; color?: string; cue?: string };
 
-export const ShareScene: React.FC<{ title?: string; unit?: string; format?: Format; segments: Segment[] }> = ({ title, unit, format, segments }) => {
+export const ShareScene: React.FC<{ title?: string; unit?: string; format?: Format; segments: Segment[]; total?: { label?: string; cue?: string } }> = ({ title, unit, format, segments, total: totalRow }) => {
   const theme = useTheme();
+  const scene = useScene();
   const { u, portrait, narrow, height, top, bottom } = useLayout();
   const at = useRevealAt();
   const t = useTime();
@@ -354,7 +355,7 @@ export const ShareScene: React.FC<{ title?: string; unit?: string; format?: Form
   const pctDecimals = segments.some((x) => x.value / total < 0.1) ? 1 : 0;
   const pct = (v: number) => `${((v / total) * 100).toFixed(pctDecimals)}%`;
   // Narrow frames stack the legend under the ring; a square one has to shrink the ring to fit it.
-  const R = portrait ? 320 * u : narrow ? Math.min(300 * u, (height - top - bottom - (180 + segments.length * 66) * u) / 2) : 300 * u, r = R * 0.62;
+  const R = portrait ? 320 * u : narrow ? Math.min(300 * u, (height - top - bottom - (180 + (segments.length + (totalRow ? 1.4 : 0)) * 66) * u) / 2) : 300 * u, r = R * 0.62;
   // The whole ring sweeps in on the first reveal, so the chart never shows a broken circle;
   // each slice then lights up (and its legend row) on its own cue.
   const first = Math.min(...segments.map((s, i) => at(i, segments.length, s.cue)));
@@ -375,6 +376,8 @@ export const ShareScene: React.FC<{ title?: string; unit?: string; format?: Form
     return `M${x0},${y0} A${R},${R} 0 ${big} 1 ${x1},${y1} L${x2},${y2} A${r},${r} 0 ${big} 0 ${x3},${y3} Z`;
   };
   const lead = arcs.reduce((m, a) => (a.s.value > m.s.value ? a : m), arcs[0]);
+  // The whole the slices add up to, as the legend's headline: on its cue, else with the ring.
+  const totalP = totalRow ? easeOut((t - cueOr(scene, totalRow.cue, first)) / 0.5) : 0;
   return (
     <Stage center>
       <Title text={title} />
@@ -387,12 +390,18 @@ export const ShareScene: React.FC<{ title?: string; unit?: string; format?: Form
           <text x={0} y={40 * u} textAnchor="middle" fontSize={26 * u} fill={theme.colors.muted} opacity={lead.p}>{lead.s.label}</text>
         </svg>
         <div style={{ display: "flex", flexDirection: "column", gap: 20 * u, minWidth: 420 * u }}>
+          {totalRow && (
+            <div data-anchor="total" style={{ display: "flex", alignItems: "baseline", gap: 18 * u, paddingBottom: 14 * u, borderBottom: `${2 * u}px solid ${theme.colors.muted}`, opacity: totalP, transform: `translateY(${(1 - totalP) * 12 * u}px)` }}>
+              <div style={{ flex: 1, fontSize: 34 * u, color: theme.colors.muted }}>{totalRow.label ?? "合计"}</div>
+              <div style={{ fontFamily: theme.fonts.number, fontSize: 64 * u, fontWeight: 800 }}>{fmt(total, format)}{unit ? ` ${unit}` : ""}</div>
+            </div>
+          )}
           {arcs.map((a) => (
             <div key={a.s.label} data-anchor={[`seg${a.i + 1}`, a.s.cue].filter(Boolean).join(" ")} style={{ display: "flex", alignItems: "center", gap: 18 * u, opacity: Math.max(0.3, a.p), transform: `translateX(${(1 - a.p) * 12 * u}px)` }}>
               <div style={{ width: 26 * u, height: 26 * u, borderRadius: 6 * u, background: a.color }} />
               <div style={{ flex: 1, fontSize: 38 * u }}>{a.s.label}</div>
               <div style={{ fontFamily: theme.fonts.number, fontSize: 40 * u, fontWeight: 700 }}>{pct(a.s.value)}</div>
-              <div style={{ fontFamily: theme.fonts.number, fontSize: 22 * u, color: theme.colors.muted, minWidth: 140 * u, textAlign: "right" }}>
+              <div style={{ fontFamily: theme.fonts.number, fontSize: 28 * u, color: theme.colors.muted, minWidth: 160 * u, textAlign: "right" }}>
                 {fmt(a.s.value, format)}{unit ? ` ${unit}` : ""}
               </div>
             </div>
