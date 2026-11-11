@@ -1,5 +1,5 @@
 import React from "react";
-import { fitFont, useLayout, useReveal, useRevealAt, useTheme, useTime } from "../engine/context";
+import { fitFont, textEms, useLayout, useReveal, useRevealAt, useTheme, useTime } from "../engine/context";
 import { MediaFill } from "../components/Media";
 import { Stage } from "./Stage";
 
@@ -127,10 +127,22 @@ export const BulletsScene: React.FC<{ title?: string; items: Bullet[] }> = ({ ti
 
 export const SourcesScene: React.FC<{ title?: string; items?: string[] }> = ({ title = "资料来源", items = [] }) => {
   const theme = useTheme();
-  const { u, portrait } = useLayout();
+  const { u, portrait, width, height, pad, top, bottom } = useLayout();
   const o = useReveal(0.1, 0.6);
   const t = useTime();
   const cols = !portrait && items.length > 8 ? 2 : 1;
+  // The largest size (30u down to 18u) at which the list, wrapped to its column width, fits the safe area.
+  const colW = (width - pad * 2 - 48 * u * (cols - 1)) / cols, room = height - top - bottom - 110 * u;
+  const listH = (fs: number) => {
+    let h = 0;
+    for (let i = 0; i < items.length; i += cols) {
+      const lines = Math.max(...items.slice(i, i + cols).map((s) => Math.ceil(((textEms(s) + 2) * fs) / (colW - 12 * u))));
+      h += lines * fs * 1.4 + 14 * u;
+    }
+    return h;
+  };
+  let fs = 30 * u;
+  while (fs > 18 * u && listH(fs) > room) fs -= u;
   return (
     <Stage center>
       <div style={{ fontSize: 44 * u, fontWeight: 700, marginBottom: 32 * u, opacity: o }}>{title}</div>
@@ -138,9 +150,9 @@ export const SourcesScene: React.FC<{ title?: string; items?: string[] }> = ({ t
         {items.map((s, i) => {
           const e = Math.min(1, Math.max(0, (t - 0.3 - i * 0.12) / 0.4));
           return (
-            <div key={i} style={{ fontSize: (items.length > 12 ? 20 : 24) * u, color: theme.colors.muted, lineHeight: 1.4, opacity: e, display: "flex", gap: 12 * u }}>
+            <div key={i} style={{ fontSize: fs, color: theme.colors.text, lineHeight: 1.4, opacity: e, display: "flex", gap: 12 * u }}>
               <span style={{ color: theme.colors.accent, fontFamily: theme.fonts.number }}>{String(i + 1).padStart(2, "0")}</span>
-              <span>{s}</span>
+              <span style={{ opacity: 0.86 }}>{s}</span>
             </div>
           );
         })}
