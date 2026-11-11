@@ -49,7 +49,8 @@ function syncCode(host, root) {
 }
 
 function rsync(args) {
-  const r = spawnSync("rsync", ["-az", "--mkpath", "-e", `ssh ${SSH.join(" ")}`, ...args], { stdio: "inherit" });
+  // No owner/group: files come back owned by whoever runs the CLI here, not the worker's uid.
+  const r = spawnSync("rsync", ["-rlptz", "--mkpath", "-e", `ssh ${SSH.join(" ")}`, ...args], { stdio: "inherit" });
   if (r.status !== 0) throw new Error(`rsync ${args.slice(-2).join(" → ")} exited ${r.status}`);
 }
 
@@ -57,7 +58,7 @@ function rsync(args) {
 async function runJob(host, project, cmd, argv, root) {
   const id = `${basename(project).replace(/[^\w.-]/g, "_")}-${cmd}-${Date.now()}`, logf = `${JOBS}/${id}.log`, exitf = `${JOBS}/${id}.exit`;
   const job = ["set -a; [ -r /etc/onevideo/env ] && . /etc/onevideo/env; set +a", `cd ${shq(project)} || exit 97`, `ONEVIDEO_ON_WORKER=1 exec node ${shq(join(root, "cli", "onevideo.mjs"))} ${[cmd, ...argv].map(shq).join(" ")}`].join("\n");
-  const start = ssh(host, `mkdir -p ${JOBS} && cat > ${JOBS}/${id}.sh && setsid sh -c 'sh ${JOBS}/${id}.sh > ${logf} 2>&1 < /dev/null; echo $? > ${exitf}' > /dev/null 2>&1 < /dev/null &`, { input: job });
+  const start = ssh(host, `mkdir -p ${JOBS} && cat > ${JOBS}/${id}.sh && { setsid sh -c 'sh ${JOBS}/${id}.sh > ${logf} 2>&1 < /dev/null; echo $? > ${exitf}' > /dev/null 2>&1 < /dev/null & }`, { input: job });
   if (start.status !== 0) throw new Error(`worker ${host}: could not start the job: ${start.stderr?.trim()}`);
   log(`worker ${host}: ${cmd} running (log ${logf}; Ctrl-C stops following, not the job)`);
   let off = 0, down = 0;
