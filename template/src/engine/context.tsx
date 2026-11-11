@@ -42,8 +42,9 @@ export function useLayout() {
 }
 
 // The font size (px) at which text that must stay on one line fits `room` px, at most `max`.
-// Widths are estimated: CJK a full em, Latin and digits about 0.62 em in the bold faces used.
-export const textEms = (text: string) => [...text].reduce((n, c) => n + (c.charCodeAt(0) > 0x2e80 ? 1 : 0.62), 0);
+// Widths are estimated: CJK a full em, Latin and digits about 0.62 em in the bold faces used
+// (`latin` overrides that for regular-weight running text, which is narrower).
+export const textEms = (text: string, latin = 0.62) => [...text].reduce((n, c) => n + (c.charCodeAt(0) > 0x2e80 ? 1 : latin), 0);
 export function fitFont(text: string, room: number, max: number): number {
   const ems = textEms(text);
   return ems ? Math.min(max, room / ems) : max;

@@ -125,6 +125,9 @@ export const BulletsScene: React.FC<{ title?: string; items: Bullet[] }> = ({ ti
   );
 };
 
+// Regular-weight Latin in the source list measures about 0.48 em; 0.52 keeps a little slack.
+const LIST_LATIN = 0.52;
+
 export const SourcesScene: React.FC<{ title?: string; items?: string[] }> = ({ title = "资料来源", items = [] }) => {
   const theme = useTheme();
   const { u, portrait, width, height, pad, top, bottom } = useLayout();
@@ -139,7 +142,7 @@ export const SourcesScene: React.FC<{ title?: string; items?: string[] }> = ({ t
   const listH = (fs: number) => {
     let h = 0;
     for (let i = 0; i < items.length; i += cols) {
-      const lines = Math.max(...items.slice(i, i + cols).map((s) => Math.ceil(((textEms(s) + 2) * fs) / (colW - 12 * u))));
+      const lines = Math.max(...items.slice(i, i + cols).map((s) => Math.ceil(((textEms(s, LIST_LATIN) + 2) * fs) / (colW - 12 * u))));
       h += lines * fs * 1.4 + 14 * u;
     }
     return h;
