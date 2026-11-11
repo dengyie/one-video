@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { request, requireApiKey } from "../core/http.mjs";
 
-export const LLM_DEFAULTS = { baseUrl: "https://api.mangoqwq.com/v1", keyEnv: "MANGO_API_KEY", models: ["gemini-3.8-flash", "qwen-3.8-flash"] };
+export const LLM_DEFAULTS = { baseUrl: "https://api.mangoqwq.com/v1", keyEnv: "MANGO_API_KEY", models: ["gpt-6.1-terra", "glm-5.3-flash", "gemini-3.7-flash"] };
 
 export const llmConfig = (config = {}) => ({ ...LLM_DEFAULTS, ...(config.llm ?? {}) });
 
@@ -41,6 +41,10 @@ export function parseJsonReply(text, { partial = false } = {}) {
   throw new Error(`unterminated JSON in reply (${s.length - start} chars): ${s.slice(start, start + 120).replace(/\s+/g, " ")}`);
 }
 
+// A broken relay channel can answer every request with the same canned line ("task ready", "ok")
+// instead of the model's output; that is a dead channel, not a garbled answer, so no retry.
+export const isPlaceholder = (text) => /^\W*(task (ready|received|submitted)|ok|done|processing)\W*$/i.test(String(text ?? "").trim());
+
 // One user turn (text + optional images) → { text, model } or, with json, { data, model }.
 // A model that errors or returns nothing is skipped for the next; unparseable JSON gets one more try.
 export async function ask({ prompt, images = [], system, json = false, maxTokens = 2000, config = {} }) {
@@ -56,6 +60,7 @@ export async function ask({ prompt, images = [], system, json = false, maxTokens
       const text = j.choices?.[0]?.message?.content;
       if (!text?.trim()) throw new Error(`empty reply${j.error ? `: ${JSON.stringify(j.error).slice(0, 160)}` : ""}`);
       if (/^⚠️? ?Upstream .* empty response/i.test(text)) throw new Error("upstream returned an empty response");
+      if (isPlaceholder(text)) throw new Error(`placeholder reply from the relay: ${text.trim()}`);
       if (!json) return { text, model };
       try {
         return { data: parseJsonReply(text, { partial: true }), model };

@@ -126,11 +126,14 @@ test("a clip from a still that fails to generate stands in as the still, and is 
 
 test("ask walks the model list and parses JSON replies", async () => {
   const r = await relay({
-    "/v1/chat/completions": (_, j) => (j.model === "gone" ? [500, { error: "no channel" }] : j.model === "blank" ? chat("⚠️ Upstream Gemini returned an empty response.") : chat('{"ok": true, "s": "a } b"}')),
+    "/v1/chat/completions": (_, j) => (j.model === "gone" ? [500, { error: "no channel" }] : j.model === "blank" ? chat("⚠️ Upstream Gemini returned an empty response.") : j.model === "canned" ? (canned++, chat("task ready")) : chat('{"ok": true, "s": "a } b"}')),
   });
+  let canned = 0;
   try {
-    const res = await ask({ prompt: "hi", json: true, config: { llm: { baseUrl: r.base, keyEnv: "OV_TEST_KEY", models: ["gone", "blank", "good"] } } });
+    const res = await ask({ prompt: "hi", json: true, config: { llm: { baseUrl: r.base, keyEnv: "OV_TEST_KEY", models: ["gone", "blank", "canned", "good"] } } });
     assert.deepEqual(res, { data: { ok: true, s: "a } b" }, model: "good" });
+    assert.equal(canned, 1); // a placeholder channel is dead: skipped, not retried
+    await assert.rejects(ask({ prompt: "hi", config: { llm: { baseUrl: r.base, keyEnv: "OV_TEST_KEY", models: ["canned"] } } }), /placeholder reply from the relay: task ready/);
     await assert.rejects(ask({ prompt: "hi", config: { llm: { baseUrl: r.base, keyEnv: "OV_TEST_KEY", models: ["gone"] } } }), /no model answered \(gone: HTTP 500/);
     let flaky = 0;
     const r2 = await relay({ "/v1/chat/completions": () => chat(flaky++ ? '{"best": 2}' : "截断的文字") });
