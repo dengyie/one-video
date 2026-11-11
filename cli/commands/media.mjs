@@ -114,6 +114,7 @@ export async function timeline(args) {
   const res = checkProject(project, { needTimings: true });
   printIssues(res.issues);
   if (res.errors.length && !args.force) throw new UserError(`${res.errors.length} error(s); fix them (or --force to write anyway)`);
+  if (!res.timeline) throw new UserError(`${res.errors.length} error(s) before the timeline could compile; fix them first`);
   writeJson(project.paths.timeline, res.timeline);
   const t = res.timeline;
   log(`timeline: ${t.scenes.length} scenes, ${t.duration.toFixed(1)}s (${t.totalFrames} frames @ ${t.fps}fps) → plan/timeline.json`);
