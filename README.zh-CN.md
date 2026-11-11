@@ -59,6 +59,7 @@ cd OneVideo
 
 npm run setup            # 安装 template/ 下的 Remotion 核心引擎（内置 ffmpeg）
 npm link                 # 全局注册 onevideo CLI
+export MANGO_API_KEY=…   # OpenAI 兼容中继 key：TTS 必需，生图/生视频/look 审片可选
 onevideo doctor          # 诊断依赖与运行环境
 ```
 

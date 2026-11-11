@@ -57,6 +57,7 @@ cd OneVideo
 
 npm run setup            # Install Remotion engine dependencies in template/
 npm link                 # Register global onevideo CLI
+export MANGO_API_KEY=…   # OpenAI-compatible relay key for TTS (and optional image/video generation, look review)
 onevideo doctor          # Inspect dependencies and environment health
 ```
 
