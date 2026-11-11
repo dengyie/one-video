@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { request, requireApiKey } from "../core/http.mjs";
 
-export const LLM_DEFAULTS = { baseUrl: "https://api.mangoqwq.com/v1", keyEnv: "MANGO_API_KEY", models: ["gpt-6.1-terra", "glm-5.3-flash", "gemini-3.7-flash"] };
+export const LLM_DEFAULTS = { baseUrl: "https://api.mangoqwq.com/v1", keyEnv: "MANGO_API_KEY", models: ["glm-5.3-flash", "gemini-3.8-flash", "gpt-6-luna", "deepseek-v4-flash"] };
 
 export const llmConfig = (config = {}) => ({ ...LLM_DEFAULTS, ...(config.llm ?? {}) });
 
