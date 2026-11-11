@@ -54,8 +54,8 @@ research → proposal → script → storyboard → assets → voice → compose
 运行要求 Node.js ≥ 20。
 
 ```bash
-git clone https://github.com/dengyie/OneVideo.git
-cd OneVideo
+git clone https://github.com/dengyie/one-video.git
+cd one-video
 
 npm run setup            # 安装 template/ 下的 Remotion 核心引擎（内置 ffmpeg）
 npm link                 # 全局注册 onevideo CLI
