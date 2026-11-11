@@ -11,7 +11,8 @@ import { Icon } from "./Icon";
 // scene-relative, and `end`). Positions are fractions of the frame; sizes are layout units.
 // They ride with the scene through transitions and its shot track, but ignore its slow camera drift.
 // An overlay with `on` is pinned to a scene element instead (its `data-anchor` name), measured
-// every frame, so it stays on the card or number it marks in any aspect, drift included.
+// every frame, so it stays on the card or number it marks in any aspect, drift included, and
+// fades out when that element leaves the frame.
 const FADE = 0.3;
 
 type Box = { x: number; y: number; w: number; h: number };
@@ -25,7 +26,7 @@ const sameBoxes = (a: Record<string, Box>, b: Record<string, Box>) => {
 export const Overlays: React.FC = () => {
   const scene = useScene();
   const t = useTime();
-  const { width } = useLayout();
+  const { width, height } = useLayout();
   const ref = useRef<HTMLDivElement>(null);
   const [boxes, setBoxes] = useState<Record<string, Box>>({});
   const names = [...new Set((scene.overlays ?? []).map((o) => o.on).filter(Boolean))] as string[];
@@ -47,13 +48,24 @@ export const Overlays: React.FC = () => {
     setBoxes((prev) => (sameBoxes(prev, next) ? prev : next));
   });
   if (!scene.overlays?.length) return null;
+  // A pinned overlay fades out with its element as it leaves the frame (a canvas card the camera
+  // flew past). With the element gone it falls back to x/y/rect only if the storyboard gave them.
+  const shown = (o: Overlay) => {
+    if (!o.on) return 1;
+    const b = boxes[o.on];
+    if (!b) return o.x !== undefined || o.y !== undefined || o.rect ? 1 : 0;
+    const iw = Math.min(b.x + b.w, width) - Math.max(b.x, 0), ih = Math.min(b.y + b.h, height) - Math.max(b.y, 0);
+    return iw <= 0 || ih <= 0 ? 0 : clamp01(((iw * ih) / Math.max(1, b.w * b.h)) * 2);
+  };
   return (
     <AbsoluteFill ref={ref} style={{ pointerEvents: "none" }}>
       <Anchors.Provider value={boxes}>
         {scene.overlays.map((o, i) => {
           if (t < o.t - 0.05 || t > o.end) return null;
+          const vis = shown(o);
+          if (vis <= 0) return null;
           const out = clamp01((o.end - t) / FADE);
-          return <OverlayView key={i} o={o} i={i} local={t - o.t} out={o.type === "flash" ? 1 : out} />;
+          return <OverlayView key={i} o={o} i={i} local={t - o.t} out={(o.type === "flash" ? 1 : out) * vis} />;
         })}
       </Anchors.Provider>
     </AbsoluteFill>
