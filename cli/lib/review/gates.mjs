@@ -203,6 +203,8 @@ export function rhythmGate(timeline, config) {
     for (const sh of sc.shots ?? []) at(sh.t);
     for (const o of sc.overlays ?? []) at(o.t);
     propTimes(sc.props, at);
+    // A quote read aloud lights up line by line as it is spoken (its caption is dropped for that).
+    if (sc.type === "quote" && sc.captions === false) for (const l of sc.lines ?? []) at(l.start);
   }
   events.sort((a, b) => a.t - b.t);
   const end = { t: timeline.duration, scene: timeline.scenes.at(-1)?.id };

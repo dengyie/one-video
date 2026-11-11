@@ -242,6 +242,9 @@ test("rhythm: long stills and transition runs warn; a covered word leaves when t
   assert.match(w[0], /^5\.0s .* from 15\.0s \(scene "d"\)/);
   assert.match(w[1], /3\+ consecutive "fade" transitions ending at "d"/);
   assert.deepEqual(rhythmGate(tl, { gates: { maxStill: 6, maxSameTransitionRun: 3 } }), []);
+  const quote = (captions) => ({ duration: 8, scenes: [sc("q", 0, 8, { type: "quote", captions, transitionIn: { type: "cut" }, lines: [{ start: 0.1 }, { start: 4 }] })] });
+  assert.equal(rhythmGate(quote(true), {}).length, 1); // a still quote under its caption
+  assert.deepEqual(rhythmGate(quote(false), {}), []); // read along: each spoken line lights up
 
   const ex = example({ media: ["sfx/whoosh.wav", "sfx/pop.wav", "music/bgm.wav"] });
   const sb = structuredClone(ex.storyboard);
