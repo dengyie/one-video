@@ -42,6 +42,13 @@ test("storyboardGate: periodCues must reference defined cues", () => {
   assert.ok(msgs(storyboardGate(sb, ex.script, ex.config, null), "cues").some((x) => /"nope"/.test(x)));
 });
 
+test("storyboardGate: pointCues must reference defined cues", () => {
+  const ex = example();
+  const sb = structuredClone(ex.storyboard);
+  sb.scenes.find((s) => s.type === "line-chart").props.pointCues = [null, "gone"];
+  assert.ok(msgs(storyboardGate(sb, ex.script, ex.config, null), "cues").some((x) => /"gone"/.test(x)));
+});
+
 test("rateGate flags speech outside the syllables/s band", () => {
   const timings = { scenes: { s: { lines: [{ text: "一二三四五六七八九十", start: 0, end: 0.5 }] } } };
   assert.ok(msgs(rateGate({ scenes: [{ id: "s" }] }, timings, {})).some((x) => /syllables\/s/.test(x)));

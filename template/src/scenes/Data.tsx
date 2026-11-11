@@ -242,8 +242,8 @@ export const pointAnchors = (si: number, k: number, n: number) => {
 type LineSeries = { name: string; color?: string; points: Point[] };
 type Annotation = { x: number | string; label: string; series?: number; cue?: string };
 
-export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?: string; format?: Format; yMin?: number; yMax?: number; series: LineSeries[]; annotations?: Annotation[]; drawCue?: string }> = ({
-  title, xLabel, yLabel, format, yMin, yMax, series, annotations = [], drawCue,
+export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?: string; format?: Format; yMin?: number; yMax?: number; series: LineSeries[]; annotations?: Annotation[]; drawCue?: string; pointCues?: (string | null)[] }> = ({
+  title, xLabel, yLabel, format, yMin, yMax, series, annotations = [], drawCue, pointCues = [],
 }) => {
   const theme = useTheme();
   const scene = useScene();
@@ -262,7 +262,19 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
   const X = (x: number) => ((x - x0) / Math.max(1e-9, x1 - x0)) * W;
   const Y = (y: number) => H - ((y - lo) / Math.max(1e-9, hi - lo)) * H;
   const drawStart = cueOr(scene, drawCue, 0.5);
-  const drawP = easeInOut((t - drawStart) / Math.max(1.2, Math.min(4, scene.duration * 0.45)));
+  // With pointCues the line reaches point k when its cue resolves (one segment at a time, like the
+  // narration reading the values out); otherwise it draws in one sweep from drawStart.
+  const n = Math.max(...series.map((s) => s.points.length));
+  const pointT = pointCues.some(Boolean) && n > 1
+    ? periodTimes(n, scene.duration, (k) => (pointCues[k] ? scene.cues[pointCues[k]!] : k === 0 ? drawStart : undefined))
+    : null;
+  const pos = pointT
+    ? pointT.slice(1).reduce((sum, T, k) => {
+        const travel = Math.min(1, Math.max(0.3, (T - pointT[k]) * 0.8));
+        return sum + easeInOut(clamp01((t - (T - travel)) / travel));
+      }, 0)
+    : 0;
+  const drawP = pointT ? pos / (n - 1) : easeInOut((t - drawStart) / Math.max(1.2, Math.min(4, scene.duration * 0.45)));
   const lastLabel = (s: LineSeries) => s.points[Math.max(0, Math.ceil(drawP * (s.points.length - 1)))];
   return (
     <Stage>
@@ -286,8 +298,14 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
             const color = s.color ?? colorAt(theme, si);
             const pts = s.points.map((p) => [X(xVal(p[0])), Y(Number(p[1]))]);
             const d = pts.map(([x, y], k) => `${k ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-            let len = 0;
-            for (let k = 1; k < pts.length; k++) len += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]);
+            let len = 0, upTo = 0;
+            for (let k = 1; k < pts.length; k++) {
+              const seg = Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]);
+              upTo += seg * clamp01(pos - (k - 1));
+              len += seg;
+            }
+            // Dash length is in path length, not points: cued segments must end exactly on their point.
+            const drawn = pointT ? upTo / Math.max(1e-9, len) : drawP;
             const tip = lastLabel(s);
             const tipK = s.points.indexOf(tip);
             const annotated = new Set(annotations.filter((a) => (a.series ?? 0) === si).map((a) => String(a.x)));
@@ -303,13 +321,13 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
                     <g key={k} opacity={o}>
                       <circle cx={x} cy={y} r={8 * u} fill={theme.colors.bg} stroke={color} strokeWidth={4 * u} />
                       {series.length === 1 && k !== tipK && !annotated.has(String(s.points[k][0])) && (
-                        <text x={x} y={y - 22 * u} textAnchor="middle" fontSize={24 * u} fontWeight={600} fill={theme.colors.text} fontFamily={theme.fonts.number}>{fmt(Number(s.points[k][1]), format)}</text>
+                        <text x={x} y={y - 24 * u} textAnchor="middle" fontSize={28 * u} fontWeight={600} fill={theme.colors.text} fontFamily={theme.fonts.number}>{fmt(Number(s.points[k][1]), format)}</text>
                       )}
                     </g>
                   );
                 })}
-                <path d={`${d} L${pts[pts.length - 1][0]},${H} L${pts[0][0]},${H} Z`} fill={color} opacity={0.08 * drawP} />
-                <path d={d} fill="none" stroke={color} strokeWidth={5 * u} strokeLinejoin="round" strokeLinecap="round" strokeDasharray={len} strokeDashoffset={len * (1 - drawP)} />
+                <path d={`${d} L${pts[pts.length - 1][0]},${H} L${pts[0][0]},${H} Z`} fill={color} opacity={0.08 * drawn} />
+                <path d={d} fill="none" stroke={color} strokeWidth={5 * u} strokeLinejoin="round" strokeLinecap="round" strokeDasharray={len} strokeDashoffset={len * (1 - drawn)} />
                 {drawP > 0.02 && (
                   // Near the right edge the label would run off the frame: right-align it above the point instead.
                   <text {...(X(xVal(tip[0])) > W * 0.85 ? { x: X(xVal(tip[0])), y: Y(Number(tip[1])) - 28 * u, textAnchor: "end" as const } : { x: X(xVal(tip[0])) + 14 * u, y: Y(Number(tip[1])) - 14 * u })} fontSize={34 * u} fontWeight={800} fill={color} fontFamily={theme.fonts.number}>

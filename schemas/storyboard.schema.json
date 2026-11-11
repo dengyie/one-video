@@ -1183,6 +1183,16 @@
         "drawCue": {
           "type": "string",
           "description": "name of a cue in scene.cues; the item appears when it resolves"
+        },
+        "pointCues": {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": "cue name per point (null = auto); the line reaches point k when its cue resolves"
         }
       }
     },

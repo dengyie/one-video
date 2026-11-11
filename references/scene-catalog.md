@@ -11,7 +11,7 @@
 | `stat-cards` | 1–8 个关键数字 | `cards[{value,label}]` | `columns`、卡片 `from`/`format`/`note`/`color`/`cue`；无 `from` 时数字逐位翻牌落定 |
 | `bar-compare` | 同一时点的横向对比 | `items[{label,value}]` | `sort`、`max`、`unit`、`format` |
 | `bar-race` | 排名随时间变化 | `periods`、`series[{name,values}]` | `top`、`group`+`groupColors`、`periodCues` |
-| `line-chart` | 趋势、增长曲线 | `series[{name,points}]` | `annotations`、`drawCue`、`yMin`/`yMax` |
+| `line-chart` | 趋势、增长曲线 | `series[{name,points}]` | `annotations`、`drawCue`、`pointCues`（每个点的 cue 名，旁白逐个报数时线逐段画到对应点）、`yMin`/`yMax` |
 | `share` | 构成、占比（环形图） | `segments[{label,value}]` | 每段 `cue`、`unit`、`total{label,cue}`（图例上方的合计大字，旁白先报总数时用） |
 | `timeline` | 事件序列 | `events[{date,title}]`（2–10 个） | `note`、`highlight`、`cue` |
 | `compare` | A vs B | `left`、`right` | `vs` |
@@ -37,7 +37,7 @@
 ## 场景通用字段
 
 - `header: {title, subtitle}`：图表场景的标题条。subtitle 写口径和日期（“2026-11-04 收盘 · StockTitan”）。
-- `cues: {name: 时间}`：时间可以是秒（负数从结尾倒数）、0–1 比例、旁白里的短语，或 `{phrase, offset}`。props 用 `cue`、`drawCue`、`periodCues` 引用 cue 名，引用未定义的 cue 会报错。
+- `cues: {name: 时间}`：时间可以是秒（负数从结尾倒数）、0–1 比例、旁白里的短语，或 `{phrase, offset}`。props 用 `cue`、`drawCue`、`periodCues`、`pointCues` 引用 cue 名，引用未定义的 cue 会报错。
 - `enter` / `exit`：转场类型 `fade`、`slide`、`push`、`whip`、`zoom`、`punch`、`iris`、`wipe`、`clock`、`dip`、`through`（镜头冲进上一镜的主体，糊开后露出下一场景，下一场景从同一点浮出；主体默认取上一镜素材末帧深度图里最近 8% 像素的重心，没有深度图时取画面中心，也可写 `focus: [x, y]` 指定屏幕点；最适合实拍接画布）、`cut`，或 `{type, duration, direction, sfx}`；相邻两场景重叠播放，边界类型取 `next.enter ?? prev.exit ?? theme.transition`。
 - `camera`：`static`、`drift`（默认）、`push`、`pull`、`pan-left`、`pan-right`、`rise`、`handheld`，或 `{move, amount}`。
 - 图标：任意 props 里的 `icon` 字段写 Lucide 名（`rocket`、`user-round`）或 `flag:<iso2>`（圆形国旗），编译时只内联用到的 SVG；未知名字会报错。

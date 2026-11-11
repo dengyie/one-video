@@ -96,7 +96,7 @@ function cueRefs(v, out = []) {
   else if (v && typeof v === "object") {
     for (const [k, x] of Object.entries(v)) {
       if ((k === "cue" || k === "drawCue") && typeof x === "string") out.push(x);
-      else if (k === "periodCues" && Array.isArray(x)) out.push(...x.filter((c) => typeof c === "string"));
+      else if ((k === "periodCues" || k === "pointCues") && Array.isArray(x)) out.push(...x.filter((c) => typeof c === "string"));
       else cueRefs(x, out);
     }
   }
