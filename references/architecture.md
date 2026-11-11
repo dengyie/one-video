@@ -6,7 +6,7 @@
 
 | 目录 | 管什么 | 主要入口 |
 |---|---|---|
-| `core/` | 项目加载与路径、参数解析、HTTP（重试、密钥）、ffmpeg、JSON Schema、阶段状态、文本度量（视觉宽度、朗读音节、读音规则、数字提取） | `project.mjs` `http.mjs` `ffmpeg.mjs` `text.mjs` |
+| `core/` | 项目加载与路径、参数解析、HTTP（重试、密钥）、ffmpeg、JSON Schema、阶段状态、文本度量（视觉宽度、朗读音节、读音规则、数字提取）、重活派发到 worker（`ONEVIDEO_WORKERS`） | `project.mjs` `http.mjs` `ffmpeg.mjs` `text.mjs` `worker.mjs` |
 | `captions/` | 字幕：旁白切行（`splitLines` `sceneLines` `captionMaxChars`）、字幕带位置与主体避让（`captionBand` `placeCaptions`）、SRT/VTT（`toSrt` `toVtt`）、宽度门禁（`captionGate`） | `index.mjs` |
 | `voice/` | 配音：TTS 请求、按停顿对齐字幕行、响度归一 | `tts.mjs` |
 | `audio/` | WAV 读写、响度、程序化音乐与音效、节拍检测 | `wav` `loudness` `synth` `beats` |

@@ -9,7 +9,7 @@ import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { resolveApiKey, viaApiBase, requireApiKey } from "../cli/lib/core/http.mjs";
 
 const CLI = join(ROOT, "cli", "onevideo.mjs");
-const ov = (cwd, ...args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: "utf8", env: { ...process.env, HOME: cwd } });
+const ov = (cwd, ...args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: "utf8", env: { ...process.env, HOME: cwd, ONEVIDEO_WORKERS: "" } });
 const json = (p) => JSON.parse(readFileSync(p, "utf8"));
 
 function exampleProject() {

@@ -19,6 +19,7 @@ import { assetFileExists, clipFrames, countFrames, framesDir } from "../lib/asse
 import { IMAGE_DEFAULTS, VIDEO_DEFAULTS } from "../lib/generate/index.mjs";
 import { llmConfig } from "../lib/llm/client.mjs";
 import { ensureBeats } from "../lib/audio/beats.mjs";
+import { workerHosts } from "../lib/core/worker.mjs";
 import { adoptLegacy, frameRange, localStamp, readRenders, recordRender, resolveVideo, timelineHash, versionFile } from "../lib/publish/renders.mjs";
 
 const ENTRY = "src/index.ts";
@@ -329,6 +330,8 @@ export async function doctor() {
   add(true, "look", `optional; ${models(llm)}${genKey(llm) ? "" : " (no key)"}`);
   const depth = media.depthTools();
   add(true, "depth", depth.missing ? `optional; ${depth.missing}` : `${depth.py} + ${depth.model}`);
+  const workers = workerHosts();
+  add(true, "workers", workers.length ? `${workers.join(", ")} (render/build/depth/stills run there; --local to stay)` : "optional; unset (heavy commands run here; ONEVIDEO_WORKERS=host,…)");
   for (const [ok, name, detail] of checks) log(`${ok ? "✓" : "✗"} ${name.padEnd(9)} ${detail}`);
   if (checks.some(([ok]) => !ok)) process.exitCode = 1;
 }

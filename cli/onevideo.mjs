@@ -7,6 +7,7 @@ import * as media from "./commands/media.mjs";
 import * as render from "./commands/render.mjs";
 import * as library from "./commands/library.mjs";
 import * as director from "./commands/director.mjs";
+import { dispatch } from "./lib/core/worker.mjs";
 
 const COMMANDS = {
   init: [plan.init, "init <dir> [--pipeline data-explainer] [--style midnight-data] [--aspect 16:9] [--title …] [--example spacex-motion|spacex-ipo|promo-demo]"],
@@ -50,7 +51,8 @@ else if (!COMMANDS[cmd]) {
   process.exitCode = 2;
 } else {
   try {
-    await COMMANDS[cmd][0](parseArgs(rest, { booleans: ["force", "dry", "sample", "draft", "strict", "json", "stems", "full", "dark"] }));
+    // render / build / depth / stills go to a worker when ONEVIDEO_WORKERS is set (--local: run here).
+    if (!(await dispatch(cmd, rest))) await COMMANDS[cmd][0](parseArgs(rest, { booleans: ["force", "dry", "sample", "draft", "strict", "json", "stems", "full", "dark", "local"] }));
   } catch (e) {
     console.error(`✗ ${e instanceof UserError ? e.message : e.stack ?? e.message}`);
     process.exitCode = 1;
