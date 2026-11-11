@@ -306,6 +306,15 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
             }
             // Dash length is in path length, not points: cued segments must end exactly on their point.
             const drawn = pointT ? upTo / Math.max(1e-9, len) : drawP;
+            // The shaded area follows the pen: the drawn part of the polyline, closed down to the axis.
+            const shown: number[][] = [pts[0]];
+            for (let k = 1, left = drawn * len; k < pts.length && left > 0; k++) {
+              const seg = Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]);
+              const f = Math.min(1, left / Math.max(1e-9, seg));
+              shown.push([pts[k - 1][0] + (pts[k][0] - pts[k - 1][0]) * f, pts[k - 1][1] + (pts[k][1] - pts[k - 1][1]) * f]);
+              left -= seg;
+            }
+            const area = shown.map(([x, y], k) => `${k ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
             const tip = lastLabel(s);
             const tipK = s.points.indexOf(tip);
             const annotated = new Set(annotations.filter((a) => (a.series ?? 0) === si).map((a) => String(a.x)));
@@ -321,13 +330,15 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
                     <g key={k} opacity={o}>
                       <circle cx={x} cy={y} r={8 * u} fill={theme.colors.bg} stroke={color} strokeWidth={4 * u} />
                       {series.length === 1 && k !== tipK && !annotated.has(String(s.points[k][0])) && (
-                        <text x={x} y={y - 24 * u} textAnchor="middle" fontSize={28 * u} fontWeight={600} fill={theme.colors.text} fontFamily={theme.fonts.number}>{fmt(Number(s.points[k][1]), format)}</text>
+                        // The first point sits on the y axis: start its label there so it clears the tick labels.
+                        <text x={k === 0 ? x - 8 * u : x} y={y - 24 * u} textAnchor={k === 0 ? "start" : "middle"} fontSize={28 * u} fontWeight={600} fill={theme.colors.text} fontFamily={theme.fonts.number}>{fmt(Number(s.points[k][1]), format)}</text>
                       )}
                     </g>
                   );
                 })}
-                <path d={`${d} L${pts[pts.length - 1][0]},${H} L${pts[0][0]},${H} Z`} fill={color} opacity={0.08 * drawn} />
-                <path d={d} fill="none" stroke={color} strokeWidth={5 * u} strokeLinejoin="round" strokeLinecap="round" strokeDasharray={len} strokeDashoffset={len * (1 - drawn)} />
+                {shown.length > 1 && <path d={`${area} L${shown[shown.length - 1][0].toFixed(1)},${H} L${pts[0][0]},${H} Z`} fill={color} opacity={0.08} />}
+                {/* The gap is twice the path so the next dash's round cap never shows as a dot at the far end. */}
+                <path d={d} fill="none" stroke={color} strokeWidth={5 * u} strokeLinejoin="round" strokeLinecap="round" strokeDasharray={`${len} ${len * 2}`} strokeDashoffset={len * (1 - drawn)} opacity={drawn > 0 ? 1 : 0} />
                 {drawP > 0.02 && (
                   // Near the right edge the label would run off the frame: right-align it above the point instead.
                   <text {...(X(xVal(tip[0])) > W * 0.85 ? { x: X(xVal(tip[0])), y: Y(Number(tip[1])) - 28 * u, textAnchor: "end" as const } : { x: X(xVal(tip[0])) + 14 * u, y: Y(Number(tip[1])) - 14 * u })} fontSize={34 * u} fontWeight={800} fill={color} fontFamily={theme.fonts.number}>
