@@ -87,8 +87,9 @@ export async function ensureBeats(root, music, { preset } = {}) {
   // Caches from before downbeat detection are re-analysed once.
   if (existsSync(cache)) { const c = JSON.parse(readFileSync(cache, "utf8")); if (c.downbeats || String(c.source).startsWith("synth:")) return c; }
   let w;
-  if (/\.wav$/i.test(file)) w = readWav(file);
-  else {
+  // A WAV that is not 16-bit PCM (float, 24-bit) goes through ffmpeg like any other format.
+  if (/\.wav$/i.test(file)) try { w = readWav(file); } catch { /* decoded below */ }
+  if (!w) {
     // Other formats are decoded to a temporary WAV, removed once read.
     const wav = join(tmpdir(), `onevideo-beats-${process.pid}.wav`);
     try {

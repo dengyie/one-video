@@ -4,7 +4,7 @@
 // lives in ../captions.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { styleDef } from "../core/project.mjs";
+import { readJson, styleDef } from "../core/project.mjs";
 import { collectIcons, resolveIcon } from "../library/icons.mjs";
 import { resolveCountry } from "../library/geo.mjs";
 import { entryPath, isMonoDark, loadCatalog, resolveEntry, tintLottie } from "../library/catalog.mjs";
@@ -61,7 +61,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
   // Beat grid of the music, cached by `onevideo music` / render (see beats.mjs).
   const musicSrc = config.music?.file ?? "music/bgm.wav";
   const beatsAt = root ? beatsFile(join(root, "public", musicSrc)) : null;
-  const grid = config.music?.enabled !== false && beatsAt && existsSync(beatsAt) ? JSON.parse(readFileSync(beatsAt, "utf8")) : {};
+  const grid = config.music?.enabled !== false && beatsAt && existsSync(beatsAt) ? readJson(beatsAt) : {};
   // music.offset starts the track that many seconds in; "auto" picks the start that lands the
   // hard cuts on downbeats (a dry compile without snapping says where they fall).
   let offset = typeof config.music?.offset === "number" ? config.music.offset : 0;
@@ -125,7 +125,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
           const hit = typeof src === "string" ? resolveEntry(src, catalog, "lottie") : null;
           const file = hit ? entryPath(hit.entry) : root && typeof src === "string" && src.endsWith(".json") ? join(root, "public", src) : null;
           if (!file || !existsSync(file)) { errors.push(`${where}: unknown lottie "${src}" (library id/category, see onevideo lib list --kind lottie, or a .json under public/)`); continue; }
-          lottie[src] = JSON.parse(readFileSync(file, "utf8"));
+          lottie[src] = readJson(file);
           const line = hit && libraryCredit(hit.entry);
           if (line && !libraryCredits.includes(line)) libraryCredits.push(line);
         }
@@ -195,7 +195,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       if (root && existsSync(join(root, "public", depthPath(a)))) {
         usedAssets[id].depth = depthPath(a);
         const meta = join(root, "public", depthPath(a), "meta.json");
-        if (a.kind === "video" && existsSync(meta)) { const m = JSON.parse(readFileSync(meta, "utf8")); Object.assign(usedAssets[id], { depthStep: m.step, depthFrames: m.frames }); }
+        if (a.kind === "video" && existsSync(meta)) { const m = readJson(meta); Object.assign(usedAssets[id], { depthStep: m.step, depthFrames: m.frames }); }
       }
       if (root && existsSync(join(root, "public", lumaPath(a)))) usedAssets[id].luma = lumaPath(a);
       if (a.kind === "video" && root) {
