@@ -10,6 +10,7 @@ import { ask, parseJsonReply } from "../cli/lib/llm/client.mjs";
 import { request } from "../cli/lib/core/http.mjs";
 import { validateNamed } from "../cli/lib/core/schema.mjs";
 import { sheetPlan, sceneAt, writeSheets } from "../cli/commands/director.mjs";
+import { stampTime } from "../cli/lib/vision/sheet.mjs";
 import { REMOTION_BIN, ffmpeg, ffprobe } from "../cli/lib/core/ffmpeg.mjs";
 
 // A stand-in relay: `routes[path]` answers (req, body) → [status, json | Buffer]; calls are logged.
@@ -157,6 +158,15 @@ test("contact sheet geometry and scene lookup", () => {
   assert.equal(sheetPlan(36).reduce((n, s) => n + s.cells, 0), 36);
   assert.equal(sheetPlan(120)[0].step, 2);
   assert.deepEqual(sheetPlan(10, { fps: 2, from: 4, to: 6 }).map((s) => [s.t0, s.cells, s.cols]), [[4, 4, 4]]);
+  // "1s" at scale 1 on a 20×8 grey grid: a black box 9×7 with the glyph pixels white, the rest untouched.
+  const W = 20, grid = Buffer.alloc(W * 8 * 3, 128);
+  stampTime(grid, W, 1, 1, "1s", 1);
+  const px = (x, y) => grid[(y * W + x) * 3];
+  assert.equal(px(0, 0), 128);
+  assert.equal(px(1, 1), 0);
+  assert.equal(px(3, 2), 255); // top of the "1" stem
+  assert.equal(px(2, 2), 0);
+  assert.equal(px(10, 1), 128);
   const tl = { scenes: [{ id: "a", start: 0 }, { id: "b", start: 11.6 }] };
   assert.equal(sceneAt(tl, 11.6), "b");
   assert.equal(sceneAt(tl, 3), "a");

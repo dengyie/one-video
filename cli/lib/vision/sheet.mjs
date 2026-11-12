@@ -49,6 +49,27 @@ function encodePng(rgb, w, h) {
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(rows)), chunk("IEND", Buffer.alloc(0))]);
 }
 
+// Each cell carries its time in the corner (a 3×5 pixel font, no drawtext in this ffmpeg), so a
+// reader names the moment it sees instead of counting cells across a 6×4 grid.
+const GLYPHS = {
+  0: "111101101101111", 1: "010110010010111", 2: "111001111100111", 3: "111001111001111", 4: "101101111001001",
+  5: "111100111001111", 6: "111100111101111", 7: "111001001001001", 8: "111101111101111", 9: "111101111001111",
+  ".": "000000000000010", s: "000011110001110",
+};
+export function stampTime(grid, W, x0, y0, text, scale = 3) {
+  const chars = [...text].filter((c) => GLYPHS[c]);
+  const bw = (chars.length * 4 + 1) * scale, bh = 7 * scale;
+  for (let y = 0; y < bh; y++) grid.fill(0, ((y0 + y) * W + x0) * 3, ((y0 + y) * W + x0 + bw) * 3);
+  chars.forEach((c, n) => {
+    for (let k = 0; k < 15; k++) {
+      if (GLYPHS[c][k] !== "1") continue;
+      const px = x0 + (1 + n * 4 + (k % 3)) * scale, py = y0 + (1 + Math.floor(k / 3)) * scale;
+      for (let y = 0; y < scale; y++) grid.fill(255, ((py + y) * W + px) * 3, ((py + y) * W + px + scale) * 3);
+    }
+  });
+}
+const stampText = (t) => `${+t.toFixed(2)}s`;
+
 async function frameRgb(video, t, w, h, tmp) {
   const f = join(tmp, `cell-${Math.random().toString(36).slice(2)}.rgb`);
   if (t < 0) return null;
@@ -59,6 +80,7 @@ async function frameRgb(video, t, w, h, tmp) {
   return buf;
 }
 
+// `shift` moves the stamped times onto the timeline (a part render starts later).
 // `pair: { video, shift }` stacks a second video into every cell (it on top, this one below), at
 // the same moment shifted by `shift` seconds: an older version of the cut against the new one.
 export async function writeSheets(video, outDir, opts = {}) {
@@ -88,6 +110,7 @@ export async function writeSheets(video, outDir, opts = {}) {
           const x0 = PAD + (i % s.cols) * (w + PAD), y0 = PAD + Math.floor(i / s.cols) * (ch + PAD);
           if (tops[n]) blit(tops[n], x0, y0);
           if (cells[n]) blit(cells[n], x0, pair ? y0 + h + PAD : y0);
+          if (opts.stamp !== false) stampTime(grid, W, x0, y0, stampText(cellTime(s, i) + (opts.shift ?? 0)), Math.max(2, Math.round(w / 160)));
         }
       }
       const png = join(tmp, "sheet.png");

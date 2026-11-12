@@ -29,7 +29,7 @@ export async function sheet(args) {
   // --vs v3: each cell shows that version on top and this one below, at the same timeline moment.
   const vs = args.vs !== undefined ? target(project, args.vs) : null;
   const { sheets } = await writeSheets(cur.file, join(project.paths.out, "qc"), {
-    fps: args.fps !== undefined ? Number(args.fps) : undefined, ...range(args, cur.offset),
+    fps: args.fps !== undefined ? Number(args.fps) : undefined, ...range(args, cur.offset), shift: cur.offset,
     cols: Number(args.cols ?? (vs ? 4 : 6)), width: Number(args.width ?? 480),
     ...(vs ? { prefix: "compare", pair: { video: vs.file, shift: cur.offset - vs.offset } } : {}),
   });
@@ -49,7 +49,7 @@ export async function look(args) {
   const { file: video, offset } = target(project, args.video);
   const tl = existsSync(project.paths.timeline) ? readJson(project.paths.timeline) : null;
   const outDir = join(project.paths.out, "qc");
-  const { sheets: raw } = await writeSheets(video, outDir, { fps: args.fps !== undefined ? Number(args.fps) : undefined, ...range(args, offset), width: 400 });
+  const { sheets: raw } = await writeSheets(video, outDir, { fps: args.fps !== undefined ? Number(args.fps) : undefined, ...range(args, offset), width: 400, shift: offset });
   // Timeline time from here on: a part render's cells are shifted by where it starts.
   const sheets = raw.map((s) => ({ ...s, t0: +(s.t0 + offset).toFixed(3) }));
   const config = { llm: { ...project.config.llm, ...(args.models ? { models: String(args.models).split(",") } : {}) } };
@@ -62,7 +62,9 @@ export async function look(args) {
       const { data, model } = await ask({ prompt: lookPrompt({ sheet: s, scenes, focus: args.focus }), images: [imagePart(s.file)], json: true, maxTokens: 4000, config });
       reviews.push({ sheet: relative(project.root, s.file), model, score: Number(data.score) || null, summary: String(data.summary ?? ""), truncated: !!data.truncated });
       for (const n of Array.isArray(data.notes) ? data.notes : []) {
-        const t = cellTime(s, Math.max(0, Math.min(s.cells - 1, Number(n.cell) || 0)));
+        // The stamped time read off the cell, snapped to it; the cell index only when no usable time came back.
+        const read = Number(n.t), k = Number.isFinite(read) && read >= s.t0 && read <= s.t0 + s.cells * s.step ? Math.floor((read - s.t0) / s.step) : Number(n.cell) || 0;
+        const t = cellTime(s, Math.max(0, Math.min(s.cells - 1, k)));
         notes.push({ t, scene: sceneAt(tl, t), severity: ["high", "medium", "low"].includes(n.severity) ? n.severity : "medium", issue: String(n.issue ?? ""), fix: String(n.fix ?? "") });
       }
       log(`  sheet ${k + 1}: ${data.score ?? "?"}/10 (${model})${data.truncated ? " [reply cut off; kept complete notes]" : ""} ${data.summary ?? ""}`);
