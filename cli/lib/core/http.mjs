@@ -66,7 +66,9 @@ const quote = (s) => `"${String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"
 function runCurl(config, timeoutSec = 180) {
   return new Promise((resolve, reject) => {
     const child = execFile("curl", ["-sS", "-K", "-", "-w", "\n%{http_code}", "-m", String(timeoutSec)], { encoding: "buffer", maxBuffer: 1 << 30 }, (err, stdout, stderr) => {
-      if (err && !stdout?.length) return reject(new Error(`curl failed: ${stderr?.toString().trim() || err.message}`));
+      // Without --fail an HTTP error status still exits 0, so any error is a transport failure (a
+      // timeout or dropped connection mid-body): partial output must not pass for a full response.
+      if (err) return reject(new Error(`curl failed: ${stderr?.toString().trim() || err.message}`));
       const nl = stdout.lastIndexOf(10);
       resolve({ status: Number(stdout.subarray(nl + 1).toString()), body: stdout.subarray(0, nl) });
     });

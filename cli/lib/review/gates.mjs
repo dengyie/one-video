@@ -39,7 +39,8 @@ export function numbersGate(script, research) {
   const allowed = new Set((research.allowNumbers ?? []).map((a) => String(a).replace(/[\s,]/g, "")));
   const out = [];
   for (const s of script.scenes) {
-    const text = s.narration ?? (s.lines ?? []).map((l) => (typeof l === "string" ? l : l.text)).join("");
+    // The text actually spoken: explicit lines win over narration, as in sceneLines.
+    const text = Array.isArray(s.lines) ? s.lines.map((l) => (typeof l === "string" ? l : l.text)).join("") : s.narration ?? "";
     for (const tok of extractNumbers(text)) {
       const n = parseNumber(tok);
       const plain = tok.replace(/,/g, "");

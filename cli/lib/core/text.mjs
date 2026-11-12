@@ -18,7 +18,8 @@ export function spokenLength(s) {
 
 const BUILTIN_RULES = [
   [/(\d+(?:\.\d+)?)\s*%/g, "百分之$1"],
-  [/[×x](\d+(?:\.\d+)?)(?![A-Za-z])/g, "$1倍"],
+  // "x3" only on its own; 0x1F and the x86 / x64 / x32 architectures are names, not multipliers.
+  [/(?<![A-Za-z0-9])(?:×|x(?!(?:86|64|32)(?!\d)))(\d+(?:\.\d+)?)(?![A-Za-z\d])/g, "$1倍"],
   // Ranges only with a tilde/en dash or a spaced hyphen; "2024-06" (date) and "-3" (negative) keep their reading.
   [/(\d)\s*[~～–]\s*(\d)/g, "$1到$2"],
   [/(\d)\s+-\s+(\d)/g, "$1到$2"],

@@ -77,13 +77,14 @@ async function synthesize(speak, t, key) {
     wav = (await request(`${base}/audio/speech`, { method: "POST", json, key, timeoutSec: 240, retries: 3 })).body;
   }
   if (wav.subarray(0, 4).toString() !== "RIFF") throw new Error(`TTS returned non-WAV data: ${wav.subarray(0, 200).toString()}`);
-  parseWav(wav); // fail fast on a truncated file
+  parseWav(wav, { strict: true }); // fail fast on a truncated file
   return wav;
 }
 
 // Place n caption lines on one scene clip. Each line boundary is estimated from the share of
-// syllables before it, then snapped to a detected pause (dynamic programming keeps pauses in
-// order and each used once); a boundary with no pause nearby stays at its estimate.
+// syllables before it, then snapped to a detected pause (dynamic programming keeps boundaries in
+// time order, so spans never overlap and each pause is used once); a boundary with no pause nearby
+// stays at its estimate.
 export function alignLines(weights, duration, pauses, kinds = []) {
   const n = weights.length;
   if (n === 1) return [[0, duration]];
@@ -95,11 +96,14 @@ export function alignLines(weights, duration, pauses, kinds = []) {
   const window = Math.max(0.8, (duration / n) * 0.6);
   const miss = window; // cost of leaving a boundary unsnapped
   const m = inner.length;
-  // dp[k][j]: best cost for boundaries 0..k with boundary k using pause j-1 (j = 0: unsnapped), last pause index used.
+  // dp[k][j]: best cost for boundaries 0..k with boundary k using pause j-1 (j = 0: unsnapped).
+  // A boundary may only start at or after the previous one ends; leaving every boundary at its
+  // (non-decreasing) estimate always satisfies that.
   const INF = Infinity;
   const dp = Array.from({ length: n - 1 }, () => new Array(m + 1).fill(INF));
   const from = Array.from({ length: n - 1 }, () => new Array(m + 1).fill(-1));
-  const lastUsed = Array.from({ length: n - 1 }, () => new Array(m + 1).fill(-1));
+  const cutStart = (k, j) => (j > 0 ? inner[j - 1][0] : est[k]);
+  const cutEnd = (k, j) => (j > 0 ? inner[j - 1][1] : est[k]);
   const cost = (k, j) => {
     if (j === 0) return miss;
     const [a, b] = inner[j - 1];
@@ -107,17 +111,15 @@ export function alignLines(weights, duration, pauses, kinds = []) {
     // Longer pauses are likelier breaks, the more so after a full sentence.
     return d > window ? INF : d - Math.min(0.5, b - a) * (kinds[k] === "sentence" ? 1.5 : 0.8);
   };
-  for (let j = 0; j <= m; j++) { dp[0][j] = cost(0, j); lastUsed[0][j] = j - 1; }
+  for (let j = 0; j <= m; j++) dp[0][j] = cost(0, j);
   for (let k = 1; k < n - 1; k++) {
     for (let j = 0; j <= m; j++) {
       const c = cost(k, j);
       if (c === INF) continue;
       for (let p = 0; p <= m; p++) {
-        if (dp[k - 1][p] === INF) continue;
-        const used = lastUsed[k - 1][p];
-        if (j > 0 && j - 1 <= used) continue;
+        if (dp[k - 1][p] === INF || cutStart(k, j) < cutEnd(k - 1, p) || (j > 0 && j === p)) continue;
         const v = dp[k - 1][p] + c;
-        if (v < dp[k][j]) { dp[k][j] = v; from[k][j] = p; lastUsed[k][j] = j > 0 ? j - 1 : used; }
+        if (v < dp[k][j]) { dp[k][j] = v; from[k][j] = p; }
       }
     }
   }

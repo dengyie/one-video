@@ -289,3 +289,9 @@ test("a speed ramp on a still becomes camera moves that leave authored shots alo
   assert.equal(mixed[3], own[2]);
   assert.equal(rampShots([{ t: 0, speed: 1 }], own, 10), own);
 });
+
+test("resolveWhen refuses a beat past the scene end", () => {
+  const ctx = { cues: {}, lines: [], duration: 4, start: 10, beats: [10, 11, 12, 13, 14.5, 16] };
+  assert.equal(resolveWhen({ at: { beat: 3 } }, ctx).t, 3);
+  assert.match(resolveWhen({ at: { beat: 4 } }, ctx).error, /past the 4s scene/);
+});

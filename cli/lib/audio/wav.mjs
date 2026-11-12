@@ -2,7 +2,9 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
-export function parseWav(buf) {
+// strict: a data chunk shorter than its declared size is an error (a truncated download), unless
+// the size is a streaming placeholder (0 or ~4 GiB).
+export function parseWav(buf, { strict = false } = {}) {
   if (buf.toString("ascii", 0, 4) !== "RIFF" || buf.toString("ascii", 8, 12) !== "WAVE") throw new Error("not a RIFF/WAVE file");
   let off = 12, fmt = null;
   while (off + 8 <= buf.length) {
@@ -20,6 +22,7 @@ export function parseWav(buf) {
       if (!fmt) throw new Error("wav data before fmt chunk");
       if (fmt.format !== 1 || fmt.bits !== 16) throw new Error(`unsupported wav encoding (format ${fmt.format}, ${fmt.bits}-bit); need 16-bit PCM`);
       // Streamed WAVs may carry a placeholder data size; trust the bytes present.
+      if (strict && size > 0 && size < 0xfffffff0 && buf.length - off - 8 < size) throw new Error(`wav truncated: data chunk has ${buf.length - off - 8} of ${size} bytes`);
       const bytes = Math.min(size, buf.length - off - 8) & ~1;
       const pcm = new Int16Array(buf.buffer.slice(buf.byteOffset + off + 8, buf.byteOffset + off + 8 + bytes));
       return { ...fmt, samples: pcm, duration: pcm.length / fmt.channels / fmt.sampleRate };

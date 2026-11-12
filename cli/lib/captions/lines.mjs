@@ -6,8 +6,10 @@ const SENTENCE_END = /[。！？!?；;…]/;
 const CLAUSE_END = /[，,、：:]/;
 const TRAILING = /[。！？!?；;…，,、：:\s]+$/u;
 
+// Portrait as the engine decides it (height ≥ 1.5 × width), so a custom width/height counts too.
 export function captionMaxChars(config) {
-  return config.captions?.maxChars ?? (config.aspect === "9:16" ? 13 : 22);
+  const portrait = config.width && config.height ? config.height >= config.width * 1.5 : config.aspect === "9:16";
+  return config.captions?.maxChars ?? (portrait ? 13 : 22);
 }
 
 // Resolve a scene's narration into caption/TTS lines.

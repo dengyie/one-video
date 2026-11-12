@@ -148,3 +148,9 @@ test("the SpaceX examples' screens do not echo their narration", () => {
   const { timeline } = compileTimeline({ ...ex, assets: ex.fetchedAssets });
   assert.deepEqual(echoGate(timeline, ex.config), []);
 });
+
+test("numbersGate checks the spoken lines, not a stale narration", () => {
+  const research = { facts: [{ id: "a", claim: "营收 300 亿", source: { title: "t" } }] };
+  const script = { scenes: [{ id: "s", narration: "营收 300 亿", lines: ["营收 450 亿"] }] };
+  assert.match(numbersGate(script, research).map((i) => i.msg).join("\n"), /"450亿"/);
+});

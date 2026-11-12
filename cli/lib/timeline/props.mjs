@@ -31,7 +31,9 @@ export function resolvePropTimes(type, props, ctx, errors, where) {
     for (const [i, l] of (props.links ?? []).entries()) fix(l, `link ${i}`);
   }
   if (type === "footage") {
-    for (const [i, r] of (props.ramp ?? []).entries()) fix(r, `ramp ${i}`, r.speed > 1.3 ? "bar" : null);
+    // A keyframe without a time starts at 0, as the player reads it; cues may resolve out of order.
+    for (const [i, r] of (props.ramp ?? []).entries()) { fix(r, `ramp ${i}`, r.speed > 1.3 ? "bar" : null); r.t ??= 0; }
+    props.ramp?.sort((a, b) => a.t - b.t);
     fix(props.title, "title");
   }
   if (type === "parallax") fix(props.title, "title");
@@ -55,6 +57,7 @@ export function resolvePropTimes(type, props, ctx, errors, where) {
     const local = (grid ?? []).map((b) => b - ctx.start).filter((b) => b >= from - 1e-3 && b < ctx.duration);
     if (grid && local.length < items.length) errors.push(`${where} match-cut: ${items.length} stills but only ${local.length} ${every}s from ${from}s in the scene (no music beats? use every: <seconds>)`);
     const step = typeof every === "number" ? every : 0.5;
+    if (!grid && items.length && from + (items.length - 1) * step >= ctx.duration) errors.push(`${where} match-cut: ${items.length} stills every ${step}s from ${from}s run past the ${r3(ctx.duration)}s scene (use a smaller every)`);
     items.forEach((it, i) => { fix(it, `item ${i}`, "beat"); it.t ??= r3(grid ? local[i] ?? from + i * step : from + i * step); });
   }
 }

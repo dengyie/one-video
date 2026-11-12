@@ -43,7 +43,9 @@ export function resolveWhen(spec, { cues, lines, duration, start = 0, beats = []
   const at = spec?.at ?? 0;
   if (at && typeof at === "object" && at.beat !== undefined) {
     const local = beats.filter((b) => b >= start - 1e-3).map((b) => b - start);
-    return local[at.beat] !== undefined ? { t: local[at.beat] + (at.offset ?? 0) } : { error: `beat ${at.beat} is past the music` };
+    if (local[at.beat] === undefined) return { error: `beat ${at.beat} is past the music` };
+    if (local[at.beat] >= duration) return { error: `beat ${at.beat} (${+local[at.beat].toFixed(2)}s) is past the ${+duration.toFixed(2)}s scene` };
+    return { t: local[at.beat] + (at.offset ?? 0) };
   }
   return resolveAt(at, lines, duration);
 }

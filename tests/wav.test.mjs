@@ -41,3 +41,12 @@ test("findPauses reports quiet stretches inside speech only above the minimum le
   assert.equal(p.length, 1);
   assert.ok(Math.abs(p[0][0] - 0.3) < 0.011 && Math.abs(p[0][1] - 0.45) < 0.011);
 });
+
+test("parseWav strict rejects a data chunk shorter than declared; lenient reads what is there", () => {
+  const full = encodeWav({ samples: new Int16Array(1000), sampleRate: 24000, channels: 1 });
+  const cut = full.subarray(0, 44 + 600);
+  assert.throws(() => parseWav(cut, { strict: true }), /truncated/);
+  assert.equal(parseWav(cut).samples.length, 300);
+  const streamed = Buffer.from(cut); streamed.writeUInt32LE(0xffffffff, 40);
+  assert.equal(parseWav(streamed, { strict: true }).samples.length, 300);
+});

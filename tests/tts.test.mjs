@@ -18,6 +18,13 @@ test("alignLines falls back to the syllable estimate when no pause is near", () 
   assert.deepEqual(spans, [[0, 2], [2, 8]]);
 });
 
+test("alignLines keeps boundaries in time order when a pause sits past the next estimate", () => {
+  // Snapping the first boundary to the 5.5–6.0 pause would leave the second (estimated at 5.1 s) behind it.
+  const spans = alignLines([50, 1, 49], 10, [[5.5, 6.0]], ["sentence", "clause"]);
+  assert.deepEqual(spans, [[0, 5], [5, 5.5], [6, 10]]);
+  for (let k = 1; k < spans.length; k++) assert.ok(spans[k][0] >= spans[k - 1][1]);
+});
+
 test("sceneSpeech speaks the narration with its own punctuation", () => {
   const config = { aspect: "16:9" };
   const { lines, speak } = sceneSpeech({ id: "a", narration: "凭什么值一万多亿美元？上涨约19%。" }, config, {});

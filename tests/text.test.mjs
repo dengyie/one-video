@@ -45,3 +45,15 @@ test("extractNumbers returns numbers with Chinese units", () => {
 test("normalizeForMatch strips punctuation and spaces", () => {
   assert.equal(normalizeForMatch("而 SpaceX，排在“第7”。"), "而SpaceX排在第7");
 });
+
+test("speakable reads x/× multipliers but leaves architecture names and hex alone", () => {
+  assert.equal(speakable("提速x2，涨了×1.5"), "提速2倍，涨了1.5倍");
+  assert.equal(speakable("x86 和 x64 架构，0x1F"), "x86 和 x64 架构，0x1F");
+});
+
+test("captionMaxChars treats a custom tall frame as portrait", async () => {
+  const { captionMaxChars } = await import("../cli/lib/captions/index.mjs");
+  assert.equal(captionMaxChars({ aspect: "16:9", width: 1080, height: 1920 }), 13);
+  assert.equal(captionMaxChars({ aspect: "9:16" }), 13);
+  assert.equal(captionMaxChars({ aspect: "4:5" }), 22);
+});
