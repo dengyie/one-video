@@ -14,7 +14,7 @@
   "props": { "cards": [{ "value": 135, "format": { "prefix": "$" }, "label": "发行价", "cue": "price" }] } }
 ```
 
-- **cues** 把画面变化钉在旁白上：值可以是旁白里的短语（取该短语开始说出的时刻）、`{phrase, offset}`、0–1 之间的比例（场景长度的百分比）或秒数。props 里的 `cue`/`drawCue`/`periodCues` 引用这些名字；引用未定义的 cue 会报错。
+- **cues** 把画面变化钉在旁白上：值可以是旁白里的短语（取该短语开始说出的时刻）、`{phrase, offset}` 或秒数（负数从场景结尾倒数，如 `-2.5`；没有按比例的写法，`0.8` 就是 0.8 秒）。props 里的 `cue`/`drawCue`/`periodCues` 引用这些名字；引用未定义的 cue 会报错。
 - 没写 cue 的元素按默认节奏在场景前 55% 依次出现。
 - `enter`/`exit`：fade · slide · push · whip · zoom · punch · iris · wipe · clock · dip · through · cut；不写用风格默认。按语义选（见 motion-rules 的“转场”）。
 - `shots`：镜头轨。每个场景至少 `"auto"`，关键场景手写推近/硬切。
