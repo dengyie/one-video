@@ -49,6 +49,9 @@ onevideo render       # 正式渲染 h264 + aac（需要 preview 已审批且没
 - 配置只在环境变量（VM 上是 `/etc/onevideo/env`，chmod 600）：`ONEVIDEO_DRIVE_URL`（以 `/api` 结尾；公网入口每个请求 ≤100 MB，内网网关不限）、`ONEVIDEO_DRIVE_USER`、`ONEVIDEO_DRIVE_PASS`（OneVideo 专用的 app 账号，不用管理员账号）、`ONEVIDEO_DRIVE_ROOT`（默认 `/onevideo`）。不写进任何项目文件。
 - `onevideo archive`：上传新增或改动的文件到 `<root>/<name>/`，每个文件上传后回读算 sha256，对上了才记进 `plan/archive.json`；`--dry` 只列出要传什么；`--prune` 删掉本地比最近 `--keep`（默认 2）更旧的 `out/versions/vN.mp4`（只删已归档且未改动的）。
 - 上传的：`out/versions`、`out/publish`、其他画幅成片、`plan`、`public/assets`、`public/audio`、`onevideo.json`、`state.json`、`out/renders.json`。不上传：帧序列、stills / QC / 预览图（随时可再生成），以及 `public/sfx`、`public/music` 和链到音效库的文件（授权素材不出本机）。
+- `onevideo archive --all [--in dir]`：归档目录下每个项目（有 `onevideo.json` 的子目录），某个失败不影响其他，最后汇总；默认跳过最近 600 秒内写过的文件（`--settle` 调整），免得把渲染或同步到一半的文件传上去。VM 上 `deploy/systemd/onevideo-archive.timer` 每晚 03:30（北京时间）在 `/srv/onevideo` 跑 `archive --all --prune`。
+- `--prune` 对完整版、`-draft`、`-part` 分别保留最近 `--keep` 个；`render vN` 被裁掉但已归档时，比较/发布会提示 `onevideo restore out/versions/vN.mp4`；`onevideo status` 显示归档文件数和时间。
+- 超过 100 MB 的文件走公网入口会被拒（HTTP 413），报错会提示把 `ONEVIDEO_DRIVE_URL` 指向内网网关；VM 已经用内网网关。
 - `publish` 结束后自动 archive（`--no-archive` 跳过；没配环境变量时不做）。
 - `onevideo restore`：取回 `archive.json` 里有、本地没有的文件（可指定路径或目录前缀，`--force` 覆盖）；在项目外 `onevideo restore <name> --into <dir>` 从云盘拉回整个项目。
 

@@ -35,7 +35,7 @@ const COMMANDS = {
   stems: [render.stems, "stems [--only voice,music,sfx]  each sound group alone as WAV → out/publish/stems/"],
   build: [render.build, "build [--draft] [--concurrency N]   tts → music → media/depth → timeline → render → qc (then approve review, publish)"],
   lib: [library.lib, "lib list [--kind sfx|lottie] [--category c] | search <words> | import <candidates.json> | merge <catalog.json> | verify | recipe [<name> --id x --set k=v]"],
-  archive: [archive.archive, "archive [--dry] [--prune [--keep 2]]   renders, publish kit, plan, voice, source media → MangoDrive (sha256 read-back) + plan/archive.json; --prune drops older renders here"],
+  archive: [archive.archive, "archive [--dry] [--prune [--keep 2]] [--settle s] | archive --all [--in dir]   renders, publish kit, plan, voice, source media → MangoDrive (sha256 read-back) + plan/archive.json; --prune drops older renders here; --all: every project under dir (skips files written in the last 600s)"],
   restore: [archive.restore, "restore [paths…] [--force] | restore <project> [--into dir]   bring archived files back from MangoDrive"],
   handoff: [director.handoff, "handoff [--lock …] [--next …]   where the project stands → plan/handoff.md (read it when taking over)"],
   doctor: [render.doctor, "doctor                       environment check"],
@@ -59,7 +59,7 @@ else if (!COMMANDS[cmd]) {
 } else {
   try {
     // render / build / depth / stills / preview / publish --formats go to a worker when ONEVIDEO_WORKERS is set (--local: run here).
-    if (!(await dispatch(cmd, rest))) await COMMANDS[cmd][0](parseArgs(rest, { booleans: ["force", "dry", "sample", "draft", "strict", "json", "stems", "full", "dark", "local", "write", "noLlm", "prune", "noArchive"] }));
+    if (!(await dispatch(cmd, rest))) await COMMANDS[cmd][0](parseArgs(rest, { booleans: ["force", "dry", "sample", "draft", "strict", "json", "stems", "full", "dark", "local", "write", "noLlm", "prune", "noArchive", "all"] }));
   } catch (e) {
     console.error(`✗ ${e instanceof UserError ? e.message : e.stack ?? e.message}`);
     process.exitCode = 1;

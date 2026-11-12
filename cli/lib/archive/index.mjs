@@ -52,14 +52,21 @@ export function changedFiles(root, files, record) {
   });
 }
 
-// out/versions/vN.mp4 older than the newest `keep`: what --prune may drop locally.
+// out/versions/vN[-draft|-part].mp4 older than the newest `keep` of their kind: what --prune may
+// drop locally. Full renders, drafts and partial renders are counted apart.
 export function prunable(files, keep = 2) {
-  const versions = files.map((f) => [f, /^out\/versions\/v(\d+)\.mp4$/.exec(f)?.[1]]).filter(([, n]) => n).sort((a, b) => b[1] - a[1]);
-  return versions.slice(keep).map(([f]) => f);
+  const kinds = new Map();
+  for (const f of files) {
+    const m = /^out\/versions\/v(\d+)(-draft|-part)?\.mp4$/.exec(f);
+    if (m) kinds.set(m[2] ?? "", [...(kinds.get(m[2] ?? "") ?? []), [f, Number(m[1])]]);
+  }
+  return [...kinds.values()].flatMap((vs) => vs.sort((a, b) => b[1] - a[1]).slice(keep).map(([f]) => f)).sort();
 }
 
 // Upload what changed, verify each by reading it back, record it; then optionally prune old renders.
-export async function archiveProject(project, { dry = false, prune = false, keep = 2, drive, log = () => {}, warn = () => {} } = {}) {
+// `settle` (seconds): files written more recently than this are left for the next run, so a render
+// or sync still in flight is not uploaded half-written (the nightly run uses it).
+export async function archiveProject(project, { dry = false, prune = false, keep = 2, settle = 0, drive, log = () => {}, warn = () => {} } = {}) {
   const cfg = drive?.cfg ?? driveConfig();
   if (!cfg) throw new Error("no archive configured: set ONEVIDEO_DRIVE_URL, ONEVIDEO_DRIVE_USER, ONEVIDEO_DRIVE_PASS (in /etc/onevideo/env)");
   const d = drive ?? new Drive(cfg);
@@ -69,7 +76,9 @@ export async function archiveProject(project, { dry = false, prune = false, keep
   if (record.remote && record.remote !== remote) warn(`plan/archive.json was written for ${record.remote}; now archiving to ${remote}`);
   record.remote = remote;
   const files = archiveFiles(root, { name: project.config.name });
-  const todo = changedFiles(root, files, record);
+  const fresh = settle > 0 ? files.filter((f) => Date.now() - statSync(join(root, f)).mtimeMs < settle * 1000) : [];
+  if (fresh.length) warn(`${fresh.length} file(s) written in the last ${settle}s left for the next run (${fresh.slice(0, 3).join(", ")}${fresh.length > 3 ? ", …" : ""})`);
+  const todo = changedFiles(root, files, record).filter((f) => !fresh.includes(f));
   const bytes = todo.reduce((s, f) => s + statSync(join(root, f)).size, 0);
   log(`${todo.length} of ${files.length} file(s) to upload (${(bytes / 1e6).toFixed(1)} MB) → ${remote}`);
   if (dry) {

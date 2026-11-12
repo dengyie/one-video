@@ -48,6 +48,13 @@ export async function status() {
   log(`${project.config.title} — pipeline ${pipeline.name}`);
   for (const r of rows) log(`  ${icon[r.status]} ${r.id.padEnd(11)} ${r.status.padEnd(18)} ${(r.produces ?? []).join(", ")}`);
   const handoff = join(project.root, "plan", "handoff.md");
+  const arch = join(project.root, "plan", "archive.json");
+  if (existsSync(arch)) {
+    const a = readJson(arch, { files: {} });
+    const files = Object.values(a.files ?? {});
+    const pruned = files.filter((f) => f.pruned).length;
+    log(`archive: ${files.length} file(s) on ${a.remote ?? "the drive"}${pruned ? `, ${pruned} only there` : ""}${a.at ? ` (${a.at.slice(0, 16).replace("T", " ")} UTC)` : ""}`);
+  }
   if (existsSync(handoff)) log(`handoff: plan/handoff.md (${statSync(handoff).mtime.toLocaleString()}; what is locked and what the next round changes)`);
   const next = rows.find((r) => !["done", "approved", "optional"].includes(r.status));
   if (!next) return log("all stages complete");

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, symlinkSync, utimesSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -53,6 +53,22 @@ test("archiveFiles: lasting files only — no frames, QC, library sound, or the 
     "plan/script.json", "public/assets/a.jpg", "public/audio/hook.wav",
   ]);
   assert.deepEqual(prunable(["out/versions/v10.mp4", "out/versions/v9.mp4", "out/versions/v2.mp4", "plan/x.json"], 2), ["out/versions/v2.mp4"]);
+  // Drafts and partial renders are counted apart from full renders.
+  assert.deepEqual(prunable(["out/versions/v1.mp4", "out/versions/v2-draft.mp4", "out/versions/v3-draft.mp4", "out/versions/v4-draft.mp4", "out/versions/v5-part.mp4", "out/versions/v6.mp4"], 2), ["out/versions/v2-draft.mp4"]);
+});
+
+test("archiveProject with settle leaves files still being written for the next run", async () => {
+  const p = project();
+  const old = new Date(Date.now() - 3600e3);
+  for (const f of archiveFiles(p.root, { name: "demo" })) utimesSync(join(p.root, f), old, old);
+  p.w("out/versions/v4.mp4", "rendering");
+  const d = fakeDrive();
+  const warns = [];
+  const r = await archiveProject(p, { drive: d, settle: 600, warn: (m) => warns.push(m) });
+  assert.ok(!r.uploaded.includes("out/versions/v4.mp4"));
+  assert.equal(r.uploaded.length, 9);
+  assert.match(warns.join(), /1 file\(s\) written in the last 600s/);
+  assert.deepEqual((await archiveProject(p, { drive: d })).uploaded, ["out/versions/v4.mp4"]);
 });
 
 test("archiveProject uploads, verifies by read-back, skips unchanged, prunes old renders; restore brings them back", async () => {
@@ -108,4 +124,9 @@ test("driveConfig reads only the environment; Drive logs in again once on a 401"
   const d = new Drive({ url: "https://d/api", user: "u", pass: "p", root: "" }, fetchFn);
   assert.deepEqual(await d.list("/"), [{ name: "a", is_dir: false, size: 1 }]);
   assert.deepEqual(calls.map((c) => c.join(" ")), ["/auth/login ", "/fs/list t1", "/auth/login ", "/fs/list t2"]);
+
+  // The public edge turns away a body over its cap with an HTML 413: say where to go instead.
+  const capped = new Drive({ url: "https://d/api", user: "u", pass: "p", root: "" }, async (url) =>
+    url.endsWith("/auth/login") ? { status: 200, ok: true, json: async () => ({ code: 200, data: { token: "t" } }) } : { status: 413, ok: false, json: async () => { throw new Error("html"); } });
+  await assert.rejects(capped.put("/demo/out/versions/v1.mp4", new Blob([new Uint8Array(10)])), /request size cap; point ONEVIDEO_DRIVE_URL at the private-network gateway/);
 });

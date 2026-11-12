@@ -70,6 +70,10 @@ test("resolveVideo: newest, prev, vN, N, a path or an alias", () => {
   assert.throws(() => resolveVideo(p, "v9"), /no render v9/);
   render(p, {});
   assert.throws(() => resolveVideo(p, "v1"), /was pruned/);
+  // Archived before it was pruned: point at restore.
+  mkdirSync(join(p.root, "plan"), { recursive: true });
+  writeFileSync(join(p.root, "plan", "archive.json"), JSON.stringify({ files: { "out/versions/v1.mp4": { pruned: true } } }));
+  assert.throws(() => resolveVideo(p, "v1"), /on the drive only: onevideo restore out\/versions\/v1\.mp4/);
 });
 
 test("adoptLegacy: an unversioned render becomes v1 instead of being overwritten", () => {

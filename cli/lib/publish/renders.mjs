@@ -104,7 +104,10 @@ export function resolveVideo(project, arg, fallback) {
   if (m) {
     const r = readRenders(project).find((x) => x.v === Number(m[1]));
     if (!r) throw new UserError(`no render v${m[1]} (see: onevideo versions)`);
-    if (r.pruned || !existsSync(join(project.root, r.file))) throw new UserError(`render v${m[1]} was pruned (render.keepVersions keeps ${project.config.render?.keepVersions ?? KEEP_VERSIONS})`);
+    if (r.pruned || !existsSync(join(project.root, r.file))) {
+      const archived = readJson(join(project.root, "plan", "archive.json"), { files: {} }).files?.[r.file];
+      throw new UserError(archived ? `render v${m[1]} is on the drive only: onevideo restore ${r.file}` : `render v${m[1]} was pruned (render.keepVersions keeps ${project.config.render?.keepVersions ?? KEEP_VERSIONS})`);
+    }
     return hit(r);
   }
   const file = resolve(s);

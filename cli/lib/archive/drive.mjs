@@ -59,7 +59,13 @@ export class Drive {
   // Upload a local file (streamed from disk; parent folders are created by the server).
   async put(remote, file) {
     const body = typeof file === "string" ? await openAsBlob(file) : file;
-    return this.call("/fs/put", { method: "PUT", body, headers: { "File-Path": encodeURIComponent(remote), "As-Task": "false", "Content-Type": "application/octet-stream" } });
+    try {
+      return await this.call("/fs/put", { method: "PUT", body, headers: { "File-Path": encodeURIComponent(remote), "As-Task": "false", "Content-Type": "application/octet-stream" } });
+    } catch (e) {
+      // The public edge caps a request body at 100 MB and answers 413 with an HTML page.
+      if (e.code === 413) throw new UserError(`${remote}: ${(body.size / 1e6).toFixed(0)} MB is over this endpoint's request size cap; point ONEVIDEO_DRIVE_URL at the private-network gateway (no cap)`);
+      throw e;
+    }
   }
 
   // Every entry of a folder ([] when it does not exist).

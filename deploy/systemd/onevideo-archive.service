@@ -1,0 +1,13 @@
+# Nightly archive of every project under /srv/onevideo to MangoDrive, keeping the newest 2 renders
+# of each kind here. Drive settings come from /etc/onevideo/env through the onevideo wrapper.
+[Unit]
+Description=OneVideo: archive projects to MangoDrive
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/onevideo
+ExecStart=/usr/local/bin/onevideo archive --all --prune
+Nice=10
+IOSchedulingClass=idle

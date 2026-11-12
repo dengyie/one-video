@@ -60,6 +60,7 @@ onevideo sheet [--fps 1] [--from s] [--to s] [--video v3] [--vs prev]   # 联系
 onevideo look [--focus "字幕可读性"] [--models a,b]   # 视觉模型看片 → out/qc/look.json
 onevideo qc | publish [--stems] [--formats 9:16,1:1] [--no-archive] | build [--draft] | doctor | decide <category> <subject> --selected X
 onevideo archive [--dry] [--prune] [--keep 2]       # 上传到 MangoDrive，逐个回读 sha256 校验 → plan/archive.json；--prune 本地只留最近 2 版
+onevideo archive --all [--in dir] [--prune]         # 目录下全部项目（跳过 10 分钟内刚写的文件）；VM 每晚由 systemd timer 跑
 onevideo restore [paths…] | restore <name> [--into dir]   # 从 MangoDrive 取回（校验 sha256）
 ```
 
