@@ -13,7 +13,8 @@ export function sheetPlan(duration, { fps, from = 0, to = duration, cols = 6, pe
   const span = Math.max(0, Math.min(to, duration) - from);
   const rate = fps ?? (span <= 75 ? 1 : span <= 150 ? 0.5 : 0.25);
   const step = 1 / rate;
-  const total = Math.max(1, Math.ceil(span * rate - 1e-6));
+  // Only cells whose sample (mid-interval) is inside the video: a short tail would sample past the end.
+  const total = Math.max(1, Math.ceil(span * rate - 0.5 - 1e-6));
   const sheets = [];
   for (let k = 0; k * per < total; k++) {
     const cells = Math.min(per, total - k * per);

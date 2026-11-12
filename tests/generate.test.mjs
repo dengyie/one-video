@@ -151,7 +151,10 @@ test("ask walks the model list and parses JSON replies", async () => {
 });
 
 test("contact sheet geometry and scene lookup", () => {
-  assert.deepEqual(sheetPlan(35.4).map((s) => [s.t0, s.cells, s.cols, s.rows]), [[0, 24, 6, 4], [24, 12, 6, 2]]);
+  assert.deepEqual(sheetPlan(35.4).map((s) => [s.t0, s.cells, s.cols, s.rows]), [[0, 24, 6, 4], [24, 11, 6, 2]]);
+  // 96.1 s at 0.5 fps: 48 cells, the last sampled at 95 s; none past the end.
+  assert.deepEqual(sheetPlan(96.1).map((s) => s.cells), [24, 24]);
+  assert.equal(sheetPlan(36).reduce((n, s) => n + s.cells, 0), 36);
   assert.equal(sheetPlan(120)[0].step, 2);
   assert.deepEqual(sheetPlan(10, { fps: 2, from: 4, to: 6 }).map((s) => [s.t0, s.cells, s.cols]), [[4, 4, 4]]);
   const tl = { scenes: [{ id: "a", start: 0 }, { id: "b", start: 11.6 }] };
