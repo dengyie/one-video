@@ -1,17 +1,19 @@
 ---
 name: onevideo
-description: Use when the user wants a narrated video made — data explainers, documentaries, short-form vertical clips — from a topic, article or dataset. Runs a staged, gated pipeline (research → proposal → script → storyboard → assets → voice → compose → render → review → publish) with sourced facts, sentence-level TTS timing, Remotion rendering, automated QC and a publish kit.
+description: Use when the user wants a narrated video made — data explainers, documentaries, short-form vertical clips — from a topic, article or dataset. Runs a staged, gated pipeline (research → proposal → script → assets → storyboard → voice → compose → preview → render → review → publish) with sourced facts, sentence-level TTS timing, Remotion rendering, automated QC and a publish kit.
 ---
 
 # OneVideo
 
-OneVideo 把“做一条视频”拆成 10 个阶段。每个阶段都有一份导演文档（`stages/<id>.md`）、一个落盘的产物（`plan/*.json`），以及机械门控；需要人拍板的阶段要审批，审批会锁定产物的哈希。共享的渲染引擎在 `template/`，项目目录里只放数据。
+OneVideo 把“做一条视频”拆成 11 个阶段。每个阶段都有一份导演文档（`stages/<id>.md`）、一个落盘的产物（`plan/*.json`），以及机械门控；需要人拍板的阶段要审批，审批会锁定产物的哈希。共享的渲染引擎在 `template/`，项目目录里只放数据。
 
 ## 工作方式
 
 1. `onevideo status` 显示每个阶段的状态和下一步该读哪份导演文档。**每进入一个阶段，先读对应的 `stages/<id>.md`，再动手。**
-2. 创作阶段（research、proposal、script、storyboard）由你写 JSON / Markdown，然后 `onevideo validate`，再把产物给用户看，用户确认后执行 `onevideo approve <stage>`。**不要替用户审批**，除非用户明确授权。
-3. 非创作阶段由 CLI 执行：`tts`、`music`、`assets fetch`、`depth`、`timeline`、`render`、`qc`，也可以用 `build` 一次跑到 qc（缺的素材自动下载，有 depth 工具时自动做深度图和亮度网格）。`publish` 要求 review 已审批。
+2. 创作阶段（research、proposal、script、assets、storyboard）由你写 JSON / Markdown，然后 `onevideo validate`，再把产物给用户看，用户确认后执行 `onevideo approve <stage>`。**不要替用户审批**，除非用户明确授权。
+   - **素材先于分镜**：script 通过后先 `onevideo assets suggest`（按场景找授权候选）→ 挑选 → `assets fetch`，把下载好的素材给用户过目，通过后 `approve assets`，再按手里的素材写分镜。素材少，片子一定单薄：density 门控按“真实素材/分钟”卡（<4 报错、<8 警告，生成图不算）。
+   - **整片渲染前先过预览**：timeline 之后 `onevideo preview` 把每个场景的静帧铺成 `out/qc/preview-*.jpg`，给用户看，通过后 `approve preview`；未通过时 `render` 只允许 `--draft` / `--scenes`，`build` 停在 preview。layout 门控在这一步之前就会报出贴纸压字幕、出画、重叠、贴纸过小、推镜把字推出画面。
+3. 非创作阶段由 CLI 执行：`tts`、`music`、`depth`、`timeline`、`preview`、`render`、`qc`，也可以用 `build` 一次跑到 qc（缺的素材自动下载，有 depth 工具时自动做深度图和亮度网格；preview 未审批时停在 preview）。`publish` 要求 review 已审批；配了 `ONEVIDEO_DRIVE_URL` 时 publish 结束后自动 `archive` 到 MangoDrive。
 4. 结构按观众的问题排（proposal 写问题链，script 每个场景写 `question`）；画面按三条线分工：旁白解释、屏幕文字只放关键词、画面给证据（storyboard.md）。
 5. 分镜按动效引擎写，不要做成一页一张卡：先读 `references/motion-rules.md`，参考 `examples/spacex-motion`。实拍做主角（`footage` 变速、标题压在主体后），数字进 `canvas` 连续飞行，每个场景都有 `shots`，钩子和结论每句一个 `word` 关键词，有音乐时写 `music.offset: "auto"`。`onevideo timeline` 报出的 rhythm 警告（画面超过 4.5s 没有新东西、连续相同转场）要处理掉，或者向用户说明为什么保留。
 6. 渲染后必须执行 `onevideo qc`，并**逐张看** `out/qc/frames/`，确认画面没问题后再 `approve review`。
@@ -41,12 +43,14 @@ onevideo init <dir> --pipeline data-explainer|documentary|shorts|promo [--style 
 onevideo status | validate [--strict] | approve <stage> [--note …]
 onevideo tts [--sample|--dry|--force|--only a,b]   # 逐句合成 → plan/timings.json（含响度归一化）
 onevideo music [--preset ambient|pulse|documentary|bright]
+onevideo assets suggest [--scene a,b] [--per 3] [--kind image|video|both] [--write] [--no-llm]   # 按场景出检索词并找授权候选 → plan/asset-suggestions.json；--write 追加进 assets.json
 onevideo assets search <q> [--provider nasa,wikimedia,openverse,pexels] | assets fetch [--only a,b] [--force]   # 含 generate：AI 生图 / 生视频
 onevideo depth [asset ids] [--step N]               # 深度图 + 亮度网格：主体穿越、关键词避让、自动加底、字幕避让
 onevideo capture <url> --id x [--device phone|tablet|desktop] [--click sel] [--rects name=sel,…] [--full] [--dark]   # 真实界面截图（自起无头 Chrome）
 onevideo screen <asset> [--at s] [--threshold 40]   # 找实拍里黑屏的四角 → footage.screen 片段
 onevideo stems                                     # 按 stem 分组导出分轨 wav → out/publish/stems/
 onevideo timeline | stills [--scene id] [--at 0.3,0.7] [--aspect 9:16] | studio
+onevideo preview [--at 0.3,0.7]                     # 全部场景静帧联系表 → out/qc/preview-*.jpg + plan/preview.json，给用户审批
 onevideo render [--draft] [--scenes a,b | --from s --to s] [--note …]   # 每次一个版本 → out/versions/vN
 onevideo render --aspect 9:16|1:1|4:5               # 同一剪辑的其他尺寸 → out/<name>.9x16.mp4（字幕按画幅重排，配音复用缓存）
 onevideo versions                                   # 渲染记录：版本、范围、时间轴哈希、备注
@@ -54,7 +58,9 @@ onevideo handoff [--lock …] [--next …]              # 交接页 → plan/han
 onevideo lib list|search|recipe <name> --id x --set k=v   # 音效 / Lottie / 镜头配方
 onevideo sheet [--fps 1] [--from s] [--to s] [--video v3] [--vs prev]   # 联系表 → out/qc/sheet-NN.jpg；--vs 新旧对比
 onevideo look [--focus "字幕可读性"] [--models a,b]   # 视觉模型看片 → out/qc/look.json
-onevideo qc | publish [--stems] [--formats 9:16,1:1] | build [--draft] | doctor | decide <category> <subject> --selected X
+onevideo qc | publish [--stems] [--formats 9:16,1:1] [--no-archive] | build [--draft] | doctor | decide <category> <subject> --selected X
+onevideo archive [--dry] [--prune] [--keep 2]       # 上传到 MangoDrive，逐个回读 sha256 校验 → plan/archive.json；--prune 本地只留最近 2 版
+onevideo restore [paths…] | restore <name> [--into dir]   # 从 MangoDrive 取回（校验 sha256）
 ```
 
 未全局安装时，用 `node <repo>/cli/onevideo.mjs …` 调用。

@@ -122,3 +122,38 @@ export async function writeSheets(video, outDir, opts = {}) {
   }
   return { duration, width: vs.width, height: vs.height, sheets: plan };
 }
+
+// Still images (one per scene moment) tiled the same way: the pre-render preview. `cells` are
+// { file, t } with t the timeline second stamped in the corner; sheets of ≤ `per` cells.
+export async function writeImageSheets(cells, outDir, { prefix = "preview", cols = 4, width = 480, per = CELLS_PER_SHEET } = {}) {
+  if (!cells.length) return [];
+  const vs = (await ffprobe(cells[0].file)).streams.find((st) => st.codec_type === "video");
+  const w = width, h = Math.round((w * vs.height) / vs.width / 2) * 2;
+  mkdirSync(outDir, { recursive: true });
+  for (const f of readdirSync(outDir)) if (new RegExp(`^${prefix}-\\d+\\.jpg$`).test(f)) rmSync(join(outDir, f));
+  const tmp = mkdtempSync(join(tmpdir(), "ov-preview-"));
+  const sheets = [];
+  try {
+    for (let k = 0; k * per < cells.length; k++) {
+      const part = cells.slice(k * per, (k + 1) * per);
+      const c = Math.min(cols, part.length), rows = Math.ceil(part.length / c);
+      const W = c * w + (c + 1) * PAD, H = rows * h + (rows + 1) * PAD;
+      const grid = Buffer.alloc(W * H * 3);
+      for (const [i, cell] of part.entries()) {
+        const f = join(tmp, `cell-${i}.rgb`);
+        await ffmpeg(["-y", "-v", "error", "-i", cell.file, "-frames:v", "1", "-vf", `scale=${w}:${h}`, "-pix_fmt", "rgb24", "-c:v", "rawvideo", "-f", "image2", "-update", "1", f]);
+        const rgb = readFileSync(f);
+        const x0 = PAD + (i % c) * (w + PAD), y0 = PAD + Math.floor(i / c) * (h + PAD);
+        for (let y = 0; y < h; y++) rgb.copy(grid, ((y0 + y) * W + x0) * 3, y * w * 3, (y + 1) * w * 3);
+        stampTime(grid, W, x0, y0, stampText(cell.t), Math.max(2, Math.round(w / 160)));
+      }
+      const png = join(tmp, "sheet.png"), file = join(outDir, `${prefix}-${String(k + 1).padStart(2, "0")}.jpg`);
+      writeFileSync(png, encodePng(grid, W, H));
+      await ffmpeg(["-y", "-v", "error", "-i", png, "-q:v", "4", file]);
+      sheets.push({ file, cells: part.length, cols: c, rows });
+    }
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+  return sheets;
+}

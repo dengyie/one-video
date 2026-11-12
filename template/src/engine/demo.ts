@@ -91,7 +91,7 @@ export const DEMO_TIMELINE: Timeline = {
   totalFrames: from,
   duration: from / FPS,
   theme: style as unknown as Theme,
-  watermark: "OneVideo",
+  watermark: { text: "OneVideo", sub: "数据解说", position: "top-right", style: "badge" },
   captions: { enabled: false, style: "line", items: [] },
   narration: [],
   music: null,

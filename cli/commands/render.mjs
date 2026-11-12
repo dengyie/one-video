@@ -4,7 +4,8 @@ import { basename, join, relative } from "node:path";
 import { availableParallelism, tmpdir, totalmem } from "node:os";
 import { execFileSync } from "node:child_process";
 import { UserError, loadProject, pipelineDef, readJson, writeJson, log, warn, ONEVIDEO_ROOT } from "../lib/core/project.mjs";
-import { reviewSubject, stageStatus } from "../lib/core/state.mjs";
+import { archiveProject, driveConfig } from "../lib/archive/index.mjs";
+import { productsHash, reviewSubject, stageStatus } from "../lib/core/state.mjs";
 import { checkProject, printIssues } from "../lib/review/check.mjs";
 import { REMOTION_BIN, TEMPLATE_DIR, requireRemotion, run, ffmpeg } from "../lib/core/ffmpeg.mjs";
 import { runQc } from "../lib/vision/qc.mjs";
@@ -19,6 +20,7 @@ import { assetFileExists, clipFrames, countFrames, framesDir } from "../lib/asse
 import { IMAGE_DEFAULTS, VIDEO_DEFAULTS } from "../lib/generate/index.mjs";
 import { llmConfig } from "../lib/llm/client.mjs";
 import { ensureBeats } from "../lib/audio/beats.mjs";
+import { writeImageSheets } from "../lib/vision/sheet.mjs";
 import { workerHosts } from "../lib/core/worker.mjs";
 import { adoptLegacy, frameRange, localStamp, readRenders, recordRender, resolveVideo, sameFile, timelineHash, versionFile } from "../lib/publish/renders.mjs";
 
@@ -106,6 +108,12 @@ export async function render(args) {
   // without paying for the whole cut.
   const range = frameRange(tl, { scenes: args.scenes, from: args.from, to: args.to, frames: args.frames });
   const part = Boolean(range) && !(range[0] === 0 && range[1] >= Math.round(tl.duration * tl.fps) - 1);
+  // The full cut renders only what the user has seen and signed off as stills; drafts, parts and
+  // other frame sizes are how the preview gets there, so they are not held back.
+  if (!draft && !part && !project.aspect && !args.out) {
+    const gate = previewGate(project);
+    if (gate) throw new UserError(gate);
+  }
   const variant = project.aspect && !args.out ? join(project.paths.out, `${project.config.name}.${aspectTag(project.aspect)}${draft ? ".draft" : ""}${part ? ".part" : ""}.mp4`) : null;
   const alias = args.out || variant ? null : part ? join(project.paths.out, `${project.config.name}.part.mp4`) : draft ? join(project.paths.out, `${project.config.name}.draft.mp4`) : videoPath(project);
   if (alias) {
@@ -159,6 +167,24 @@ export async function versions(args) {
   log(`compare two: onevideo sheet --video v${renders.at(-1).v} --vs v${renders.at(-2)?.v ?? renders.at(-1).v}`);
 }
 
+// One JPEG per scene and fraction of it (--at 0.7 or a list 0.3,0.6,0.9; a list adds the fraction to the name).
+async function renderStills(project, tl, { dir, only = null, ats = [0.7] }) {
+  if (ats.some((a) => !Number.isFinite(a) || a < 0 || a > 1)) throw new UserError(`--at takes fractions 0–1, got "${ats.join(",")}"`);
+  mkdirSync(dir, { recursive: true });
+  const shots = [];
+  for (const [i, s] of tl.scenes.entries()) {
+    if (only && !only.includes(s.id)) continue;
+    for (const at of ats) {
+      const frame = s.from + Math.min(s.durationInFrames - 1, Math.floor(s.durationInFrames * at));
+      const file = join(dir, `${String(i + 1).padStart(2, "0")}-${s.id}${ats.length > 1 ? `@${at}` : ""}.jpg`);
+      await run(REMOTION_BIN, ["still", ENTRY, COMPOSITION, file, ...commonFlags(project), `--frame=${frame}`, "--image-format=jpeg", "--scale=0.5"], { cwd: TEMPLATE_DIR });
+      log(`✓ ${file}`);
+      shots.push({ scene: s.id, at, t: +(frame / tl.fps).toFixed(2), file });
+    }
+  }
+  return shots;
+}
+
 export async function stills(args) {
   requireRemotion();
   const project = withAspect(loadProject(), args.aspect);
@@ -167,20 +193,35 @@ export async function stills(args) {
   await ensureAspectTimings(project);
   const tl = freshTimeline(project, { force: Boolean(args.force) });
   const dir = join(project.paths.out, "stills", ...(project.aspect ? [aspectTag(project.aspect)] : []));
-  mkdirSync(dir, { recursive: true });
-  const only = typeof args.scene === "string" ? args.scene.split(",") : null;
-  // --at 0.7 or a list (--at 0.3,0.6,0.9): fractions of each scene; a list adds the fraction to the file name.
-  const ats = args.at !== undefined ? String(args.at).split(",").map(Number) : [0.7];
-  if (ats.some((a) => !Number.isFinite(a) || a < 0 || a > 1)) throw new UserError(`--at takes fractions 0–1, got "${args.at}"`);
-  for (const [i, s] of tl.scenes.entries()) {
-    if (only && !only.includes(s.id)) continue;
-    for (const at of ats) {
-      const frame = s.from + Math.min(s.durationInFrames - 1, Math.floor(s.durationInFrames * at));
-      const file = join(dir, `${String(i + 1).padStart(2, "0")}-${s.id}${ats.length > 1 ? `@${at}` : ""}.jpg`);
-      await run(REMOTION_BIN, ["still", ENTRY, COMPOSITION, file, ...commonFlags(project), `--frame=${frame}`, "--image-format=jpeg", "--scale=0.5"], { cwd: TEMPLATE_DIR });
-      log(`✓ ${file}`);
-    }
-  }
+  await renderStills(project, tl, { dir, only: typeof args.scene === "string" ? args.scene.split(",") : null, ats: args.at !== undefined ? String(args.at).split(",").map(Number) : [0.7] });
+}
+
+// The pre-render review: every scene as the render will show it (early and late in the scene, so
+// overlays that come in on a cue are caught), tiled into out/qc/preview-NN.jpg. The user approves
+// this (onevideo approve preview) before the full render; it goes stale when the timeline changes.
+export const PREVIEW_AT = [0.3, 0.8];
+export async function preview(args) {
+  requireRemotion();
+  const project = loadProject();
+  await ensureClipFrames(project);
+  await ensureMusicBeats(project);
+  const tl = freshTimeline(project, { force: Boolean(args.force) });
+  const dir = join(project.paths.out, "preview");
+  rmSync(dir, { recursive: true, force: true });
+  const ats = args.at !== undefined ? String(args.at).split(",").map(Number) : PREVIEW_AT;
+  const shots = await renderStills(project, tl, { dir, ats });
+  const sheets = await writeImageSheets(shots, join(project.paths.out, "qc"), { prefix: "preview", cols: ats.length * 2 });
+  const { issues } = checkProject(project, { needTimings: true });
+  const layout = issues.filter((i) => i.gate === "layout" || i.gate === "rhythm").map((i) => `${i.level}: ${i.msg}`);
+  writeJson(project.p("plan", "preview.json"), {
+    timeline: productsHash(project.root, ["plan/timeline.json"]),
+    at: new Date().toISOString(),
+    sheets: sheets.map((s) => relative(project.root, s.file)),
+    scenes: tl.scenes.map((s) => ({ id: s.id, type: s.type, start: s.start, stills: shots.filter((x) => x.scene === s.id).map((x) => relative(project.root, x.file)) })),
+    layout,
+  });
+  for (const s of sheets) log(`✓ ${relative(project.root, s.file)}  ${s.cols}×${s.rows}, ${ats.length} cell(s) per scene, in scene order`);
+  log(`next: show the preview sheet(s) to the user; once they sign off: onevideo approve preview, then onevideo render`);
 }
 
 export async function studio(args) {
@@ -241,6 +282,11 @@ export async function publish(args = {}) {
   for (const w of kit.publish.warnings) warn(w);
   log(`publish kit → ${dir} (${Object.keys(kit.files).join(", ")})`);
   if (args.stems) await stems({ _: [] });
+  // The published cut and everything behind it go to the archive when one is configured.
+  if (driveConfig() && !args.noArchive) {
+    try { await archiveProject(project, { log, warn }); }
+    catch (e) { warn(`archive: ${e.message}; run onevideo archive again`); }
+  }
 }
 
 // Other sizes of the same cut for other platforms (9:16 for short-video apps, 1:1 / 4:5 for feeds).
@@ -305,11 +351,25 @@ async function prepareMedia(project) {
 
 // Full non-creative pass: voice → music → timeline → render → qc. Publishing waits for the
 // human review sign-off, so build stops at the QC report.
+// Why the full render must wait for the preview, or null when it is approved for this timeline.
+export function previewGate(project) {
+  const row = stageStatus(project, pipelineDef(project.config.pipeline)).find((s) => s.id === "preview");
+  if (!row || row.status === "approved") return null;
+  if (row.status === "pending") return "no preview yet: run onevideo preview, show out/qc/preview-*.jpg to the user, then onevideo approve preview (or render --draft / --scenes to iterate)";
+  if (row.status === "stale") return `the preview is stale (${row.reason ?? "it changed after approval"}); run onevideo preview again and get it approved`;
+  return "the preview is waiting for the user: show out/qc/preview-*.jpg, then onevideo approve preview";
+}
+
 export async function build(args) {
   await media.tts({ _: [], force: args.forceTts });
   await media.music({ _: [] });
   await prepareMedia(loadProject());
   await media.timeline({ _: [] });
+  // Without an approved preview, build stops at it: the full render waits for the user's sign-off.
+  if (!args.draft && previewGate(loadProject())) {
+    await preview({ _: [] });
+    return;
+  }
   await render({ _: [], draft: args.draft, concurrency: args.concurrency });
   if (args.draft) return;
   const review = await qc({ _: [] });

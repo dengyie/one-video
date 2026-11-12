@@ -3,3 +3,4 @@
 export * from "./pick-take.mjs";
 export * from "./inspect-clip.mjs";
 export * from "./look.mjs";
+export * from "./suggest-assets.mjs";

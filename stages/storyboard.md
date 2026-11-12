@@ -37,6 +37,20 @@
 - 结果和证据出现后停 1–1.5 秒再切（`hold` 或下一个 cue 往后放），让观众看清；不要刚出现就清屏换下一页。
 - 证据留在画面上，新信息叠上来或镜头移过去，而不是每句话都清空重来。
 
+## 素材怎么用
+
+素材已经在 assets 阶段定好并下载了；分镜要把它们用足，而不是把照片缩成角落里的小图。
+
+- 优先让照片和实拍占满画面：`footage` / `media` 做底，标题压在上面；一个人物或事件有多张照片时用 `photo-stack` 连续翻，比单张图停 6 秒好得多。
+- 贴纸（`image` 叠层）尺寸 ≥240（1080 基准），重要的 300 以上；小于 240 时 layout 门控警告，看起来就是缩略图。
+- 文字场景（title / kinetic / bullets / quote）超过 6 秒，背后要有一张真实素材（`backdrop` 或 image 叠层），否则 density 门控警告。
+
+## 版面（layout 门控，timeline 时检查）
+
+- 叠层不能压在正在念的字幕上（报错）：横屏放到 y 0.8 以上、竖屏 0.7 以上，或放到两侧。
+- 叠层出画、两个叠层同时出现且重叠、贴纸过小：警告。
+- 文字场景的推镜：左对齐文字被推近裁掉左边，或 zoom 超过 1.25（`gates.maxTextZoom`）：警告。
+
 ## 原则（详见 `references/motion-rules.md`）
 
 - 先看 `examples/spacex-motion/plan/storyboard.json`：实拍做主角、数字进画布、关键词跟着旁白。目标是剪辑感，不是一页一张卡。
@@ -51,4 +65,4 @@
 
 ## 检查
 
-`onevideo validate` 之后 `onevideo tts`、`onevideo assets fetch`、`onevideo depth`、`onevideo timeline`，处理 rhythm 警告，再 `onevideo stills --at 0.3,0.7`，逐张看 `out/stills/`，再进入渲染。
+`onevideo validate` 之后 `onevideo tts`、`onevideo depth`、`onevideo timeline`，处理 rhythm / layout / density 警告，再 `onevideo preview`，自己先看 `out/qc/preview-*.jpg`，再交给用户审批（preview 阶段），通过后才渲染整片。

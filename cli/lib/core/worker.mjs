@@ -1,5 +1,5 @@
 // Heavy commands on a bigger machine: with ONEVIDEO_WORKERS set (ssh hosts, in order of preference),
-// render / build / depth / stills (and publish --formats) run on the idlest worker. The project stays
+// render / build / depth / stills / preview (and publish --formats) run on the idlest worker. The project stays
 // here: it is mirrored to the same path on the worker, the job runs detached there (a dropped connection only
 // pauses the log), and what it wrote comes back. The worker reads its own /etc/onevideo/env.
 import { execFileSync, spawnSync } from "node:child_process";
@@ -7,7 +7,7 @@ import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
 import { ONEVIDEO_ROOT, UserError, findProjectRoot, log, warn } from "./project.mjs";
 
-export const HEAVY = new Set(["render", "build", "depth", "stills"]);
+export const HEAVY = new Set(["render", "build", "depth", "stills", "preview"]);
 const SSH = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ControlMaster=auto", "-o", "ControlPath=/tmp/ov-ssh-%C", "-o", "ControlPersist=120"];
 const JOBS = "/tmp/onevideo-jobs";
 

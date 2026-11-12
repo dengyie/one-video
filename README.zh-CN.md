@@ -20,8 +20,8 @@
 面向 Claude Code / ZCode 生产带旁白视频（数据解说、纪录片、竖屏短视频、产品宣传）的工业级全自动流水线和 Agent Skill。全流程分阶段推进，每一步均受严格的机械门控（Mechanical Gates）约束与校验。
 
 ```
-research → proposal → script → storyboard → assets → voice → compose → render → review → publish
-  事实+来源   方案      逐句脚本    分镜/图表     授权素材   TTS+响度   时间轴     Remotion   自动 QC   字幕/章节/简介
+research → proposal → script → assets → storyboard → voice → compose → preview → render → review → publish
+  事实+来源   方案      逐句脚本   授权素材   分镜/图表    TTS+响度  时间轴    静帧审批  Remotion  自动 QC  字幕/章节/简介
 ```
 
 ---
@@ -34,6 +34,9 @@ research → proposal → script → storyboard → assets → voice → compose
   - **数字溯源门控**：旁白中出现的每一个统计数字必须精确对应 `research` 中具名来源的 fact id。
   - **语速节奏门控**：基于音节算法严格约束在 3.5–6.2 音节/秒最佳听感区间。
   - **合规审计门控**：字幕单行字符数、分镜最短时长、第三方素材授权合规性全自动前置扫描。
+  - **素材密度门控**：按编译后的时间轴统计每分钟真实素材数（生成图不算），<4 个拦截渲染，<8 个警告；`onevideo assets suggest` 在写分镜前按脚本场景找授权候选。
+  - **版面门控与预览审批**：叠层压字幕、出画、相互重叠、推镜把字推出画面在渲染前报出；`onevideo preview` 把每个场景的静帧铺成联系表，用户审批后才渲染整片。
+- **归档到 MangoDrive**：`onevideo archive` 上传成片、发布包、plan、配音和素材，逐个回读校验 sha256 后记入 `plan/archive.json`；`--prune` 本地只留最近几版，`onevideo restore` 取回。仅通过 `ONEVIDEO_DRIVE_*` 环境变量配置。
 - **逐句精确 TTS 计时**：字幕与画面揭示精确跟随真实语音时间戳推进。全局执行 EBU R128 / ITU-R BS.1770 响度归一化（默认 −16 LUFS）与防削顶软限幅。
 - **现代影视级动效引擎**：
   - 每个场景独立运镜轨道（缓慢推拉、跳切、物理动态模糊）。

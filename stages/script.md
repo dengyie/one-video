@@ -15,6 +15,7 @@
 - `narration`：整段旁白；按句号/逗号自动切成字幕行（16:9 每行 ≤22 字宽，9:16 ≤13）。需要精确控制时改用 `lines: [{ "text": "…", "speak": "读法", "pause": "sentence|clause" }]`。
 - `question`：这个场景回答的观众问题，用观众自己的话写（来自 proposal 的结构）。旁白第一句就要接住它；缺 `question` 的旁白场景 validate 会警告。
 - `claims`：本场景引用的 fact id，方便审稿时核对。
+- `search`（可选）：这个场景找素材用的英文检索词，如 `["Jensen Huang GTC keynote", "NVIDIA Santa Clara headquarters"]`。`onevideo assets suggest` 优先用它，没写的场景由模型补。
 - `chapter`：出现即生成一个章节标记（publish 阶段写入简介时间戳）。
 - 没有旁白的场景（片尾来源）只写 `id` + `beat`。
 

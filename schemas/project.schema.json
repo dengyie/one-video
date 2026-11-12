@@ -52,9 +52,45 @@
       "minimum": 10
     },
     "watermark": {
-      "type": [
-        "string",
-        "null"
+      "oneOf": [
+        {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "sub": {
+              "type": "string"
+            },
+            "logo": {
+              "type": "string"
+            },
+            "icon": {
+              "type": "string"
+            },
+            "position": {
+              "enum": [
+                "top-right",
+                "top-left",
+                "bottom-right",
+                "bottom-left"
+              ]
+            },
+            "style": {
+              "enum": [
+                "badge",
+                "text"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
       ]
     },
     "theme": {

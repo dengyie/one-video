@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { productsHash, reviewOutdated, reviewSubject, stageStatus } from "../cli/lib/core/state.mjs";
+import { approveStage, previewOutdated, productsHash, reviewOutdated, reviewSubject, stageStatus } from "../cli/lib/core/state.mjs";
 
 test("productsHash: missing or empty (dotfiles only) products are not done", () => {
   const root = mkdtempSync(join(tmpdir(), "ov-state-"));
@@ -62,4 +62,21 @@ test("a QC review goes stale when the main render or the timeline changes", () =
   assert.match(reviewOutdated(project), /rendered again after QC/);
   writeFileSync(join(root, "plan", "review.json"), JSON.stringify({ issues: [] }));
   assert.match(reviewOutdated(project), /does not record which render/);
+});
+
+test("an approved preview goes stale when the timeline compiles differently", () => {
+  const root = mkdtempSync(join(tmpdir(), "ov-state-"));
+  mkdirSync(join(root, "plan"));
+  const project = { root, config: { name: "demo" }, paths: { state: join(root, "state.json") } };
+  const pipeline = { name: "p", stages: [{ id: "preview", produces: ["plan/preview.json"], approval: true }] };
+  writeFileSync(join(root, "plan", "timeline.json"), "{}");
+  assert.equal(stageStatus(project, pipeline)[0].status, "pending");
+  writeFileSync(join(root, "plan", "preview.json"), JSON.stringify({ timeline: productsHash(root, ["plan/timeline.json"]) }));
+  assert.equal(stageStatus(project, pipeline)[0].status, "awaiting-approval");
+  approveStage(project, pipeline, "preview");
+  assert.equal(stageStatus(project, pipeline)[0].status, "approved");
+  writeFileSync(join(root, "plan", "timeline.json"), '{"duration": 2}');
+  assert.match(previewOutdated(project), /changed after the preview/);
+  assert.equal(stageStatus(project, pipeline)[0].status, "stale");
+  assert.throws(() => approveStage(project, pipeline, "preview"), /onevideo preview/);
 });

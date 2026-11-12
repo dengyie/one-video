@@ -34,6 +34,7 @@
         "lines": { "type": "array", "items": { "$ref": "#/$defs/line" } },
         "claims": { "type": "array", "items": { "type": "string" } },
         "visualIntent": { "type": "string" },
+        "search": { "type": "array", "items": { "type": "string" }, "description": "English stock-search queries for this scene's photos and footage (onevideo assets suggest); without it a chat model writes them" },
         "question": { "type": "string", "description": "The audience question this scene answers, in the viewer's words" }
       }
     }

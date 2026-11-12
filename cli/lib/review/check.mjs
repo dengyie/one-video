@@ -1,7 +1,7 @@
 // Collects every pre-compose issue for a project; used by `validate`, `timeline` and `render`.
 import { existsSync } from "node:fs";
 import { readJson } from "../core/project.mjs";
-import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, timingsGate, rhythmGate, questionGate, echoGate, deviceGate, summarize } from "./gates.mjs";
+import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, timingsGate, rhythmGate, questionGate, echoGate, deviceGate, layoutGate, densityGate, summarize } from "./gates.mjs";
 import { compileTimeline } from "../timeline/index.mjs";
 
 export function loadPlan(project) {
@@ -47,7 +47,7 @@ export function checkProject(project, { needTimings = false } = {}) {
       const res = compileTimeline({ config, script: plan.script, storyboard: plan.storyboard, timings: plan.timings, assets: plan.assets, research: plan.research, root: project.root });
       issues.push(...res.errors.map((msg) => ({ level: "error", gate: "timeline", msg })));
       issues.push(...res.warnings.map((msg) => ({ level: "warn", gate: "timeline", msg })));
-      if (res.timeline) issues.push(...rhythmGate(res.timeline, config), ...echoGate(res.timeline, config), ...deviceGate(res.timeline, config));
+      if (res.timeline) issues.push(...rhythmGate(res.timeline, config), ...echoGate(res.timeline, config), ...deviceGate(res.timeline, config), ...layoutGate(res.timeline, config), ...densityGate(res.timeline, plan.assets, config));
       timeline = res.timeline;
     } else if (needTimings) issues.push({ level: "error", gate: "files", msg: "missing plan/timings.json; run: onevideo tts" });
   }

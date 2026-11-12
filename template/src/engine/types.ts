@@ -82,6 +82,16 @@ export type Scene = {
 // `depth` is a near-is-white depth map (an image, or a sequence dir for a video) when one was made.
 export type Asset = { src: string; kind: "image" | "video"; credit: string; seq?: string; frames?: number; fps?: number; depth?: string; depthStep?: number; depthFrames?: number; luma?: string; pages?: number };
 
+// The channel mark (compiled from onevideo.json; a bare string there becomes { text }).
+export type Watermark = {
+  text?: string;
+  sub?: string;
+  logo?: string;
+  icon?: string;
+  position: "top-right" | "top-left" | "bottom-right" | "bottom-left";
+  style: "badge" | "text";
+};
+
 export type Timeline = {
   version: number;
   title: string;
@@ -92,7 +102,7 @@ export type Timeline = {
   totalFrames: number;
   duration: number;
   theme: Theme;
-  watermark: string | null;
+  watermark: Watermark | null;
   captions: { enabled: boolean; style: "line" | "karaoke" | "kinetic" | "none"; items: { scene: string; text: string; start: number; end: number; top?: boolean }[] };
   narration: [number, number][];
   // `offset`: seconds into the track the video starts at.

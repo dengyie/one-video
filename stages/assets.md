@@ -1,8 +1,20 @@
 # 阶段：assets — 素材
 
-**产物**：`plan/assets.json`（schema：`schemas/assets.schema.json`） · data-explainer/shorts 可选，documentary 需审批
+**产物**：`plan/assets.json`（schema：`schemas/assets.schema.json`） · 所有流水线都在 storyboard **之前**、需审批
 
 所有外部图片/视频都通过清单进入工程，每条带许可证与出处，片尾自动署名。
+
+## 素材先行：找全、下载、给用户看
+
+第一版片子差，多半不是文案，而是画面没东西可看。所以素材在分镜之前定：
+
+1. `onevideo assets suggest`：按 script 的每个场景出 2–3 个英文检索词（场景里写了 `search: [...]` 就用它，其余一次 LLM 调用补齐，失败时退回旁白里的英文名词），在 NASA / Wikimedia / Openverse（有 key 时加 Pexels）里找授权候选，每场景取 `--per` 条，写进 `plan/asset-suggestions.json`（每条带许可、作者、出处、尺寸和命中的检索词）。已在清单里的来源会跳过；某个源 429 时等 20 秒只重试它。
+2. 挑：看候选，把要用的写进 `assets.json`（`--write` 直接把全部候选按 `<场景>-<n>` 追加进去，再删掉不要的）。宁多勿少——分镜时用不上的可以不引用。
+3. `onevideo assets fetch` 下载，再把 `public/assets/` 里的实物（不是候选列表）给用户看，通过后 `onevideo approve assets`。之后 fetch 改了清单，该阶段会变 stale，需要再给用户看。
+4. 分镜按手里的素材写。
+
+**密度目标**：真实素材（照片、实拍、截图、logo；生成图不算）每分钟 ≥8 个；<4 个时 density 门控报错，拦住渲染。超过 6 秒的纯文字场景（title / kinetic / bullets / quote…）没有任何真实素材会被警告。阈值在 `onevideo.json` 的 `gates`：`minAssetsPerMinute`（默认 4，0 关闭）、`goodAssetsPerMinute`（8）、`bareTextMax`（6 秒）。
+
 
 ## 清单条目
 
@@ -39,7 +51,9 @@
 ## 命令
 
 ```bash
-onevideo assets search "falcon heavy" --provider nasa,wikimedia   # 先看候选
+onevideo assets suggest                                            # 每场景的授权候选 → plan/asset-suggestions.json
+onevideo assets suggest --scene hook,ipo --per 5 --kind both --write   # 指定场景、含视频、直接追加进清单
+onevideo assets search "falcon heavy" --provider nasa,wikimedia   # 单个检索词看候选
 onevideo assets fetch                                              # 下载缺失项 → public/assets/
 onevideo assets fetch --only launch --force                        # 重取单个
 ```

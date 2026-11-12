@@ -14,11 +14,12 @@
 | `llm/` | 模型客户端：`ask`（文本 + 图片，JSON 回复解析、模型回退） | `client.mjs` |
 | `prompts/` | 所有发给模型的提示词，一个提示词一个纯函数（数据进、字符串出） | `index.mjs` |
 | `generate/` | 生图（多 take + 视觉挑选）、生视频（提交 / 轮询 / 质检截取）、共用配置与模型回退 | `index.mjs` |
-| `assets/` | 素材来源（NASA / Wikimedia / Openverse / Pexels 搜索与排序）、取素材（`fetchAsset`）、媒体文件（剪片、帧序列、深度 / 亮度图路径） | `index.mjs` |
+| `assets/` | 素材来源（NASA / Wikimedia / Openverse / Pexels 搜索与排序）、按场景推荐候选（`suggest.mjs`：检索词 → 检索 → 排序 → 清单条目）、取素材（`fetchAsset`）、媒体文件（剪片、帧序列、深度 / 亮度图路径） | `index.mjs` |
 | `vision/` | 画面分析：深度主体与对比度、屏幕检测、UI 截图（自起 Chrome）、联系表、成片 QC | `subject` `screen` `capture` `sheet` `qc` |
 | `timeline/` | 时间线编译：`compile.mjs` 编排，各道工序分文件——`cues`（短语 / 节拍定时）、`transitions`、`sfx`、`shots`（镜头轨、硬切、音乐偏移）、`props`（画布 / 设备等的内部时间）、`anchors`（叠层锚点）、`credits` | `index.mjs` |
 | `review/` | 门禁（数字核对、分镜、语速、节奏、授权……）与 `checkProject` 汇总 | `gates.mjs` `check.mjs` |
 | `publish/` | 发布包（章节、致谢、简介）、交接页、渲染版本记录 | `kit` `handoff` `renders` |
+| `archive/` | 归档到 MangoDrive（OpenList REST）：上传、回读校验 sha256、`plan/archive.json` 记录、裁剪旧渲染、恢复；地址与账号只从环境变量读 | `index.mjs` `drive.mjs` |
 
 ## 依赖方向
 
@@ -32,10 +33,11 @@ library                      → audio, core
 captions                     → vision, core
 voice                        → captions, audio, core
 generate                     → prompts, llm, vision, assets/media, core
-assets                       → generate, core
+assets                       → generate, prompts, core
 timeline                     → captions, vision, library, audio, assets/media, core
 review                       → timeline, captions, voice, core
 publish                      → review, timeline, captions, voice, core
+archive                      → core
 commands                     → 以上任意
 ```
 

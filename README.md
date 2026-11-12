@@ -20,8 +20,8 @@
 **OneVideo** is an industrial-grade, fully automated video production pipeline and autonomous coding agent skill designed for Claude Code and ZCode. It orchestrates the creation of narrated data explainers, mini-documentaries, vertical shorts, and product teasers through strict, mechanical quality gates.
 
 ```
-research → proposal → script → storyboard → assets → voice → compose → render → review → publish
-  Facts+Sources Proposal   Sentences   Layout/Charts Lic. Assets TTS+Loudness Timeline   Remotion   Auto QC   Subtitles/Stems
+research → proposal → script → assets → storyboard → voice → compose → preview → render → review → publish
+  Facts+Sources Proposal Sentences Lic. Assets Layout/Charts TTS+Loudness Timeline Stills sheet Remotion Auto QC Subtitles/Stems
 ```
 
 ---
@@ -34,6 +34,9 @@ research → proposal → script → storyboard → assets → voice → compose
   - **Fact Provenance Gate**: Every single statistic in narration must map to an authoritative fact id declared during the research phase.
   - **Pacing & Cadence Gate**: Pacing is estimated algorithmically and enforced within 3.5–6.2 syllables per second.
   - **Compliance Gate**: Subtitle line length, minimum scene duration, and media licensing allow-lists are validated before rendering.
+  - **Material Density Gate**: Real (non-generated) assets per minute are counted on the compiled timeline; below 4/min blocks the render, below 8/min warns. `onevideo assets suggest` finds licensed candidates for every script scene before the storyboard is written.
+  - **Layout Gate & Preview Sign-off**: Overlays over spoken captions, off-frame or overlapping stickers and text pushed out of frame are caught before rendering; `onevideo preview` tiles stills of every scene into a sheet the user approves before the full render.
+- **Archive to MangoDrive**: `onevideo archive` uploads renders, publish kit, plan, voice and source media, verifies each file by reading it back (sha256) and records it in `plan/archive.json`; `--prune` keeps only recent renders locally, `onevideo restore` brings files back. Configured through `ONEVIDEO_DRIVE_*` environment variables only.
 - **Sentence-Level TTS Synchronization**: Visual reveals and typography synchronize exactly with timestamped audio cues. Global audio is normalized according to ITU-R BS.1770 / EBU R128 standards (default −16 LUFS) with soft-limiting.
 - **Cinematic Motion Graphics Engine**:
   - Independent camera tracks per scene (slow pushes, whip pans, depth zooms, dynamic motion blur).

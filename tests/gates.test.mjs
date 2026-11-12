@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, timingsGate, normalizeLicense, summarize, questionGate, echoGate } from "../cli/lib/review/gates.mjs";
+import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, timingsGate, normalizeLicense, summarize, questionGate, echoGate, layoutGate, densityGate } from "../cli/lib/review/gates.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { example } from "./helpers.mjs";
 
@@ -153,4 +153,43 @@ test("numbersGate checks the spoken lines, not a stale narration", () => {
   const research = { facts: [{ id: "a", claim: "营收 300 亿", source: { title: "t" } }] };
   const script = { scenes: [{ id: "s", narration: "营收 300 亿", lines: ["营收 450 亿"] }] };
   assert.match(numbersGate(script, research).map((i) => i.msg).join("\n"), /"450亿"/);
+});
+
+test("layoutGate: overlays over spoken captions, off-frame, tiny or stacked stickers, text pushed out by a shot", () => {
+  const base = { width: 1920, height: 1080, captions: { enabled: true, style: "line", items: [{ scene: "a", text: "说话中", start: 1, end: 3 }] } };
+  const scene = (over) => ({ id: "a", type: "media", start: 0, duration: 6, shots: [{ t: 0, zoom: 1, x: 0.5, y: 0.5 }], overlays: [], ...over });
+  const run = (sc) => layoutGate({ ...base, scenes: [scene(sc)] }, {});
+  const img = (x, y, size, t = 0, end = 5) => ({ type: "image", asset: "p", x, y, size, t, end });
+
+  assert.deepEqual(run({ overlays: [img(0.8, 0.34, 320)] }), []);
+  const band = run({ overlays: [img(0.5, 0.86, 300)] });
+  assert.ok(band.some((i) => i.level === "error" && /caption band/.test(i.msg)));
+  // Shown only after the caption ends: no clash.
+  assert.ok(!run({ overlays: [img(0.5, 0.86, 300, 3.5, 5)] }).some((i) => /caption band/.test(i.msg)));
+  assert.ok(run({ overlays: [img(0.97, 0.3, 300)] }).some((i) => /off the frame/.test(i.msg)));
+  assert.ok(run({ overlays: [img(0.8, 0.3, 160)] }).some((i) => /thumbnail/.test(i.msg)));
+  assert.ok(run({ overlays: [img(0.4, 0.3, 300), img(0.45, 0.32, 300)] }).some((i) => /overlaps overlay 0/.test(i.msg)));
+
+  const left = run({ type: "kinetic", props: { align: "left" }, shots: [{ t: 0, zoom: 1.15, x: 0.5, y: 0.5 }] });
+  assert.ok(left.some((i) => /left edge/.test(i.msg)));
+  assert.deepEqual(run({ type: "kinetic", props: { align: "center" }, shots: [{ t: 0, zoom: 1.15, x: 0.5, y: 0.5 }] }), []);
+  assert.ok(run({ type: "kinetic", props: {}, shots: [{ t: 0, zoom: 1.4, x: 0.5, y: 0.5 }] }).some((i) => /maxTextZoom/.test(i.msg)));
+});
+
+test("densityGate: real assets per minute, generated ones excluded, bare text scenes flagged", () => {
+  const sc = (id, type, duration, extra = {}) => ({ id, type, duration, props: {}, overlays: [], ...extra });
+  const tl = (scenes) => ({ duration: scenes.reduce((s, x) => s + x.duration, 0), scenes });
+  const assets = { items: [{ id: "g", generate: { prompt: "x" } }, { id: "p1", license: "CC0" }] };
+  const photos = (n) => Array.from({ length: n }, (_, i) => ({ type: "image", asset: `p${i}` }));
+
+  const thin = densityGate(tl([sc("a", "media", 60, { props: { asset: "p1" }, overlays: [{ type: "image", asset: "g" }] })]), assets, {});
+  assert.ok(thin.some((i) => i.level === "error" && /1 real assets in 60s/.test(i.msg)));
+  const mid = densityGate(tl([sc("a", "media", 60, { overlays: photos(5) })]), assets, {});
+  assert.deepEqual(mid.map((i) => i.level), ["warn"]);
+  assert.deepEqual(densityGate(tl([sc("a", "media", 60, { overlays: photos(8) })]), assets, {}), []);
+  assert.deepEqual(densityGate(tl([sc("a", "media", 60)]), assets, { gates: { minAssetsPerMinute: 0, goodAssetsPerMinute: 0 } }), []);
+
+  const bare = densityGate(tl([sc("a", "media", 50, { overlays: photos(8) }), sc("q", "quote", 8), sc("k", "kinetic", 4), sc("c", "bar-race", 9), sc("s", "sources", 9)]), assets, {});
+  assert.deepEqual(msgs(bare, "density").filter((m) => /no photo/.test(m)).length, 1);
+  assert.ok(bare.some((i) => /scene "q"/.test(i.msg)));
 });

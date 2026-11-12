@@ -244,7 +244,7 @@ export const Video: React.FC<Timeline> = (timeline) => {
         ))}
         <FilmLook />
         {timeline.captions.enabled && timeline.captions.style !== "none" && <Captions />}
-        {timeline.watermark && <Watermark text={timeline.watermark} />}
+        {timeline.watermark && <Watermark mark={timeline.watermark} />}
       </AbsoluteFill>
     </TimelineContext.Provider>
   );

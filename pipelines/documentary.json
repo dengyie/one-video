@@ -99,12 +99,22 @@
     {
       "id": "compose",
       "director": "stages/compose.md",
-      "purpose": "Compile the timeline, procedural music/SFX, per-scene stills for a visual check.",
+      "purpose": "Compile the timeline, procedural music/SFX.",
       "produces": [
         "plan/timeline.json"
       ],
       "approval": false,
-      "command": "onevideo music && onevideo timeline && onevideo stills"
+      "command": "onevideo music && onevideo timeline"
+    },
+    {
+      "id": "preview",
+      "director": "stages/compose.md",
+      "purpose": "Stills of every scene tiled into out/qc/preview-*.jpg; the user signs off on the picture before the full render.",
+      "produces": [
+        "plan/preview.json"
+      ],
+      "approval": true,
+      "command": "onevideo preview"
     },
     {
       "id": "render",

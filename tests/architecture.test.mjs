@@ -11,7 +11,7 @@ const LIB = join(ROOT, "cli", "lib");
 const ALLOWED = {
   prompts: [], core: [], llm: ["core"], audio: ["core"], vision: ["core"], library: ["audio", "core"],
   captions: ["vision", "core"], voice: ["captions", "audio", "core"],
-  generate: ["prompts", "llm", "vision", "assets", "core"], assets: ["generate", "core"],
+  generate: ["prompts", "llm", "vision", "assets", "core"], assets: ["generate", "prompts", "core"], archive: ["core"],
   timeline: ["captions", "vision", "library", "audio", "assets", "core"],
   review: ["timeline", "captions", "voice", "core"], publish: ["review", "timeline", "captions", "voice", "core"],
 };

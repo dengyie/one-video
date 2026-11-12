@@ -50,6 +50,17 @@ export function reviewOutdated(project) {
   return null;
 }
 
+// The pre-render preview (plan/preview.json) shows one timeline: stills of every scene taken from
+// it. It stops covering the plan as soon as the timeline compiles differently.
+const PREVIEW = "plan/preview.json";
+export function previewOutdated(project) {
+  const preview = readJson(join(project.root, PREVIEW), null);
+  if (!preview) return null;
+  if (preview.timeline !== productsHash(project.root, ["plan/timeline.json"])) return "plan/timeline.json changed after the preview; run: onevideo preview";
+  return null;
+}
+const outdatedFor = (project, products) => (products.includes(REVIEW) ? reviewOutdated(project) : products.includes(PREVIEW) ? previewOutdated(project) : null);
+
 export function loadState(project) {
   return readJson(project.paths.state, { stages: {} });
 }
@@ -61,7 +72,7 @@ export function stageStatus(project, pipeline, state = loadState(project)) {
     const products = stageProducts(project, stage);
     const hash = products.length ? productsHash(project.root, products) : null;
     const rec = state.stages[stage.id];
-    const outdated = hash !== null && products.includes(REVIEW) ? reviewOutdated(project) : null;
+    const outdated = hash !== null ? outdatedFor(project, products) : null;
     let status;
     if (hash === null) status = stage.optional ? "optional" : "pending";
     else if (outdated) status = "stale";
@@ -82,7 +93,7 @@ export function approveStage(project, pipeline, stageId, note) {
   const products = stageProducts(project, stage);
   const hash = productsHash(project.root, products);
   if (hash === null) throw new UserError(`stage "${stageId}" has no products yet (${products.join(", ")})`);
-  const outdated = products.includes(REVIEW) ? reviewOutdated(project) : null;
+  const outdated = outdatedFor(project, products);
   if (outdated) throw new UserError(`cannot approve "${stageId}": ${outdated}`);
   const state = loadState(project);
   state.stages[stageId] = { hash, at: new Date().toISOString(), ...(note ? { note } : {}) };

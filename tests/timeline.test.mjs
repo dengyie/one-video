@@ -148,3 +148,19 @@ test("compileTimeline: adjacent scenes share one overlap window; audio starts st
   assert.equal(whooshes, sc.slice(1).filter((s) => s.transitionIn.type !== "cut").length, "one transition sound per non-cut boundary");
   for (let i = 1; i < timeline.sfx.length; i++) assert.ok(timeline.sfx[i].at >= timeline.sfx[i - 1].at, "sfx sorted by time");
 });
+
+test("watermark: a string becomes the default badge; objects take a logo asset, icon and corner", () => {
+  const ex = example();
+  const run = (watermark) => compileTimeline({ ...ex, assets: ex.fetchedAssets, config: { ...ex.config, watermark } });
+  assert.deepEqual(run("频道名").timeline.watermark, { text: "频道名", style: "badge", position: "top-right" });
+  assert.equal(run(null).timeline.watermark, null);
+  const logo = ex.fetchedAssets.items[0].id;
+  const r = run({ text: "频道名", sub: "每周解读", logo, icon: "rocket", position: "bottom-left" });
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.timeline.watermark.position, "bottom-left");
+  assert.ok(r.timeline.assets[logo], "logo asset is shipped with the timeline");
+  assert.ok(r.timeline.icons.rocket, "icon is inlined");
+  const bad = run({ text: "x", logo: "nope", position: "middle" });
+  assert.ok(bad.errors.some((e) => /unknown asset "nope"/.test(e)));
+  assert.ok(bad.errors.some((e) => /position "middle"/.test(e)));
+});

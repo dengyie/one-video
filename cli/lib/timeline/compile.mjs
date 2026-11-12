@@ -37,6 +37,33 @@ const OPAQUE_TYPES = new Set(["media", "focus", "split", "footage", "parallax", 
 const readAloud = (sb, lines) => sb.type === "quote" && typeof sb.props?.text === "string" && lines.length > 0 && normalizeForMatch(sb.props.text) === normalizeForMatch(lines.map((l) => l.text).join(""));
 const overlaps = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
 
+// The channel mark. A string is the text of the default badge; an object adds a line under it
+// (`sub`), a mark (`logo`: an asset id, or `icon`: Lucide name; without either the badge shows the
+// text's first letter), a corner and `style: "text"` for the old plain line.
+export const WATERMARK_POSITIONS = ["top-right", "top-left", "bottom-right", "bottom-left"];
+export function compileWatermark(wm, { assetById, usedAssets, icons, errors, root }) {
+  if (wm == null || wm === "" || wm === false) return null;
+  const w = typeof wm === "string" ? { text: wm } : { ...wm };
+  if (!w.text && !w.logo) { errors.push(`watermark needs "text" or "logo"`); return null; }
+  w.style ??= "badge";
+  w.position ??= "top-right";
+  if (!WATERMARK_POSITIONS.includes(w.position)) { errors.push(`watermark position "${w.position}" (use ${WATERMARK_POSITIONS.join(", ")})`); w.position = "top-right"; }
+  if (w.logo) {
+    const a = assetById.get(w.logo);
+    if (!a) errors.push(`watermark references unknown asset "${w.logo}"`);
+    else if (!a.file) errors.push(`asset "${w.logo}" not fetched yet; run: onevideo assets fetch`);
+    else {
+      if (root && !existsSync(join(root, "public", a.file))) errors.push(`asset "${w.logo}" file missing: public/${a.file}; run: onevideo assets fetch`);
+      usedAssets[w.logo] ??= { src: a.file, kind: a.kind, credit: null };
+    }
+  }
+  if (w.icon && !icons[w.icon]) {
+    const icon = resolveIcon(w.icon);
+    if (icon) icons[w.icon] = icon; else errors.push(`watermark uses unknown icon "${w.icon}" (Lucide name or flag:<iso2>)`);
+  }
+  return w;
+}
+
 export function compileTimeline({ config, script, storyboard, timings, assets, research, root }) {
   const errors = [];
   const warnings = [];
@@ -319,6 +346,8 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     if (sfxLen[s.src]) s.duration = sfxLen[s.src];
   }
 
+  const watermark = compileWatermark(config.watermark, { assetById, usedAssets, icons, errors, root });
+
   const timeline = {
     version: 1,
     title: script.title ?? config.title ?? "",
@@ -329,7 +358,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     totalFrames,
     duration: r3(totalFrames / fps),
     theme,
-    watermark: config.watermark ?? null,
+    watermark,
     captions: { enabled: config.captions?.enabled !== false, style: config.captions?.style ?? "line", items: captions },
     narration,
     music,

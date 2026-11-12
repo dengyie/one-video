@@ -8,8 +8,9 @@ import { sceneLines } from "../lib/captions/index.mjs";
 import { writeMusic, synthSfx, SFX, MUSIC_PRESETS } from "../lib/audio/synth.mjs";
 import { writeWav } from "../lib/audio/wav.mjs";
 import { checkProject, printIssues } from "../lib/review/check.mjs";
-import { search, fetchAsset, scoreCandidate, assetFileExists, depthPath, depthStep, lumaPath, framesDir, countFrames } from "../lib/assets/index.mjs";
+import { search, fetchAsset, scoreCandidate, sceneQueries, sceneCandidates, candidateItems, assetFileExists, depthPath, depthStep, lumaPath, framesDir, countFrames } from "../lib/assets/index.mjs";
 import { run } from "../lib/core/ffmpeg.mjs";
+import { ask } from "../lib/llm/client.mjs";
 import { AUTO_TRANSITION_SFX, DIMENSIONS, MOTION_SFX, overlaySound, sfxFile, sfxVariants } from "../lib/timeline/index.mjs";
 import { categories, entryPath, loadCatalog, resolveSfx } from "../lib/library/catalog.mjs";
 import { spokenLength } from "../lib/core/text.mjs";
@@ -161,7 +162,42 @@ export async function assets(args) {
     if (failed) process.exitCode = 1;
     return;
   }
-  throw new UserError("usage: onevideo assets <search|fetch> …");
+  if (sub === "suggest") {
+    // Licensed candidates for every scene, before the storyboard: printed and kept in
+    // plan/asset-suggestions.json; --write adds them to plan/assets.json for assets fetch.
+    const script = readJson(paths.script);
+    const only = list(args.scene);
+    const scenes = script.scenes.filter((s) => !only.length || only.includes(s.id));
+    if (!scenes.length) throw new UserError(`no scene ${only.join(", ")} in plan/script.json`);
+    const per = Number(args.per ?? 3);
+    const research = readJson(paths.research, null);
+    const askFn = args.noLlm ? null : (o) => ask({ ...o, config });
+    const queries = await sceneQueries(scenes, { research, title: config.title, per, askFn });
+    if (queries._error) warn(`query model: ${queries._error}; using names from the script`);
+    const manifest = readJson(paths.assets, { items: [] });
+    const skip = new Set(manifest.items.map((x) => x.source).filter(Boolean));
+    const taken = new Set(manifest.items.map((x) => x.id));
+    const report = { at: new Date().toISOString(), scenes: [] };
+    for (const s of scenes) {
+      const q = queries[s.id];
+      if (!q?.length) { if (s.beat !== "credits") warn(`${s.id}: no query (add "search": [...] to the scene)`); continue; }
+      const cands = await sceneCandidates(q, { kind: args.kind ?? "image", providers: args.provider ? list(args.provider) : undefined, aspect: w / h, per, skip, onWarn: (m) => warn(`${s.id}: ${m}`) });
+      log(`\n${s.id}  ${q.map((x) => `"${x}"`).join(" · ")}`);
+      if (!cands.length) log("   (nothing licensed found; try other words in the scene's search)");
+      cands.forEach((c, i) => log(`${String(i).padStart(3)} ${c.provider.padEnd(9)} ${(c.license ?? "").padEnd(14)} ${c.width ?? "?"}x${c.height ?? "?"}  ${(c.title ?? "").slice(0, 56)}\n      ${c.source}${c.author ? ` · ${c.author.slice(0, 40)}` : ""}`));
+      const items = args.write ? await candidateItems(s.id, cands, { taken }) : [];
+      manifest.items.push(...items);
+      report.scenes.push({ id: s.id, queries: q, candidates: cands.map(({ preview: _p, ...c }) => c), ...(items.length ? { added: items.map((x) => x.id) } : {}) });
+    }
+    writeJson(project.p("plan/asset-suggestions.json"), report);
+    if (args.write) {
+      writeJson(paths.assets, manifest);
+      const added = report.scenes.flatMap((x) => x.added ?? []);
+      log(`\n${added.length} item(s) added to plan/assets.json; drop the ones you do not want, then: onevideo assets fetch`);
+    } else log("\n→ plan/asset-suggestions.json; add them with --write (or copy single ones into plan/assets.json)");
+    return;
+  }
+  throw new UserError("usage: onevideo assets <search|suggest|fetch> …");
 }
 
 // Real UI for a promo: open the page in our own headless Chrome at a device viewport, screenshot

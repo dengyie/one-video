@@ -3,6 +3,7 @@ import { validate, loadSchema } from "../core/schema.mjs";
 import { extractNumbers, parseNumber, spokenLength, normalizeForMatch } from "../core/text.mjs";
 import { timingHashes } from "../voice/tts.mjs";
 import { sceneLines } from "../captions/lines.mjs";
+import { captionBand } from "../captions/layout.mjs";
 export { captionGate } from "../captions/gate.mjs";
 
 export const STATIC_TYPES = new Set(["quote", "bullets", "title", "chapter", "sources"]);
@@ -274,6 +275,89 @@ export function echoGate(timeline, config) {
     if (!said) continue;
     const echoes = [...new Set(screenTexts([sc.props, sc.overlays, sc.header]))].filter((t) => { const n = normalizeForMatch(t); return n.length >= g.echoMinChars && said.includes(n); });
     for (const t of echoes.slice(0, 3)) out.push(issue("warn", "echo", `scene "${sc.id}": on-screen "${t}" repeats the narration verbatim — keep the screen to the key words (gates.echoMinChars ${g.echoMinChars})`));
+  }
+  return out;
+}
+
+// Layout, checked on the compiled timeline before anything is rendered: what a contact sheet
+// would otherwise catch only after a full render. Boxes are frame fractions; overlays ride with
+// the shot track, so the caption band is mapped into the scene's own coordinates at each moment.
+// - an overlay over a spoken caption (error): the caption is unreadable or the sticker is cut;
+// - an overlay partly out of frame, two stickers on top of each other, a sticker too small to read;
+// - a shot pushed in so far that left-aligned or wide text leaves the frame.
+const BOXED = new Set(["image", "icon", "lottie", "stamp"]);
+const LEFT_TEXT = (sc, portrait) => (sc.type === "kinetic" && sc.props?.align === "left") || sc.type === "bullets" || (sc.type === "chapter" && !portrait);
+const TEXT_TYPES = new Set([...STATIC_TYPES, "kinetic"]);
+export const LAYOUT_DEFAULTS = { minSticker: 240, maxTextZoom: 1.25 };
+
+function overlayBox(o, width, height) {
+  if (o.on || !BOXED.has(o.type) || (o.x === undefined && o.y === undefined)) return null;
+  const u = Math.min(width, height) / 1080;
+  const x = o.x ?? 0.5, y = o.y ?? 0.5;
+  // A stamp's box is its text at `size` px per character plus padding; the rest are size×size.
+  const w = (o.type === "stamp" ? ((o.size ?? 72) * [...(o.text ?? "")].length + 80) : (o.size ?? 160)) * u / width;
+  const h = (o.type === "stamp" ? (o.size ?? 72) * 1.5 : (o.size ?? 160)) * u / height;
+  // An image or icon label hangs under it.
+  const below = (o.type === "image" || o.type === "icon") && o.label ? 64 * u / height : 0;
+  return [x - w / 2, y - h / 2, x + w / 2, y + h / 2 + below];
+}
+const meets = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+
+export function layoutGate(timeline, config) {
+  const g = { ...LAYOUT_DEFAULTS, ...(config.gates ?? {}) };
+  const { width, height } = timeline;
+  const portrait = height >= width * 1.5;
+  const out = [];
+  const spoken = timeline.captions?.enabled !== false && timeline.captions?.style !== "none" ? timeline.captions.items ?? [] : [];
+  for (const sc of timeline.scenes) {
+    const placed = [];
+    for (const [i, o] of (sc.overlays ?? []).entries()) {
+      const box = overlayBox(o, width, height);
+      if (!box) continue;
+      const name = `scene "${sc.id}" overlay ${i} (${o.type}${o.asset ? ` ${o.asset}` : ""}${o.text ? ` "${o.text}"` : ""})`;
+      if (box[0] < -0.01 || box[1] < -0.01 || box[2] > 1.01 || box[3] > 1.01) out.push(issue("warn", "layout", `${name} runs off the frame at x ${o.x ?? 0.5}, y ${o.y ?? 0.5} — move it inward`));
+      if (o.type === "image" && (o.size ?? 160) < g.minSticker) out.push(issue("warn", "layout", `${name}: size ${o.size ?? 160} reads as a thumbnail — use ${g.minSticker}+ or make it a backdrop / photo-stack (gates.minSticker)`));
+      const hit = spoken.find((c) => c.scene === sc.id && !c.top && c.start - sc.start < o.end && o.t < c.end - sc.start && meets(box, captionBand(sc.shots, Math.max(o.t, c.start - sc.start), portrait)));
+      if (hit) out.push(issue("error", "layout", `${name} sits in the caption band while "${hit.text}" is spoken — move it above y ${portrait ? 0.7 : 0.8} or to a side`));
+      for (const p of placed) if (p.o.t < o.end && o.t < p.o.end && meets(p.box, box)) out.push(issue("warn", "layout", `${name} overlaps overlay ${p.i} (${p.o.type}) — space them out or stagger their times`));
+      placed.push({ i, o, box });
+    }
+    if (!TEXT_TYPES.has(sc.type)) continue;
+    for (const sh of sc.shots ?? []) {
+      const z = sh.zoom ?? 1;
+      if (z <= 1.02) continue;
+      const left = (sh.x ?? 0.5) - 0.5 / z;
+      if (LEFT_TEXT(sc, portrait) && left > 0.06) { out.push(issue("warn", "layout", `scene "${sc.id}" shot at ${sh.t}s (zoom ${z}) crops the left edge where its left-aligned text starts — centre the text (props.align) or keep the shot wider`)); break; }
+      if (z > g.maxTextZoom) { out.push(issue("warn", "layout", `scene "${sc.id}" shot at ${sh.t}s pushes text to zoom ${z} (max ${g.maxTextZoom}); wide lines leave the frame — check with onevideo stills (gates.maxTextZoom)`)); break; }
+    }
+  }
+  return out;
+}
+
+// Material density on the compiled timeline: distinct real assets (photos, footage, captures,
+// logos; generated ones do not count) per minute, and text-only scenes held with nothing to look at.
+// Charts, maps and timelines are their own evidence and are not flagged.
+export const DENSITY_DEFAULTS = { minAssetsPerMinute: 4, goodAssetsPerMinute: 8, bareTextMax: 6 };
+function assetRefs(v, out = new Set()) {
+  if (Array.isArray(v)) v.forEach((x) => assetRefs(x, out));
+  else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) (k === "asset" || k === "avatar" || k === "logo") && typeof x === "string" ? out.add(x) : assetRefs(x, out);
+  return out;
+}
+export function densityGate(timeline, assets, config) {
+  const g = { ...DENSITY_DEFAULTS, ...(config.gates ?? {}) };
+  if (!g.minAssetsPerMinute && !g.goodAssetsPerMinute) return [];
+  const generated = new Set((assets?.items ?? []).filter((a) => a.generate || normalizeLicense(a.license) === "generated").map((a) => a.id));
+  const real = (refs) => [...refs].filter((r) => !generated.has(r));
+  const out = [];
+  const minutes = Math.max(timeline.duration, 1) / 60;
+  const n = real(assetRefs(timeline.scenes)).length;
+  const rate = n / minutes;
+  const msg = `${n} real assets in ${Math.round(timeline.duration)}s (${rate.toFixed(1)}/min)`;
+  if (g.minAssetsPerMinute && rate < g.minAssetsPerMinute) out.push(issue("error", "density", `${msg}; min ${g.minAssetsPerMinute}/min — run onevideo assets suggest and put photos/footage behind the talk (gates.minAssetsPerMinute, 0 disables)`));
+  else if (g.goodAssetsPerMinute && rate < g.goodAssetsPerMinute) out.push(issue("warn", "density", `${msg}; ${g.goodAssetsPerMinute}/min reads as well-sourced — onevideo assets suggest finds more (gates.goodAssetsPerMinute)`));
+  for (const sc of timeline.scenes) {
+    if (!TEXT_TYPES.has(sc.type) || sc.type === "sources" || sc.duration <= g.bareTextMax) continue;
+    if (!real(assetRefs(sc)).length) out.push(issue("warn", "density", `scene "${sc.id}" is ${sc.duration.toFixed(1)}s of ${sc.type} text with no photo, footage or logo — add a backdrop, photo-stack or image overlay`));
   }
   return out;
 }

@@ -3,3 +3,4 @@
 export * from "./sources.mjs";
 export * from "./media.mjs";
 export * from "./fetch.mjs";
+export * from "./suggest.mjs";
