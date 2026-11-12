@@ -1,5 +1,5 @@
 import React from "react";
-import { colorAt, fitFont, useLayout, useRevealAt, useTheme, useTime } from "../engine/context";
+import { colorAt, fitFont, useLayout, useRevealAt, useScene, useTheme, useTime } from "../engine/context";
 import { fmtCount } from "../engine/format";
 import { clamp01, easeOut, lerp } from "../engine/motion";
 import type { Format } from "../engine/types";
@@ -13,7 +13,8 @@ type Event = { date: string; title: string; note?: string; highlight?: boolean; 
 
 export const TimelineScene: React.FC<{ title?: string; events: Event[] }> = ({ title, events }) => {
   const theme = useTheme();
-  const { u, portrait } = useLayout();
+  const { u, portrait, height, top, bottom, pad } = useLayout();
+  const scene = useScene();
   const at = useRevealAt();
   const t = useTime();
   const starts = events.map((e, i) => at(i, events.length, e.cue));
@@ -25,20 +26,25 @@ export const TimelineScene: React.FC<{ title?: string; events: Event[] }> = ({ t
     border: `${3 * u}px solid ${on ? theme.colors.bg : theme.colors.border}`, boxShadow: on && e.highlight ? `0 0 ${24 * u}px ${theme.colors.highlight}` : "none",
   });
   if (portrait) {
+    // 8–10 stacked events outgrow the Stage: shrink the rows (~95u each, ~40u more with a note,
+    // 40u apart, 10% slack for wrapped titles) until the list fits above the captions.
+    const room = height - (scene.header ? top + 20 * u : pad) - bottom - (title ? 72 * u : 0);
+    const need = events.reduce((h, e) => h + (95 + (e.note ? 40 : 0)) * u, 0) * 1.1 + Math.max(0, events.length - 1) * 40 * u;
+    const k = Math.min(1, room / need);
     return (
       <Stage center>
         <Title text={title} />
-        <div style={{ position: "relative", paddingLeft: 56 * u, display: "flex", flexDirection: "column", gap: 40 * u }}>
+        <div style={{ position: "relative", paddingLeft: 56 * u, display: "flex", flexDirection: "column", gap: 40 * u * k }}>
           <div style={{ position: "absolute", left: 14 * u, top: 10 * u, bottom: 10 * u, width: 4 * u, background: theme.colors.border }} />
           <div style={{ position: "absolute", left: 14 * u, top: 10 * u, height: `calc(${lineP * 100}% - ${20 * u * lineP}px)`, width: 4 * u, background: theme.colors.accent }} />
           {events.map((e, i) => {
             const o = easeOut((t - starts[i]) / 0.5);
             return (
               <div key={i} style={{ position: "relative", opacity: Math.max(0.2, o), transform: `translateX(${(1 - o) * 30 * u}px)` }}>
-                <div style={{ position: "absolute", left: -54 * u, top: 8 * u, ...dot(e, o > 0.5) }} />
-                <div style={{ fontFamily: theme.fonts.number, fontSize: 34 * u, fontWeight: 700, color: e.highlight ? theme.colors.highlight : theme.colors.accent }}>{e.date}</div>
-                <div style={{ fontSize: 42 * u, fontWeight: 700, marginTop: 4 * u }}>{e.title}</div>
-                {e.note && <div style={{ fontSize: 28 * u, color: theme.colors.muted, marginTop: 6 * u }}>{e.note}</div>}
+                <div style={{ position: "absolute", left: -54 * u, top: 8 * u * k, ...dot(e, o > 0.5) }} />
+                <div style={{ fontFamily: theme.fonts.number, fontSize: 34 * u * k, fontWeight: 700, color: e.highlight ? theme.colors.highlight : theme.colors.accent }}>{e.date}</div>
+                <div style={{ fontSize: 42 * u * k, fontWeight: 700, marginTop: 4 * u * k }}>{e.title}</div>
+                {e.note && <div style={{ fontSize: 28 * u * k, color: theme.colors.muted, marginTop: 6 * u * k }}>{e.note}</div>}
               </div>
             );
           })}

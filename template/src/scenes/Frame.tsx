@@ -48,6 +48,8 @@ export const FocusScene: React.FC<{ asset: string; regions: Region[]; hold?: num
   // Region rect in screen space after the camera transform.
   const sx = (x: number) => (x - cx) * width * z + width / 2;
   const sy = (y: number) => (y - cy) * height * z + height / 2;
+  // A long label wraps inside the frame (portrait is narrow); above the region it grows upward.
+  const lx = r ? Math.min(width - 520 * u, Math.max(40 * u, sx(r.x))) : 0;
   return (
     <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
       <div style={{ position: "absolute", inset: 0, transform: `translate(${tx}px, ${ty}px) scale(${z})` }}>
@@ -71,9 +73,10 @@ export const FocusScene: React.FC<{ asset: string; regions: Region[]; hold?: num
           </div>
           {r.label && (
             <div style={{
-              position: "absolute", left: Math.min(width - 520 * u, Math.max(40 * u, sx(r.x))), top: sy(r.y + r.h) + 18 * u > height - 220 * u ? sy(r.y) - 80 * u : sy(r.y + r.h) + 18 * u,
+              position: "absolute", left: lx, maxWidth: width - 40 * u - lx,
+              ...(sy(r.y + r.h) + 18 * u > height - 220 * u ? { bottom: height - sy(r.y) + 26 * u } : { top: sy(r.y + r.h) + 18 * u }),
               opacity: rp, transform: `translateY(${(1 - rp) * 14 * u}px)`, background: theme.colors.highlight, color: "#0b0f19",
-              fontSize: 32 * u, fontWeight: 800, padding: `${8 * u}px ${18 * u}px`, borderRadius: 6 * u, whiteSpace: "nowrap", textShadow: "none",
+              fontSize: 32 * u, fontWeight: 800, padding: `${8 * u}px ${18 * u}px`, borderRadius: 6 * u, textShadow: "none",
             }}>{r.label}</div>
           )}
         </>

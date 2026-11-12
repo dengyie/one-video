@@ -26,7 +26,11 @@ export const Captions: React.FC = () => {
   const { u, portrait } = useLayout();
   const t = frame / fps;
   const hidden = new Set(tl.scenes.filter((s) => !s.captions).map((s) => s.id));
-  const item = tl.captions.items.find((c) => t >= c.start - 0.05 && t < c.end + 0.25 && !hidden.has(c.scene));
+  // A line lingers 0.25 s past its end, but the line started most recently wins: a next line
+  // starting inside that linger must not be shadowed by the one before it.
+  const item = tl.captions.items
+    .filter((c) => t >= c.start - 0.05 && t < c.end + 0.25 && !hidden.has(c.scene))
+    .reduce<(typeof tl.captions.items)[number] | undefined>((m, c) => (!m || c.start >= m.start ? c : m), undefined);
   if (!item) return null;
   const { colors, captionBg } = tl.theme;
   const fadeIn = clamp01((t - (item.start - 0.05)) / 0.12);

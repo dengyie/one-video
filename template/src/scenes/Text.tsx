@@ -1,6 +1,7 @@
 import React from "react";
 import { fitFont, textEms, useLayout, useScene, useReveal, useRevealAt, useTheme, useTime } from "../engine/context";
 import { MediaFill } from "../components/Media";
+import { Icon } from "../components/Icon";
 import { Stage } from "./Stage";
 
 export const TitleScene: React.FC<{ kicker?: string; title: string; subtitle?: string; date?: string }> = ({ kicker, title, subtitle, date }) => {
@@ -139,7 +140,8 @@ export const BulletsScene: React.FC<{ title?: string; items: Bullet[] }> = ({ ti
                   color: active ? theme.colors.bg : theme.colors.text,
                 }}
               >
-                {b.icon ?? i + 1}
+                {/* `icon` is a Lucide name the compiler inlined, not text; without one the badge shows the item's number. */}
+                {b.icon ? <Icon name={b.icon} size={32 * u} color={active ? theme.colors.bg : theme.colors.text} /> : i + 1}
               </div>
               <div>
                 <div style={{ fontSize: (portrait ? 46 : 42) * u, fontWeight: 600, lineHeight: 1.3 }}>{b.text}</div>

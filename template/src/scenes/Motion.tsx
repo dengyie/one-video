@@ -1,7 +1,7 @@
 import React from "react";
 import { Img, staticFile } from "remotion";
 import { Highlight, Underline } from "@remotion/rough-notation";
-import { colorAt, cueOr, useLayout, useRevealAt, useScene, useTheme, useTime, useTimeline } from "../engine/context";
+import { colorAt, cueOr, textEms, useLayout, useRevealAt, useScene, useTheme, useTime, useTimeline } from "../engine/context";
 import { fmt, fmtCount } from "../engine/format";
 import { clamp01, easeInOut, easeOut, easeOutBack, lerp } from "../engine/motion";
 import type { Format } from "../engine/types";
@@ -73,6 +73,7 @@ export const KineticScene: React.FC<{ lines: KLine[]; align?: "left" | "center";
   const k = easeOut((t - 0.05) / 0.5);
   const nAt = number ? cueOr(scene, number.cue, at(lines.length, lines.length + 1)) : 0;
   const np = number ? easeOut((t - nAt) / 0.9) : 0;
+  // The count-up runs small, then slams to full size; easeOutBack's overshoot is the pop, so it settles without a jump.
   const slam = number ? easeOutBack(clamp01((t - nAt - 0.75) / 0.3)) : 0;
   return (
     <Stage center style={{ alignItems: align === "center" ? "center" : "flex-start", gap: 18 * u }}>
@@ -80,7 +81,7 @@ export const KineticScene: React.FC<{ lines: KLine[]; align?: "left" | "center";
       {lines.map((l, i) => <KineticLine key={i} line={l} at={at(i, lines.length + (number ? 1 : 0), l.cue)} align={align} />)}
       {number && (
         <div style={{ textAlign: align, opacity: clamp01((t - nAt) / 0.2) }}>
-          <div style={{ fontFamily: theme.fonts.number, fontSize: 190 * u, fontWeight: 900, lineHeight: 1, color: theme.colors.accent, transform: `scale(${1 + 0.08 * (1 - Math.abs(slam - 1) * 4) * (slam > 0.9 ? 0 : 1)})` }}>
+          <div style={{ fontFamily: theme.fonts.number, fontSize: 190 * u, fontWeight: 900, lineHeight: 1, color: theme.colors.accent, transform: `scale(${lerp(0.76, 1, slam)})` }}>
             {fmtCount(number.value * np, number.value, number.format)}
           </div>
           {number.label && <div style={{ fontSize: 34 * u, color: theme.colors.muted, marginTop: 10 * u }}>{number.label}</div>}
@@ -98,7 +99,7 @@ type HeadlineItem = { outlet: string; title: string; date?: string; excerpt?: st
 const HeadlineCard: React.FC<{ item: HeadlineItem; at: number; i: number; n: number }> = ({ item, at, i, n }) => {
   const theme = useTheme();
   const tl = useTimeline();
-  const { u, portrait } = useLayout();
+  const { u, portrait, width, pad } = useLayout();
   const t = useTime();
   const p = easeOut((t - at) / 0.55);
   const lineP = easeInOut((t - at - 0.25) / 0.7);
@@ -116,7 +117,8 @@ const HeadlineCard: React.FC<{ item: HeadlineItem; at: number; i: number; n: num
       {item.title.slice(idx + (item.highlight?.length ?? 0))}
     </>
   );
-  const w = portrait ? 900 : 1180;
+  // 1:1 and 4:5 are only 1080u wide: keep the card inside the side margins.
+  const w = Math.min(portrait ? 900 : 1180, (width - 2 * pad) / u);
   return (
     <div
       style={{
@@ -160,14 +162,19 @@ export const UnitGridScene: React.FC<{ title?: string; total?: number; columns?:
   title, total, columns, icon = "user-round", groups, note,
 }) => {
   const theme = useTheme();
-  const { u, portrait } = useLayout();
+  const { u, portrait, height, top, bottom, pad } = useLayout();
+  const scene = useScene();
   const at = useRevealAt();
   const t = useTime();
   const sum = groups.reduce((n, g) => n + g.count, 0);
   const N = Math.max(total ?? 100, sum);
-  const cols = columns ?? (N <= 20 ? N / 2 : N <= 50 ? 10 : portrait ? 10 : 20);
+  const cols = columns ?? (N <= 20 ? Math.ceil(N / 2) : N <= 50 ? 10 : portrait ? 10 : 20);
   const rows = Math.ceil(N / cols);
-  const cell = Math.min((portrait ? 900 : 1080) / cols, (portrait ? 900 : 560) / rows) * u;
+  // Portrait stacks the legend under the grid: the grid gets what the Stage has left after the
+  // title and an estimate of the legend (~129u a group, the note ~2 lines), so neither runs into the captions.
+  const stageH = height - (scene.header ? top + 20 * u : pad) - bottom - (title ? 72 * u : 0);
+  const legendH = groups.length * 129 * u + Math.max(0, groups.length - 1) * 26 * u + (note ? 92 * u : 0);
+  const cell = Math.min(((portrait ? 900 : 1080) / cols) * u, ((portrait ? 900 : 560) / rows) * u, portrait ? Math.max(8 * u, (stageH - legendH - 60 * u) / rows) : Infinity);
   const owner: { g: number; k: number }[] = [];
   groups.forEach((g, gi) => { for (let k = 0; k < g.count; k++) owner.push({ g: gi, k }); });
   const starts = groups.map((g, i) => at(i, groups.length, g.cue));
@@ -215,14 +222,22 @@ type ScaleItem = { label: string; value: number; format?: Format; color?: string
 
 export const ScaleCompareScene: React.FC<{ title?: string; items: ScaleItem[]; shape?: "circle" | "square" }> = ({ title, items, shape = "circle" }) => {
   const theme = useTheme();
-  const { u, width, height, portrait, pad } = useLayout();
+  const { u, width, height, portrait, narrow, pad } = useLayout();
   const at = useRevealAt();
   const t = useTime();
   const sorted = [...items].sort((a, b) => a.value - b.value);
-  const R = sorted.map((it) => Math.sqrt(Math.max(1e-12, it.value / sorted[sorted.length - 1].value)));
+  // Guarded so an all-zero list gives tiny circles rather than NaN radii.
+  const R = sorted.map((it) => Math.sqrt(Math.max(1e-12, it.value / Math.max(1e-12, sorted[sorted.length - 1].value))));
   const starts = sorted.map((it, i) => at(i, sorted.length, it.cue));
+  // Narrow frames (9:16, 1:1, 4:5) have no spare width beside a 0.33-short-edge circle: the label
+  // column takes ~42% of the content width and the circle gets what is left, flush with the margin.
+  const gap = (narrow ? 80 : 120) * u;
+  const colW = narrow ? (width - 2 * pad) * 0.42 : width - pad - (width * 0.4 + Math.min(width, height) * 0.33 + gap);
   // Zoom so the newest item fills ~70% of the short edge; interpolate in log space between steps.
-  const frameR = Math.min(width, height) * 0.33;
+  const frameR = Math.min(Math.min(width, height) * 0.33, narrow ? (width - 2 * pad - colW - gap) / 2 : Infinity);
+  const cx = narrow ? pad + frameR : width * 0.4;
+  // One label scale for every row, small enough that the widest stays inside the column.
+  const labelK = Math.min(1, ...sorted.map((it) => colW / Math.max(textEms(fmt(it.value, it.format)) * 60 * u, textEms(it.label + (it.note ? ` · ${it.note}` : "")) * 30 * u, 1)));
   let logZ = Math.log(frameR / Math.max(1e-6, R[0]));
   for (let i = 1; i < sorted.length; i++) {
     const p = easeInOut((t - starts[i] + 0.2) / 1.1);
@@ -237,12 +252,11 @@ export const ScaleCompareScene: React.FC<{ title?: string; items: ScaleItem[]; s
         const r = R[i] * z;
         const o = easeOut((t - starts[i]) / 0.5);
         const color = it.color ?? colorAt(theme, i);
-        const cx = width * (portrait ? 0.42 : 0.4);
         // Labels sit in a column right of the biggest circle (largest on top), joined to their
         // circle's upper-right edge by a leader line, so nested circles never collide.
         const labelO = o * clamp01(1.6 - Math.abs(Math.log(r / frameR)) / 4);
         const ex = cx + r * Math.SQRT1_2, ey = baseY - r - r * Math.SQRT1_2;
-        const colX = portrait ? width - pad - 260 * u : cx + frameR + 120 * u;
+        const colX = cx + frameR + gap;
         const rows = sorted.length;
         const colY = height * (portrait ? 0.2 : 0.24) + ((rows - 1 - i) * (baseY - height * 0.3)) / Math.max(1, rows - 1) * 0.85;
         return (
@@ -257,14 +271,15 @@ export const ScaleCompareScene: React.FC<{ title?: string; items: ScaleItem[]; s
               <circle cx={ex} cy={ey} r={5 * u} fill={color} />
             </svg>
             <div style={{ position: "absolute", left: colX, top: colY, opacity: labelO, whiteSpace: "nowrap", transform: `translateX(${(1 - labelO) * 20 * u}px)` }}>
-              <div style={{ fontFamily: theme.fonts.number, fontSize: 60 * u, fontWeight: 900, color, lineHeight: 1.1 }}>{fmt(it.value, it.format)}</div>
-              <div style={{ fontSize: 30 * u, color: theme.colors.text }}>{it.label}{it.note ? <span style={{ color: theme.colors.muted }}> · {it.note}</span> : null}</div>
+              <div style={{ fontFamily: theme.fonts.number, fontSize: 60 * u * labelK, fontWeight: 900, color, lineHeight: 1.1 }}>{fmt(it.value, it.format)}</div>
+              <div style={{ fontSize: 30 * u * labelK, color: theme.colors.text }}>{it.label}{it.note ? <span style={{ color: theme.colors.muted }}> · {it.note}</span> : null}</div>
             </div>
           </React.Fragment>
         );
       })}
       <div style={{ position: "absolute", left: 0, right: 0, top: baseY, height: 2 * u, background: theme.colors.border }} />
-      {sorted.length > 1 && (
+      {/* No ratio against a zero: it would read ×Infinity. */}
+      {sorted.length > 1 && sorted[0].value > 0 && (
         <div style={{ position: "absolute", right: 96 * u, top: baseY + 24 * u, fontSize: 30 * u, color: theme.colors.muted, fontFamily: theme.fonts.number, opacity: easeOut((t - starts[sorted.length - 1] - 0.8) / 0.5) }}>
           ×{fmt(sorted[sorted.length - 1].value / sorted[0].value, { compact: "zh" })}
         </div>
@@ -312,6 +327,11 @@ export const PriceChartScene: React.FC<{
   const color = up ? theme.colors.positive : theme.colors.negative;
   const [hx, hy] = visible[visible.length - 1];
   const axisO = easeOut((t - 0.1) / 0.5);
+  // The change since the first close; none from a zero base (it would read Infinity%).
+  const delta = closes[0] ? `${up ? "▲" : "▼"}${fmt(Math.abs((cur / closes[0] - 1) * 100), { decimals: 1, suffix: "%" })}` : "";
+  // Near the right edge the live label would run off the frame: right-align it above the pen instead.
+  const liveW = textEms(fmt(cur, format)) * 44 * u + (delta ? 10 * u + textEms(delta) * 26 * u : 0);
+  const livePos = hx + 22 * u + liveW > width - pad ? { right: width - hx, top: hy - 100 * u } : { left: hx + 22 * u, top: hy - 34 * u };
   return (
     <div style={{ position: "absolute", inset: 0 }}>
       {!scene.header && <Stage><Title text={title} /></Stage>}
@@ -377,9 +397,9 @@ export const PriceChartScene: React.FC<{
         )}
       </svg>
       {t >= d0 && (
-        <div style={{ position: "absolute", left: Math.min(hx + 22 * u, width - 260 * u), top: hy - 34 * u, fontFamily: theme.fonts.number, fontSize: 44 * u, fontWeight: 800, color, whiteSpace: "nowrap" }}>
+        <div style={{ position: "absolute", ...livePos, fontFamily: theme.fonts.number, fontSize: 44 * u, fontWeight: 800, color, whiteSpace: "nowrap" }}>
           {fmt(cur, format)}
-          <span style={{ fontSize: 26 * u, marginLeft: 10 * u }}>{up ? "▲" : "▼"}{fmt(Math.abs((cur / closes[0] - 1) * 100), { decimals: 1, suffix: "%" })}</span>
+          {delta && <span style={{ fontSize: 26 * u, marginLeft: 10 * u }}>{delta}</span>}
         </div>
       )}
       {label && <div style={{ position: "absolute", right: width - R, top: T - 50 * u, fontSize: 26 * u, color: theme.colors.muted, opacity: axisO }}>{label}</div>}

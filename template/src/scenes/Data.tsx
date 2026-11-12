@@ -12,11 +12,17 @@ const COUNT = 0.8;
 
 // Round axis ticks (1/2/2.5/5 × 10^n) covering [lo, hi].
 export function niceTicks(lo: number, hi: number, target = 4): number[] {
+  // A flat (or inverted) range has no step to find: open it up around the value.
+  if (!(hi > lo)) {
+    const v = Number.isFinite(lo) ? lo : 0, d = Math.max(1, Math.abs(v) * 0.1);
+    lo = v - d; hi = v + d;
+  }
   const raw = (hi - lo) / Math.max(1, target);
   const mag = Math.pow(10, Math.floor(Math.log10(Math.max(1e-12, raw))));
   const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag;
   const out: number[] = [];
-  for (let v = Math.floor(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(Math.round(v / step) * step);
+  // Bounded: at large magnitudes a tiny step can stop advancing v in floating point.
+  for (let v = Math.floor(lo / step) * step, k = 0; v <= hi + step * 1e-9 && k < 100; v += step, k++) out.push(Math.round(v / step) * step);
   if (out[out.length - 1] < hi) out.push(out[out.length - 1] + step);
   return out;
 }
@@ -67,7 +73,8 @@ export const BarCompareScene: React.FC<{ title?: string; unit?: string; format?:
   const at = useRevealAt();
   const t = useTime();
   const rows = sort === "none" ? items : [...items].sort((a, b) => (sort === "desc" ? b.value - a.value : a.value - b.value));
-  const top = max ?? Math.max(...items.map((x) => Math.abs(x.value)));
+  // All-zero items (or max: 0) must not divide by zero: every bar then stays a sliver.
+  const top = Math.max(1e-9, max ?? Math.max(...items.map((x) => Math.abs(x.value))));
   const anyHi = items.some((x) => x.highlight);
   const rowH = Math.min(portrait ? 110 : 90, (portrait ? 1100 : 640) / rows.length) * u;
   const labelW = (portrait ? 260 : 320) * u;
@@ -259,7 +266,9 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
   const allX = series.flatMap((s) => s.points.map((p) => xVal(p[0])));
   const allY = series.flatMap((s) => s.points.map((p) => Number(p[1])));
   const x0 = Math.min(...allX), x1 = Math.max(...allX);
-  const tickVals = niceTicks(yMin ?? Math.min(0, ...allY), yMax ?? Math.max(...allY) * 1.05);
+  // Headroom above the top value, upward whatever its sign (×1.05 would pull a negative max down).
+  const yTop = Math.max(...allY);
+  const tickVals = niceTicks(yMin ?? Math.min(0, ...allY), yMax ?? yTop + Math.abs(yTop) * 0.05);
   const lo = yMin ?? tickVals[0], hi = yMax ?? tickVals[tickVals.length - 1];
   const W = width - pad * 2 - 120 * u;
   const H = height - (scene.header ? topY + 20 * u : pad) - bottom - (title ? 80 : 20) * u - 70 * u;
@@ -364,7 +373,7 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
           })}
           {annotations.map((a, k) => {
             const s = series[a.series ?? 0];
-            const pt = s.points.find((p) => String(p[0]) === String(a.x));
+            const pt = s?.points.find((p) => String(p[0]) === String(a.x));
             if (!pt) return null;
             const at = cueOr(scene, a.cue, drawStart + 1 + k * 0.8);
             const o = easeOut((t - at) / 0.5);
@@ -397,8 +406,11 @@ export const ShareScene: React.FC<{ title?: string; unit?: string; format?: Form
   // One precision for the whole chart: a decimal only when some slice is under 10%.
   const pctDecimals = segments.some((x) => x.value / total < 0.1) ? 1 : 0;
   const pct = (v: number) => `${((v / total) * 100).toFixed(pctDecimals)}%`;
-  // Narrow frames stack the legend under the ring; a square one has to shrink the ring to fit it.
-  const R = portrait ? 320 * u : narrow ? Math.min(300 * u, (height - top - bottom - (180 + (segments.length + (totalRow ? 1.4 : 0)) * 66) * u) / 2) : 300 * u, r = R * 0.62;
+  // Narrow frames stack the legend under the ring; a square one has to shrink the ring to fit it,
+  // down to a readable minimum, after which the legend rows shrink instead (k scales them).
+  const legendRows = (segments.length + (totalRow ? 1.4 : 0)) * 66 * u, room = height - top - bottom - 180 * u;
+  const R = portrait ? 320 * u : narrow ? Math.max(140 * u, Math.min(300 * u, (room - legendRows) / 2)) : 300 * u, r = R * 0.62;
+  const k = narrow && !portrait ? Math.max(0.5, Math.min(1, (room - 2 * R) / legendRows)) : 1;
   // The whole ring sweeps in (faint) as the scene opens, alongside the faint legend, so a first cue
   // seconds in doesn't leave the chart empty; each slice then lights up (and its legend row) on its own cue.
   const first = Math.min(...segments.map((s, i) => at(i, segments.length, s.cue)), ...(totalRow?.cue && scene.cues[totalRow.cue] !== undefined ? [scene.cues[totalRow.cue]] : []));
@@ -413,6 +425,8 @@ export const ShareScene: React.FC<{ title?: string; unit?: string; format?: Form
   });
   const arc = (a0: number, a1: number) => {
     if (a1 - a0 < 1e-4) return "";
+    // A full turn has start == end, which an SVG arc draws as nothing: two half-rings instead.
+    if (a1 - a0 > Math.PI * 2 - 1e-4) return `M0,${-R} A${R},${R} 0 1 1 0,${R} A${R},${R} 0 1 1 0,${-R} M0,${-r} A${r},${r} 0 1 0 0,${r} A${r},${r} 0 1 0 0,${-r} Z`;
     const pt = (rad: number, a: number) => [rad * Math.sin(a), -rad * Math.cos(a)];
     const big = a1 - a0 > Math.PI ? 1 : 0;
     const [x0, y0] = pt(R, a0), [x1, y1] = pt(R, a1), [x2, y2] = pt(r, a1), [x3, y3] = pt(r, a0);
@@ -434,19 +448,19 @@ export const ShareScene: React.FC<{ title?: string; unit?: string; format?: Form
           </text>
           {showLabel && <text x={0} y={40 * u} textAnchor="middle" fontSize={26 * u} fill={theme.colors.muted} opacity={lead.p}>{lead.s.label}</text>}
         </svg>
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 * u, minWidth: 420 * u }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 * u * k, minWidth: 420 * u }}>
           {totalRow && (
-            <div data-anchor="total" style={{ display: "flex", alignItems: "baseline", gap: 18 * u, paddingBottom: 14 * u, borderBottom: `${2 * u}px solid ${theme.colors.muted}`, opacity: totalP, transform: `translateY(${(1 - totalP) * 12 * u}px)` }}>
-              <div style={{ flex: 1, fontSize: 34 * u, color: theme.colors.muted }}>{totalRow.label ?? "合计"}</div>
-              <div style={{ fontFamily: theme.fonts.number, fontSize: 64 * u, fontWeight: 800 }}>{fmt(total, format)}{unit ? ` ${unit}` : ""}</div>
+            <div data-anchor="total" style={{ display: "flex", alignItems: "baseline", gap: 18 * u, paddingBottom: 14 * u * k, borderBottom: `${2 * u}px solid ${theme.colors.muted}`, opacity: totalP, transform: `translateY(${(1 - totalP) * 12 * u}px)` }}>
+              <div style={{ flex: 1, fontSize: 34 * u * k, color: theme.colors.muted }}>{totalRow.label ?? "合计"}</div>
+              <div style={{ fontFamily: theme.fonts.number, fontSize: 64 * u * k, fontWeight: 800 }}>{fmt(total, format)}{unit ? ` ${unit}` : ""}</div>
             </div>
           )}
           {arcs.map((a) => (
             <div key={a.s.label} data-anchor={[`seg${a.i + 1}`, a.s.cue].filter(Boolean).join(" ")} style={{ display: "flex", alignItems: "center", gap: 18 * u, opacity: Math.max(0.3, a.p), transform: `translateX(${(1 - a.p) * 12 * u}px)` }}>
-              <div style={{ width: 26 * u, height: 26 * u, borderRadius: 6 * u, background: a.color }} />
-              <div style={{ flex: 1, fontSize: 38 * u }}>{a.s.label}</div>
-              <div style={{ fontFamily: theme.fonts.number, fontSize: 40 * u, fontWeight: 700 }}>{pct(a.s.value)}</div>
-              <div style={{ fontFamily: theme.fonts.number, fontSize: 28 * u, color: theme.colors.muted, minWidth: 160 * u, textAlign: "right" }}>
+              <div style={{ width: 26 * u * k, height: 26 * u * k, borderRadius: 6 * u, background: a.color }} />
+              <div style={{ flex: 1, fontSize: 38 * u * k }}>{a.s.label}</div>
+              <div style={{ fontFamily: theme.fonts.number, fontSize: 40 * u * k, fontWeight: 700 }}>{pct(a.s.value)}</div>
+              <div style={{ fontFamily: theme.fonts.number, fontSize: 28 * u * k, color: theme.colors.muted, minWidth: 160 * u, textAlign: "right" }}>
                 {fmt(a.s.value, format)}{unit ? ` ${unit}` : ""}
               </div>
             </div>
