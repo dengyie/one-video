@@ -24,7 +24,9 @@ export function latinTerms(text, max = 3) {
   return [...seen].slice(0, max);
 }
 
-// scene id → queries. Scenes with `search` keep theirs; the rest go to the model in one call.
+// scene id → queries. Scenes with `search` keep theirs; the rest go to the model in one call, with
+// room for every scene (a reply cut short parses as a partial object), and the scenes a reply left
+// out are asked once more on their own before falling back to the names in the script.
 export async function sceneQueries(scenes, { research, title, per = 3, askFn }) {
   const out = {};
   const open = [];
@@ -35,9 +37,14 @@ export async function sceneQueries(scenes, { research, title, per = 3, askFn }) 
   }
   if (!open.length) return out;
   let data = {};
+  const askFor = async (list) => {
+    try { Object.assign(data, (await askFn({ prompt: suggestAssetsPrompt({ title, scenes: list, per }), json: true, maxTokens: Math.max(3000, 400 * list.length) })).data ?? {}); }
+    catch (e) { data._error = e.message; }
+  };
   if (askFn) {
-    try { data = (await askFn({ prompt: suggestAssetsPrompt({ title, scenes: open, per }), json: true, maxTokens: 1500 })).data ?? {}; }
-    catch (e) { data = { _error: e.message }; }
+    await askFor(open);
+    const missing = open.filter((s) => !Array.isArray(data[s.id]) || !data[s.id].length);
+    if (missing.length && missing.length < open.length) await askFor(missing);
   }
   for (const s of open) {
     const q = Array.isArray(data[s.id]) ? data[s.id].filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim()) : [];

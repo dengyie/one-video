@@ -184,7 +184,7 @@ export async function assets(args) {
       const cands = await sceneCandidates(q, { kind: args.kind ?? "both", providers: args.provider ? list(args.provider) : undefined, aspect: w / h, per, skip, onWarn: (m) => warn(`${s.id}: ${m}`) });
       log(`\n${s.id}  ${q.map((x) => `"${x}"`).join(" · ")}`);
       if (!cands.length) log("   (nothing licensed found; try other words in the scene's search)");
-      cands.forEach((c, i) => log(`${String(i).padStart(3)} ${c.provider.padEnd(9)} ${(c.license ?? "").padEnd(14)} ${c.width ?? "?"}x${c.height ?? "?"}  ${(c.title ?? "").slice(0, 56)}\n      ${c.source}${c.author ? ` · ${c.author.slice(0, 40)}` : ""}`));
+      cands.forEach((c, i) => log(`${String(i).padStart(3)} ${c.kind === "video" ? "clip " : "photo"} ${c.provider.padEnd(9)} ${(c.license ?? "").padEnd(14)} ${c.width ?? "?"}x${c.height ?? "?"}${c.duration ? ` ${Math.round(c.duration)}s` : ""}  ${(c.title ?? "").slice(0, 56)}\n      ${c.source}${c.author ? ` · ${c.author.slice(0, 40)}` : ""}`));
       const items = args.write ? await candidateItems(s.id, cands, { taken }) : [];
       // Nothing licensed: an AI still stands in (--no-generate leaves the scene empty).
       if (args.write && !items.length && !args.noGenerate) {

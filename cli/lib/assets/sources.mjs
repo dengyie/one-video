@@ -144,16 +144,25 @@ export function scoreCandidate(c, targetAspect = 16 / 9) {
   return s;
 }
 
+// Providers whose CDN answered with a bot challenge: skipped for the rest of this process, so one
+// blocked archive does not cost a request and a warning for every query.
+const blocked = new Set();
+const challenged = (msg) => /\b403\b/.test(msg) && /just a moment|cloudflare|cf-chl|attention required/i.test(msg);
+
 export async function search(query, { providers = DEFAULT_PROVIDER_ORDER, kind = "image", limit = 12 } = {}) {
   const results = [];
   const errors = [];
   for (const name of providers) {
     const fn = PROVIDERS[name];
     if (!fn) { errors.push(`unknown provider "${name}"`); continue; }
+    if (blocked.has(name)) continue;
     try {
       results.push(...(await fn(query, { limit, kind })));
     } catch (e) {
-      errors.push(`${name}: ${e.message}`);
+      if (challenged(e.message)) {
+        blocked.add(name);
+        errors.push(`${name}: blocked by its CDN (403 bot challenge) from this machine; skipped for the rest of this run`);
+      } else errors.push(`${name}: ${e.message.replace(/<[^>]*>[\s\S]*/, "").trim().slice(0, 200)}`);
     }
   }
   return { results, errors };

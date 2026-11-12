@@ -17,7 +17,7 @@ test("sceneBrief joins what is said, the visual intent and the cited facts; lati
 test("sceneQueries: the script's own search wins, the model fills the rest, names when it fails", async () => {
   const scenes = [{ id: "a", search: ["Santa Clara campus"] }, { id: "b", narration: "NVIDIA 的 H100" }, { id: "c", narration: "OpenAI 的订单" }, { id: "z", beat: "credits" }];
   let prompt = "";
-  const askFn = async (o) => { prompt = o.prompt; return { data: { b: ["NVIDIA H100 GPU", "data center racks"], c: [] } }; };
+  const askFn = async (o) => { prompt ||= o.prompt; return { data: { b: ["NVIDIA H100 GPU", "data center racks"], c: [] } }; };
   const q = await sceneQueries(scenes, { research, per: 2, askFn });
   assert.deepEqual(q.a, ["Santa Clara campus"]);
   assert.deepEqual(q.b, ["NVIDIA H100 GPU", "data center racks"]);
@@ -98,4 +98,17 @@ test("generatedItem: an AI still from the visual intent, the first query kept as
   assert.equal(g.query, "data center");
   assert.ok(taken.has("hook-2"));
   assert.equal(generatedItem({ id: "z" }, [], {}), null);
+});
+
+test("sceneQueries asks again for the scenes a cut-short reply left out", async () => {
+  const scenes = ["a", "b", "c"].map((id) => ({ id, narration: `场景 ${id}` }));
+  const asked = [];
+  const askFn = async (o) => {
+    const ids = [...o.prompt.matchAll(/\[(\w)\]/g)].map((m) => m[1]);
+    asked.push([ids.join(""), o.maxTokens]);
+    return { data: asked.length === 1 ? { a: ["qa"], truncated: true } : Object.fromEntries(ids.map((id) => [id, [`q${id}`]])) };
+  };
+  const q = await sceneQueries(scenes, { askFn });
+  assert.deepEqual([q.a, q.b, q.c], [["qa"], ["qb"], ["qc"]]);
+  assert.deepEqual(asked, [["abc", 3000], ["bc", 3000]]);
 });
