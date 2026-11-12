@@ -334,9 +334,9 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
                 {pts.map(([x, y], k) => {
                   // Cued, the start point waits half-lit until its value is spoken.
                   const o = pointT && k === 0 ? (reached >= 0 ? 1 : 0.5) : clamp01(((pointT ? pos : drawP * (pts.length - 1)) - k + 0.15) / 0.3);
-                  // Cued, the points still ahead wait as faint markers, so the axes show where the line is going
-                  // instead of sitting empty until the narration gets there; their values stay hidden.
-                  const ghost = pointT ? 0.3 : 0;
+                  // Cued, the points still ahead wait as faint markers on a dashed preview of the path, so the axes
+                  // show where the line is going instead of sitting empty until the narration gets there; their values stay hidden.
+                  const ghost = pointT ? 0.45 : 0;
                   if (o <= 0 && !ghost) return null;
                   return (
                     <g key={k}>
@@ -348,6 +348,7 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
                     </g>
                   );
                 })}
+                {pointT && <path d={d} fill="none" stroke={color} strokeWidth={3 * u} strokeDasharray={`${6 * u} ${10 * u}`} strokeLinecap="round" opacity={0.3} />}
                 {shown.length > 1 && <path d={`${area} L${shown[shown.length - 1][0].toFixed(1)},${H} L${pts[0][0]},${H} Z`} fill={color} opacity={0.08} />}
                 {/* The gap is twice the path so the next dash's round cap never shows as a dot at the far end. */}
                 <path d={d} fill="none" stroke={color} strokeWidth={5 * u} strokeLinejoin="round" strokeLinecap="round" strokeDasharray={`${len} ${len * 2}`} strokeDashoffset={len * (1 - drawn)} opacity={drawn > 0 ? 1 : 0} />
