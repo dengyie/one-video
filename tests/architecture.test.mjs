@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { ROOT } from "./helpers.mjs";
-import { inspectClipPrompt, lookPrompt, pickTakePrompt } from "../cli/lib/prompts/index.mjs";
+import { inspectClipPrompt, lookPrompt, pickTakePrompt, sceneLine } from "../cli/lib/prompts/index.mjs";
 
 const LIB = join(ROOT, "cli", "lib");
 // Domain → domains it may import (see references/architecture.md). assets ↔ generate is allowed
@@ -44,5 +44,9 @@ test("prompt builders are pure and fill every field", () => {
   const look = lookPrompt({ sheet: { cells: 24, t0: 10, step: 1 }, scenes: "- a (title) 0.0–3.0s: ", focus: "captions" });
   assert.match(look, /cell i shows t = 10\.5s \+ i×1s\./);
   assert.match(look, /Pay extra attention to: captions\./);
+  assert.match(look, /within ~1s after the cell/);
+  const line = sceneLine({ id: "v", type: "line-chart", start: 39.333, duration: 18, lines: [{ start: 2.25, text: "约3500亿" }], cues: { draw: 0.6, a: 8.122, b: 8.122, c: 0, d: null } });
+  assert.equal(line, "- v (line-chart) 39.3–57.3s: [41.6s] 约3500亿 · reveals at 39.9, 47.5s");
+  assert.doesNotMatch(sceneLine({ id: "t", type: "title", start: 0, duration: 3, lines: [] }), /reveals/);
   for (const s of [pick, ins, look]) assert.doesNotMatch(s, /undefined|\$\{/);
 });
