@@ -3,7 +3,7 @@ import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { request, requireApiKey } from "../core/http.mjs";
 import { clipFrames, cutClip, framesDir } from "../assets/media.mjs";
-import { VIDEO_DEFAULTS, firstModel, genConfig, jpegPart, sleep } from "./common.mjs";
+import { VIDEO_ASPECT, VIDEO_DEFAULTS, firstModel, genConfig, jpegPart, sleep } from "./common.mjs";
 import { inspectClip } from "./inspect.mjs";
 
 // Text- or image-to-video through the relay's /videos task API: submit, poll, download, then the
@@ -20,7 +20,7 @@ export async function generateVideo(item, { publicDir, defaults = {}, aspect = "
     image = { url: (await jpegPart(join(publicDir, src.file), 1280)).image_url.url };
   }
   const t = await firstModel(cfg, `video "${item.id}"`, async (model) => {
-    const json = { model, prompt: cfg.prompt, duration: Math.round(cfg.duration), aspect_ratio: aspect, resolution: cfg.resolution, ...(image ? { image } : {}) };
+    const json = { model, prompt: cfg.prompt, duration: Math.round(cfg.duration), aspect_ratio: VIDEO_ASPECT[aspect] ?? aspect, resolution: cfg.resolution, ...(image ? { image } : {}) };
     const sub = JSON.parse((await request(`${base}/videos`, { method: "POST", key, json, timeoutSec: 120, retries: 1 })).body.toString());
     if (!sub.id) throw new Error(`no task id: ${JSON.stringify(sub).slice(0, 200)}`);
     const deadline = Date.now() + cfg.timeoutSec * 1000;

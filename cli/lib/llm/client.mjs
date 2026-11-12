@@ -17,13 +17,19 @@ export function imagePart(src, mime) {
   return { type: "image_url", image_url: { url: `data:${type};base64,${buf.toString("base64")}` } };
 }
 
-// The first JSON object or array in a reply, tolerating ```json fences and surrounding prose. With
-// `partial`, a reply cut off mid-way (relays cap output, reasoning tokens included) is closed after
-// its last complete element instead of rejected; the result then carries a `truncated` marker.
+// The JSON object or array in a reply: a ```json block when there is one, else the longest value that
+// parses, so prose before it ("cells [3] and [4]: {…}") is not taken for the answer. With `partial`,
+// a reply cut off mid-way (relays cap output, reasoning tokens included) is closed after its last
+// complete element instead of rejected; the result then carries a `truncated` marker.
 export function parseJsonReply(text, { partial = false } = {}) {
-  const s = String(text ?? "").replace(/```(?:json)?/gi, "");
-  const start = s.search(/[[{]/);
-  if (start < 0) throw new Error(`no JSON in reply: ${s.slice(0, 120)}`);
+  const raw = String(text ?? "");
+  const fenced = /```json\s*([\s\S]*?)(?:```|$)/i.exec(raw)?.[1];
+  if (fenced) try { return findJson(fenced, partial); } catch { /* fall through to the whole reply */ }
+  return findJson(raw.replace(/```(?:json)?/gi, ""), partial);
+}
+
+// Where the value opening at `start` closes ({ end }), or how to close it after its last complete element ({ cut }).
+function scanJson(s, start) {
   const stack = [];
   let inStr = false, cut = null;
   for (let i = start; i < s.length; i++) {
@@ -33,12 +39,36 @@ export function parseJsonReply(text, { partial = false } = {}) {
     else if (c === "{" || c === "[") stack.push(c === "{" ? "}" : "]");
     else if (c === "}" || c === "]") {
       stack.pop();
-      if (!stack.length) return JSON.parse(s.slice(start, i + 1));
+      if (!stack.length) return { end: i + 1 };
       cut = { at: i + 1, close: stack.slice().reverse().join("") };
     }
   }
-  if (partial && cut) return Object.assign(JSON.parse(s.slice(start, cut.at) + cut.close), { truncated: true });
-  throw new Error(`unterminated JSON in reply (${s.length - start} chars): ${s.slice(start, start + 120).replace(/\s+/g, " ")}`);
+  return { cut };
+}
+
+function findJson(s, partial) {
+  let best = null, open = -1, bad = null;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] !== "{" && s[i] !== "[") continue;
+    const { end, cut } = scanJson(s, i);
+    try {
+      if (end) {
+        const value = JSON.parse(s.slice(i, end));
+        if (!best || end - i > best.len) best = { value, len: end - i };
+        i = end - 1; // values inside this one are shorter
+      } else {
+        if (open < 0) open = i;
+        if (partial && cut && (!best || cut.at - i > best.len)) {
+          best = { value: Object.assign(JSON.parse(s.slice(i, cut.at) + cut.close), { truncated: true }), len: cut.at - i };
+          break; // anything opening later is inside this value, so shorter
+        }
+      }
+    } catch (e) { bad ??= e; }
+  }
+  if (best) return best.value;
+  if (open >= 0) throw new Error(`unterminated JSON in reply (${s.length - open} chars): ${s.slice(open, open + 120).replace(/\s+/g, " ")}`);
+  if (bad) throw bad;
+  throw new Error(`no JSON in reply: ${s.slice(0, 120)}`);
 }
 
 // A broken relay channel can answer every request with the same canned line ("task ready", "ok")

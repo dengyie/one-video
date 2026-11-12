@@ -15,6 +15,13 @@ test("frameRange: scenes, seconds, or nothing", () => {
   assert.equal(frameRange(TL, {}), null);
   assert.throws(() => frameRange(TL, { scenes: "a,zz" }), /unknown scene\(s\): zz/);
   assert.throws(() => frameRange(TL, { from: 5, to: 5 }), /empty range/);
+  assert.deepEqual(frameRange(TL, { frames: "60-119" }), [60, 119]);
+  assert.deepEqual(frameRange(TL, { frames: "0-9999" }), [0, 299]);
+  assert.throws(() => frameRange(TL, { frames: "90" }), /--frames takes/);
+  assert.throws(() => frameRange(TL, { frames: "200-100" }), /empty range/);
+  // A bare --from parses as true, not as 0.
+  assert.throws(() => frameRange(TL, { from: true }), /--from takes seconds/);
+  assert.throws(() => frameRange(TL, { to: "soon" }), /--to takes seconds/);
 });
 
 function project() {
@@ -80,4 +87,16 @@ test("adoptLegacy: an unversioned render becomes v1 instead of being overwritten
   assert.equal(adoptLegacy(p, alias), null);
   assert.equal(adoptLegacy(p, join(p.paths.out, "missing.mp4")), null);
   assert.deepEqual(readRenders(p).map((r) => r.v), [1, 2]);
+});
+
+test("adoptLegacy: an alias the log already knows is not adopted again", () => {
+  const p = project();
+  const alias = join(p.paths.out, "demo.mp4");
+  render(p);
+  render(p);
+  render(p); // v1 pruned
+  // A copy (not a link) of a logged render, e.g. after rsync or a filesystem without hard links.
+  writeFileSync(alias, "render 3");
+  assert.equal(adoptLegacy(p, alias), null);
+  assert.deepEqual(readRenders(p).map((r) => r.v), [1, 2, 3]);
 });

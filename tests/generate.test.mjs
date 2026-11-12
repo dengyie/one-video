@@ -78,6 +78,28 @@ test("variants: a vision model picks the take; every take stays on disk", async 
   } finally { r.close(); }
 });
 
+test("after a failed take, pick and picked still name takes by their file", async () => {
+  let n = 0;
+  const r = await relay({
+    "/v1/images/generations": () => (n++ === 0 ? [400, { error: "bad take" }] : [200, { data: [{ b64_json: (n === 3 ? PNG : JPG).toString("base64") }] }]),
+    "/v1/chat/completions": () => chat('{"best": 1}'),
+  });
+  try {
+    const dir = mkdtempSync(join(tmpdir(), "ov-gen-"));
+    const defaults = { baseUrl: r.base, keyEnv: "OV_TEST_KEY", models: ["gpt-image-2.5"] };
+    const pinned = await generateImage({ id: "pad", generate: { prompt: "p", variants: 3, pick: 2 } }, { dir, defaults });
+    assert.deepEqual(pinned.takes, ["assets/pad.take1.jpg", "assets/pad.take2.png"]);
+    assert.equal(pinned.picked, 2);
+    assert.equal(pinned.file, "assets/pad.png");
+    n = 0;
+    const looked = await generateImage({ id: "pad", generate: { prompt: "p", variants: 3 } }, { dir, defaults, llm: { baseUrl: r.base, keyEnv: "OV_TEST_KEY", models: ["eyes"] } });
+    assert.equal(looked.picked, 2); // the model's second image is take2
+    // 4:5 frames ask for the portrait size.
+    await generateImage({ id: "tall", generate: "p" }, { dir, aspect: "4:5", defaults });
+    assert.equal(r.calls.filter((c) => c.path === "/v1/images/generations").at(-1).json.size, "1024x1536");
+  } finally { r.close(); }
+});
+
 test("a failed generation falls back to the item's stock url", async () => {
   const r = await relay({ "/v1/images/generations": () => [400, { error: "bad prompt" }], "/photo.jpg": () => [200, JPG] });
   try {
@@ -143,6 +165,11 @@ test("ask walks the model list and parses JSON replies", async () => {
     } finally { r2.close(); }
   } finally { r.close(); }
   assert.deepEqual(parseJsonReply("x [1, [2]] y"), [1, [2]]);
+  // Prose that brackets numbers before the answer is not the answer.
+  assert.deepEqual(parseJsonReply('Checking cells [3] and [4]: {"best": 1, "notes": [3]}'), { best: 1, notes: [3] });
+  assert.deepEqual(parseJsonReply('see [3]\n```json\n{"best": 2}\n```\nand {"a": [1, 2, 3, 4, 5, 6]}'), { best: 2 });
+  assert.deepEqual(parseJsonReply('use {braces} like {"a": 1}'), { a: 1 });
+  assert.deepEqual(parseJsonReply('cells [3]: {"notes": [{"cell": 1}, {"cell": 2}, {"ce', { partial: true }).notes, [{ cell: 1 }, { cell: 2 }]);
   assert.throws(() => parseJsonReply("nothing here"), /no JSON/);
   // A reply the relay cut off keeps its complete notes.
   const cut = parseJsonReply('```json\n{"score": 6, "notes": [{"cell": 1, "issue": "a"}, {"cell": 2, "issue": "b \\"}\\""}, {"cell": 3, "iss', { partial: true });

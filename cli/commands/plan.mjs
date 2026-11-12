@@ -4,11 +4,13 @@ import { join, resolve, basename } from "node:path";
 import { ONEVIDEO_ROOT, CONFIG_FILE, UserError, loadProject, pipelineDef, styleDef, writeJson, readJson, log } from "../lib/core/project.mjs";
 import { stageStatus, approveStage } from "../lib/core/state.mjs";
 import { checkProject, printIssues } from "../lib/review/check.mjs";
+import { DIMENSIONS } from "../lib/timeline/index.mjs";
 
 export async function init(args) {
   const dir = resolve(args._[0] ?? ".");
   if (existsSync(join(dir, CONFIG_FILE))) throw new UserError(`${dir} is already a OneVideo project`);
   if (existsSync(dir) && readdirSync(dir).filter((f) => !f.startsWith(".")).length && !args.force) throw new UserError(`${dir} is not empty (use --force to init anyway)`);
+  if (args.aspect !== undefined && !DIMENSIONS[args.aspect]) throw new UserError(`--aspect ${args.aspect === true ? "needs a value" : `"${args.aspect}"`}: one of ${Object.keys(DIMENSIONS).join(", ")}`);
   const example = args.example;
   const exampleDir = example ? join(ONEVIDEO_ROOT, "examples", example) : null;
   if (exampleDir && !existsSync(exampleDir)) throw new UserError(`unknown example "${example}" (${readdirSync(join(ONEVIDEO_ROOT, "examples")).join(", ")})`);
@@ -54,7 +56,7 @@ export async function status() {
   log(`  director: ${join(ONEVIDEO_ROOT, next.director)}`);
   if (next.command) log(`  command:  ${next.command}`);
   if (next.status === "awaiting-approval") log(`  review the products, then: onevideo approve ${next.id}`);
-  if (next.status === "stale") log(`  products changed since approval; review again, then: onevideo approve ${next.id}`);
+  if (next.status === "stale") log(`  ${next.reason ?? "products changed since approval; review again"}, then: onevideo approve ${next.id}`);
 }
 
 export async function validate(args) {

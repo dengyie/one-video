@@ -29,15 +29,19 @@ export async function generateImage(item, { dir, defaults = {}, aspect = "16:9",
       const t = await firstModel(cfg, `image "${item.id}"`, (model) => imageTake(cfg, key, model));
       const file = n > 1 ? `assets/${item.id}.take${k}.${imageExt(t.buf)}` : `assets/${item.id}.${imageExt(t.buf)}`;
       writeFileSync(join(dir, file.slice("assets/".length)), t.buf);
-      takes.push({ ...t, file });
+      takes.push({ ...t, file, k });
     } catch (e) {
       if (k === n - 1 && !takes.length) throw e;
       onWarn(`${item.id} take ${k}: ${e.message}`);
     }
   }
+  // `best` indexes the takes that arrived; `pick` and `picked` name a take by its file (take<k>), which
+  // differ once a take has failed.
   let best = 0, pickedBy = null, pickReason = null;
-  if (takes.length > 1 && Number.isInteger(cfg.pick)) best = Math.min(cfg.pick, takes.length - 1);
-  else if (takes.length > 1) {
+  if (takes.length > 1 && Number.isInteger(cfg.pick)) {
+    best = Math.max(0, takes.findIndex((t) => t.k === cfg.pick));
+    if (takes[best].k !== cfg.pick) onWarn(`${item.id}: pick ${cfg.pick} has no take on disk, keeping take ${takes[best].k}`);
+  } else if (takes.length > 1) {
     try {
       const { data, model } = await ask({
         prompt: pickTakePrompt({ count: takes.length, aspect, prompt: cfg.prompt, brief: cfg.brief }),
@@ -45,7 +49,7 @@ export async function generateImage(item, { dir, defaults = {}, aspect = "16:9",
       });
       if (Number.isInteger(data.best) && data.best >= 0 && data.best < takes.length) [best, pickedBy, pickReason] = [data.best, model, data.reason ?? null];
     } catch (e) {
-      onWarn(`${item.id}: vision pick failed, keeping take 0 (${e.message})`);
+      onWarn(`${item.id}: vision pick failed, keeping take ${takes[0].k} (${e.message})`);
     }
   }
   const chosen = takes[best];
@@ -56,7 +60,7 @@ export async function generateImage(item, { dir, defaults = {}, aspect = "16:9",
   }
   return {
     ...item, file, kind: "image", via: "generate", license: "generated", author: chosen.model, title: item.title ?? cfg.prompt.slice(0, 80),
-    ...(takes.length > 1 ? { takes: takes.map((t) => t.file), picked: best, ...(pickedBy ? { pickedBy, pickReason } : {}) } : {}),
+    ...(takes.length > 1 ? { takes: takes.map((t) => t.file), picked: chosen.k, ...(pickedBy ? { pickedBy, pickReason } : {}) } : {}),
     fetchedAt: new Date().toISOString(),
   };
 }

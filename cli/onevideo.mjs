@@ -44,7 +44,10 @@ function help() {
 }
 
 const [cmd, ...rest] = process.argv.slice(2);
-if (!cmd || cmd === "help" || cmd === "--help" || cmd === "-h") help();
+const wantsHelp = (a) => a === "--help" || a === "-h";
+if (!cmd || cmd === "help" || wantsHelp(cmd)) help();
+// `<command> --help` prints its usage; it must never run the command (render, publish …).
+else if (COMMANDS[cmd] && rest.some(wantsHelp)) console.log(`onevideo ${COMMANDS[cmd][1]}`);
 else if (!COMMANDS[cmd]) {
   console.error(`unknown command "${cmd}"\n`);
   help();

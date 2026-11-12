@@ -8,7 +8,10 @@ import { imagePart } from "../llm/client.mjs";
 
 export const IMAGE_DEFAULTS = { baseUrl: "https://api.mangoqwq.com/v1", models: ["gpt-image-2.5", "grok-imagine-image-quality"], keyEnv: "MANGO_API_KEY" };
 export const VIDEO_DEFAULTS = { baseUrl: "https://api.mangoqwq.com/v1", models: ["grok-imagine-video", "grok-imagine-video-1.5"], duration: 6, resolution: "720p", keyEnv: "MANGO_API_KEY", pollSec: 5, timeoutSec: 900 };
-export const IMAGE_SIZE = { "16:9": "1536x1024", "9:16": "1024x1536", "1:1": "1024x1024" };
+// 4:5 has no size of its own on the image models: the portrait size, cropped to the frame.
+export const IMAGE_SIZE = { "16:9": "1536x1024", "9:16": "1024x1536", "1:1": "1024x1024", "4:5": "1024x1536" };
+// The same for clips: the video models take the common ratios only.
+export const VIDEO_ASPECT = { "4:5": "9:16" };
 
 // item.generate (string prompt or object) over project defaults; `model` pins one model, `models` is
 // the fallback order. Relay channels come and go, so each model is tried until one delivers.

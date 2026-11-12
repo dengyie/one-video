@@ -10,9 +10,17 @@ export const KEEP_VERSIONS = 8;
 const logPath = (project) => join(project.paths.out, "renders.json");
 export const readRenders = (project) => readJson(logPath(project), { renders: [] }).renders ?? [];
 
-// --scenes a,b (first to last named scene) or --from/--to seconds → an inclusive frame range.
-export function frameRange(timeline, { scenes, from, to } = {}) {
+// --frames a-b, --scenes a,b (first to last named scene) or --from/--to seconds → an inclusive frame range.
+export function frameRange(timeline, { scenes, from, to, frames } = {}) {
   const fps = timeline.fps, last = Math.round(timeline.duration * fps) - 1;
+  if (frames !== undefined) {
+    const m = /^(\d+)-(\d+)$/.exec(String(frames).trim());
+    if (!m) throw new UserError(`--frames takes an inclusive range like 0-90, got ${frames === true ? "no value" : `"${frames}"`}`);
+    // An end past the cut renders to its last frame.
+    const a = Number(m[1]), b = Math.min(last, Number(m[2]));
+    if (a > b) throw new UserError(`empty range: --frames ${frames} (the cut has frames 0-${last})`);
+    return [a, b];
+  }
   if (scenes) {
     const ids = String(scenes).split(",").map((x) => x.trim()).filter(Boolean);
     const hit = timeline.scenes.filter((s) => ids.includes(s.id));
@@ -22,6 +30,10 @@ export function frameRange(timeline, { scenes, from, to } = {}) {
     return [a, Math.min(b, last)];
   }
   if (from === undefined && to === undefined) return null;
+  // A flag without its value parses as true, which Number() would turn into 1 second.
+  for (const [k, x] of [["from", from], ["to", to]]) {
+    if (x !== undefined && (typeof x === "boolean" || String(x).trim() === "" || !Number.isFinite(Number(x)))) throw new UserError(`--${k} takes seconds, got ${x === true ? "no value" : `"${x}"`}`);
+  }
   const a = Math.max(0, Math.round(Number(from ?? 0) * fps)), b = Math.min(last, Math.round(Number(to ?? timeline.duration) * fps) - 1);
   if (!(b > a)) throw new UserError(`empty range: --from ${from ?? 0} --to ${to ?? timeline.duration}`);
   return [a, b];
@@ -61,10 +73,12 @@ export function recordRender(project, entry, { alias, keep = project.config.rend
 
 // A render made before versioning (out/<name>.mp4 that no logged version points at) becomes the
 // first version instead of being overwritten by the next render, so it can still be compared.
+// An alias the log already wrote is never legacy, even when it is a copy (no hard links) or its
+// version was pruned since.
 export function adoptLegacy(project, alias, { draft = false, part = false } = {}) {
   if (!alias || !existsSync(alias)) return null;
-  const renders = readRenders(project);
-  if (renders.some((r) => !r.pruned && sameFile(alias, join(project.root, r.file)))) return null;
+  const renders = readRenders(project), rel = relative(project.root, alias);
+  if (renders.some((r) => r.alias === rel || (!r.pruned && sameFile(alias, join(project.root, r.file))))) return null;
   const { v, file } = versionFile(project, { draft, part });
   mkdirSync(join(project.paths.out, "versions"), { recursive: true });
   renameSync(alias, file);
@@ -98,6 +112,6 @@ export function resolveVideo(project, arg, fallback) {
   return r ? hit(r) : { file, offset: 0, entry: null };
 }
 
-function sameFile(a, b) {
+export function sameFile(a, b) {
   try { const x = statSync(a), y = statSync(b); return x.ino === y.ino && x.dev === y.dev; } catch { return false; }
 }

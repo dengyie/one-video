@@ -1,12 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, cpSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ROOT } from "./helpers.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { resolveApiKey, viaApiBase, requireApiKey } from "../cli/lib/core/http.mjs";
+import { reviewSubject } from "../cli/lib/core/state.mjs";
 
 const CLI = join(ROOT, "cli", "onevideo.mjs");
 const ov = (cwd, ...args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: "utf8", env: { ...process.env, HOME: cwd, ONEVIDEO_WORKERS: "" } });
@@ -58,7 +59,10 @@ test("publish requires the review stage to be approved", () => {
   const read = (f) => json(join(dir, "plan", f));
   const { timeline } = compileTimeline({ config: json(join(dir, "onevideo.json")), script: read("script.json"), storyboard: read("storyboard.json"), timings: json(join(ROOT, "tests", "fixtures", "spacex-timings.json")), research: read("research.json") });
   writeFileSync(join(dir, "plan", "timeline.json"), JSON.stringify(timeline));
-  writeFileSync(join(dir, "plan", "review.json"), JSON.stringify({ verdict: "pass", checks: [], frames: [] }));
+  const project = { root: dir, config: json(join(dir, "onevideo.json")) };
+  const video = join(dir, "out", `${project.config.name}.mp4`);
+  writeFileSync(video, "cut 1");
+  writeFileSync(join(dir, "plan", "review.json"), JSON.stringify({ verdict: "pass", checks: [], frames: [], subject: reviewSubject(project) }));
   const denied = ov(dir, "publish");
   assert.equal(denied.status, 1);
   assert.match(denied.stderr, /review stage is awaiting-approval/);
@@ -66,6 +70,39 @@ test("publish requires the review stage to be approved", () => {
   const ok = ov(dir, "publish");
   assert.equal(ok.status, 0, ok.stderr);
   assert.ok(readFileSync(join(dir, "out", "publish", "captions.srt"), "utf8").length > 0);
+  // A new render after sign-off is not the cut that was reviewed.
+  writeFileSync(video, "cut 2, longer");
+  const again = ov(dir, "publish");
+  assert.equal(again.status, 1);
+  assert.match(again.stderr, /review stage is stale \(out\/spacex-ipo\.mp4 was rendered again after QC/);
+  assert.match(ov(dir, "approve", "review").stderr, /cannot approve "review"/);
+});
+
+test("a QC report that does not name its render cannot be approved", () => {
+  const dir = exampleProject();
+  writeFileSync(join(dir, "plan", "review.json"), JSON.stringify({ verdict: "pass", checks: [], frames: [] }));
+  assert.match(ov(dir, "status").stdout, /review\s+stale/);
+  const r = ov(dir, "approve", "review");
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /does not record which render it checked/);
+});
+
+test("<command> --help prints its usage instead of running it", () => {
+  const dir = exampleProject();
+  for (const flag of ["--help", "-h"]) {
+    const r = ov(dir, "publish", "--force", flag);
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /^onevideo publish \[--force\]/);
+  }
+  assert.ok(!existsSync(join(dir, "out", "publish")));
+});
+
+test("init rejects an aspect the timeline cannot lay out", () => {
+  const dir = join(mkdtempSync(join(tmpdir(), "ov-cli-")), "bad");
+  const r = ov(ROOT, "init", dir, "--aspect", "3:2");
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /--aspect "3:2": one of 16:9, 9:16, 1:1, 4:5/);
+  assert.ok(!existsSync(dir));
 });
 
 test("shared API keys only go to trusted hosts", () => {

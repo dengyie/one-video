@@ -1,10 +1,10 @@
 // render / stills / studio / qc / publish / build / doctor
 import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { basename, join, relative } from "node:path";
 import { availableParallelism, tmpdir, totalmem } from "node:os";
 import { execFileSync } from "node:child_process";
 import { UserError, loadProject, pipelineDef, readJson, writeJson, log, warn, ONEVIDEO_ROOT } from "../lib/core/project.mjs";
-import { stageStatus } from "../lib/core/state.mjs";
+import { reviewSubject, stageStatus } from "../lib/core/state.mjs";
 import { checkProject, printIssues } from "../lib/review/check.mjs";
 import { REMOTION_BIN, TEMPLATE_DIR, requireRemotion, run, ffmpeg } from "../lib/core/ffmpeg.mjs";
 import { runQc } from "../lib/vision/qc.mjs";
@@ -20,7 +20,7 @@ import { IMAGE_DEFAULTS, VIDEO_DEFAULTS } from "../lib/generate/index.mjs";
 import { llmConfig } from "../lib/llm/client.mjs";
 import { ensureBeats } from "../lib/audio/beats.mjs";
 import { workerHosts } from "../lib/core/worker.mjs";
-import { adoptLegacy, frameRange, localStamp, readRenders, recordRender, resolveVideo, timelineHash, versionFile } from "../lib/publish/renders.mjs";
+import { adoptLegacy, frameRange, localStamp, readRenders, recordRender, resolveVideo, sameFile, timelineHash, versionFile } from "../lib/publish/renders.mjs";
 
 const ENTRY = "src/index.ts";
 const COMPOSITION = "OneVideo";
@@ -104,7 +104,7 @@ export async function render(args) {
   const draft = Boolean(args.draft);
   // A part (--scenes / --from / --to / --frames) is the 15-second sample: iterate on one stretch
   // without paying for the whole cut.
-  const range = args.frames ? String(args.frames).split("-").map(Number) : frameRange(tl, { scenes: args.scenes, from: args.from, to: args.to });
+  const range = frameRange(tl, { scenes: args.scenes, from: args.from, to: args.to, frames: args.frames });
   const part = Boolean(range) && !(range[0] === 0 && range[1] >= Math.round(tl.duration * tl.fps) - 1);
   const variant = project.aspect && !args.out ? join(project.paths.out, `${project.config.name}.${aspectTag(project.aspect)}${draft ? ".draft" : ""}${part ? ".part" : ""}.mp4`) : null;
   const alias = args.out || variant ? null : part ? join(project.paths.out, `${project.config.name}.part.mp4`) : draft ? join(project.paths.out, `${project.config.name}.draft.mp4`) : videoPath(project);
@@ -194,15 +194,25 @@ export async function studio(args) {
 
 export async function qc(args) {
   const project = loadProject();
-  const video = args.video ? resolveVideo(project, args.video).file : videoPath(project);
+  const main = videoPath(project);
+  const { file: video, offset, entry } = args.video ? resolveVideo(project, args.video) : { file: main, offset: 0, entry: null };
   if (!existsSync(video)) throw new UserError(`no video at ${video}; run: onevideo render`);
   const tl = readJson(project.paths.timeline);
-  const review = await runQc({ video, timeline: tl, outDir: join(project.paths.out, "qc"), thresholds: project.config.qc });
-  writeJson(project.paths.review, review);
+  // Only the main cut's report is the review stage's product (and records which render it was);
+  // another version's report goes beside its own frames, so it can never be approved for publishing.
+  const isMain = video === main || sameFile(video, main);
+  const subject = isMain ? reviewSubject(project) : null;
+  const outDir = isMain ? join(project.paths.out, "qc") : join(project.paths.out, "qc", entry ? `v${entry.v}` : basename(video, ".mp4"));
+  const span = entry?.part && entry.frames ? (entry.frames[1] - entry.frames[0] + 1) / tl.fps : undefined;
+  const review = await runQc({ video, timeline: tl, outDir, thresholds: project.config.qc, offset, span });
+  const reportPath = isMain ? project.paths.review : join(outDir, "review.json");
+  writeJson(reportPath, isMain ? { ...review, subject } : review);
   const icon = { pass: "✓", warn: "⚠", fail: "✗" };
   for (const c of review.checks) log(`${icon[c.status]} ${c.id.padEnd(22)} ${c.detail}`);
-  log(`verdict: ${review.verdict.toUpperCase()} · ${review.frames.length} review frames in out/qc/frames/ → plan/review.json`);
-  log("next: look at every frame in out/qc/frames/ before approving review");
+  const framesRel = relative(project.root, join(outDir, "frames"));
+  log(`verdict: ${review.verdict.toUpperCase()} · ${review.frames.length} review frames in ${framesRel}/ → ${relative(project.root, reportPath)}`);
+  if (isMain) log(`next: look at every frame in ${framesRel}/ before approving review`);
+  else log(`not the main cut (${relative(project.root, main)}): this report is for comparison and does not count as the review`);
   if (review.verdict === "fail") process.exitCode = 1;
   return review;
 }
@@ -218,8 +228,9 @@ export async function publish(args = {}) {
   if (review.verdict === "fail") throw new UserError("QC verdict is FAIL; fix and re-render before publishing");
   const reviewStage = stageStatus(project, pipelineDef(project.config.pipeline)).find((s) => s.id === "review");
   if (reviewStage && reviewStage.status !== "approved") {
-    if (!args.force) throw new UserError(`review stage is ${reviewStage.status}; look at out/qc/frames/, then: onevideo approve review (or publish --force)`);
-    warn(`publishing without review approval (review stage is ${reviewStage.status})`);
+    const why = reviewStage.reason ? ` (${reviewStage.reason})` : "";
+    if (!args.force) throw new UserError(`review stage is ${reviewStage.status}${why}; look at out/qc/frames/, then: onevideo approve review (or publish --force)`);
+    warn(`publishing without review approval (review stage is ${reviewStage.status}${why})`);
   }
   const kit = buildPublishKit({ timeline: tl, research, config: project.config, script });
   const dir = join(project.paths.out, "publish");

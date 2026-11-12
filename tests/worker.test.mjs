@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { pickWorker, shq, wantsWorker, workerHosts } from "../cli/lib/core/worker.mjs";
+import { pickWorker, projectJobs, shq, wantsWorker, workerHosts } from "../cli/lib/core/worker.mjs";
 
 test("only heavy commands go to a worker, and only when one is configured", () => {
   const env = { ONEVIDEO_WORKERS: "ov-a, ov-b" };
@@ -29,4 +29,14 @@ test("the idlest reachable worker is picked, the first listed on a tie", () => {
 test("arguments reach the worker's shell intact", () => {
   assert.equal(shq("--note"), "'--note'");
   assert.equal(shq("it's v2; rm -rf /"), `'it'\\''s v2; rm -rf /'`);
+});
+
+test("projectJobs sorts this project's jobs into running and not yet synced back", () => {
+  let sent;
+  const run = (host, cmd) => ((sent = cmd), { status: 0, stdout: "running /tmp/onevideo-jobs/demo-render-2\nunsynced /tmp/onevideo-jobs/demo-render-1\n\n" });
+  assert.deepEqual(projectJobs("ov-a", "/srv/demo", run), { running: ["/tmp/onevideo-jobs/demo-render-2"], unsynced: ["/tmp/onevideo-jobs/demo-render-1"] });
+  // Only jobs that cd into this very project count, not another checkout with the same basename.
+  assert.match(sent, /demo-\*\.sh/);
+  assert.ok(sent.includes(shq("cd '/srv/demo' ||")));
+  assert.throws(() => projectJobs("ov-a", "/srv/demo", () => ({ status: 255, stdout: "", stderr: "no route" })), /could not list its jobs: no route/);
 });

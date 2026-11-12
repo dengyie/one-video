@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { productsHash, stageStatus } from "../cli/lib/core/state.mjs";
+import { productsHash, reviewOutdated, reviewSubject, stageStatus } from "../cli/lib/core/state.mjs";
 
 test("productsHash: missing or empty (dotfiles only) products are not done", () => {
   const root = mkdtempSync(join(tmpdir(), "ov-state-"));
@@ -43,4 +43,23 @@ test("stageStatus expands {name} in products: stills alone do not complete rende
   assert.equal(stageStatus(project, pipeline)[0].status, "pending");
   writeFileSync(join(root, "out", "demo.mp4"), "v");
   assert.equal(stageStatus(project, pipeline)[0].status, "done");
+});
+
+test("a QC review goes stale when the main render or the timeline changes", () => {
+  const root = mkdtempSync(join(tmpdir(), "ov-state-"));
+  mkdirSync(join(root, "out"));
+  mkdirSync(join(root, "plan"));
+  const project = { root, config: { name: "demo" }, paths: { state: join(root, "state.json") } };
+  assert.equal(reviewOutdated(project), null);
+  writeFileSync(join(root, "plan", "timeline.json"), "{}");
+  writeFileSync(join(root, "out", "demo.mp4"), "v1");
+  writeFileSync(join(root, "plan", "review.json"), JSON.stringify({ subject: reviewSubject(project) }));
+  assert.equal(reviewOutdated(project), null);
+  writeFileSync(join(root, "plan", "timeline.json"), '{"duration": 2}');
+  assert.match(reviewOutdated(project), /timeline\.json changed after QC/);
+  writeFileSync(join(root, "plan", "review.json"), JSON.stringify({ subject: reviewSubject(project) }));
+  writeFileSync(join(root, "out", "demo.mp4"), "v2 longer");
+  assert.match(reviewOutdated(project), /rendered again after QC/);
+  writeFileSync(join(root, "plan", "review.json"), JSON.stringify({ issues: [] }));
+  assert.match(reviewOutdated(project), /does not record which render/);
 });

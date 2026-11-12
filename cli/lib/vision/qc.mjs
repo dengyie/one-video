@@ -107,7 +107,9 @@ function parseSilence(stderr) {
   return out;
 }
 
-export async function runQc({ video, timeline, outDir, thresholds = {} }) {
+// A part render starts `offset` seconds into the timeline and runs `span` seconds: the duration
+// check, the narration intervals and the scene samples are taken on the file's own clock.
+export async function runQc({ video, timeline, outDir, thresholds = {}, offset = 0, span = timeline.duration - offset }) {
   const t = deepMerge(QC_DEFAULTS, thresholds);
   const checks = [];
   const add = (id, status, detail) => checks.push({ id, status, detail });
@@ -126,7 +128,7 @@ export async function runQc({ video, timeline, outDir, thresholds = {} }) {
   }
   if (!a) add("audio-stream", "fail", "no audio stream");
   else add("audio-codec", a.codec_name === "aac" ? "pass" : "warn", `${a.codec_name} ${a.sample_rate}Hz ${a.channels}ch`);
-  add("duration", Math.abs(duration - timeline.duration) <= t.durationTolerance ? "pass" : "fail", `${duration.toFixed(2)}s (timeline ${timeline.duration}s)`);
+  add("duration", Math.abs(duration - span) <= t.durationTolerance ? "pass" : "fail", `${duration.toFixed(2)}s (${offset ? `part from ${offset}s: ${+span.toFixed(2)}` : `timeline ${timeline.duration}`}s)`);
 
   let loud = null, silences = [];
   if (a) {
@@ -139,7 +141,7 @@ export async function runQc({ video, timeline, outDir, thresholds = {} }) {
       add("true-peak", loud.truePeak <= t.loudness.maxTruePeak ? "pass" : "warn", `${loud.truePeak.toFixed(1)} dBTP (max ${t.loudness.maxTruePeak})`);
     } else add("loudness", "warn", "loudnorm produced no measurement");
     // Silence during a narration interval means a dropped TTS line: fail. Elsewhere it is only dead air.
-    const inSpeech = silences.filter(([s, e]) => (timeline.narration ?? []).some(([a, b]) => s < b - 0.2 && e > a + 0.2));
+    const inSpeech = silences.filter(([s, e]) => (timeline.narration ?? []).some(([a, b]) => s < b - offset - 0.2 && e > a - offset + 0.2));
     const fmtS = (rs) => rs.map(([s, e]) => `${s.toFixed(1)}–${e.toFixed(1)}s`).join(", ");
     add("silence-in-narration", inSpeech.length ? "fail" : "pass", inSpeech.length ? fmtS(inSpeech) : "narration audible throughout");
     add("dead-air", silences.length > inSpeech.length ? "warn" : "pass", silences.length ? fmtS(silences) : `no gap > ${t.silence.maxGap}s`);
@@ -165,7 +167,8 @@ export async function runQc({ video, timeline, outDir, thresholds = {} }) {
   const framesDir = join(outDir, "frames");
   rmSync(framesDir, { recursive: true, force: true });
   mkdirSync(framesDir, { recursive: true });
-  const samples = timeline.scenes.map((s, i) => ({ scene: s.id, type: s.type, at: Math.min(duration - 0.05, s.start + s.duration * 0.6), file: join(framesDir, `${String(i + 1).padStart(2, "0")}-${s.id}.jpg`) }));
+  const samples = timeline.scenes.map((s, i) => ({ scene: s.id, type: s.type, at: Math.max(0, Math.min(duration - 0.05, s.start + s.duration * 0.6 - offset)), file: join(framesDir, `${String(i + 1).padStart(2, "0")}-${s.id}.jpg`), inFile: s.start + s.duration > offset && s.start < offset + duration }))
+    .filter((x) => x.inFile);
   await pool(samples, 4, (s) => ffmpeg(["-ss", s.at.toFixed(3), "-i", video, "-frames:v", "1", "-vf", "scale=960:-2", "-c:v", "mjpeg", "-q:v", "4", "-y", s.file]));
 
   const verdict = checks.some((c) => c.status === "fail") ? "fail" : checks.some((c) => c.status === "warn") ? "warn" : "pass";
@@ -176,7 +179,7 @@ export async function runQc({ video, timeline, outDir, thresholds = {} }) {
     probe: { duration, width: v?.width, height: v?.height, videoCodec: v?.codec_name, audioCodec: a?.codec_name, sizeBytes: Number(probe.format.size) },
     loudness: loud,
     checks,
-    frames: samples.map(({ scene, type, at, file }) => ({ scene, type, at: Math.round(at * 100) / 100, file })),
+    frames: samples.map(({ scene, type, at, file }) => ({ scene, type, at: Math.round((at + offset) * 100) / 100, file })),
   };
 }
 
