@@ -93,7 +93,7 @@ export const MediaScene: React.FC<{ asset: string; caption?: string; title?: str
   );
 };
 
-type Side = { title: string; subtitle?: string; value?: number; format?: Format; items?: string[]; color?: string; asset?: string };
+type Side = { title: string; subtitle?: string; value?: number; format?: Format; items?: string[]; color?: string; asset?: string; cue?: string };
 
 const CompareSide: React.FC<{ side: Side; at: number; color: string; valueSize: number; anchor: string }> = ({ side, at, color, valueSize, anchor }) => {
   const theme = useTheme();
@@ -125,7 +125,8 @@ export const CompareScene: React.FC<{ title?: string; vs?: string; left: Side; r
   const { u, portrait, width, pad } = useLayout();
   const at = useRevealAt();
   const t = useTime();
-  const a0 = at(0, 2), a1 = at(1, 2);
+  // Each side comes in on its own cue (when the narration reaches it), else on the default stagger.
+  const a0 = at(0, 2, left.cue), a1 = at(1, 2, right.cue);
   // Both values at one size that keeps the longer on one line in its card (1:1 / 4:5 cards are narrow).
   const room = portrait ? width - 2 * pad - 88 * u : (width - 2 * pad - 80 * u - [...vs].length * 40 * u) / 2 - 88 * u;
   const valueSize = Math.min(...[left, right].map((s) => (s.value === undefined ? 112 * u : fitFont(fmtCount(s.value, s.value, s.format), room, 112 * u))));

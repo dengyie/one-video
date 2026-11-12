@@ -155,6 +155,10 @@
         "title": {
           "type": "string"
         },
+        "cue": {
+          "type": "string",
+          "description": "name of a cue in scene.cues; this side appears when it resolves"
+        },
         "subtitle": {
           "type": "string"
         },

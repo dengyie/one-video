@@ -281,6 +281,8 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
   const drawP = pointT ? pos / (n - 1) : easeInOut((t - drawStart) / Math.max(1.2, Math.min(4, scene.duration * 0.45)));
   // The big label sits on the last point reached; cued, that is the last value spoken (none before the first).
   const reached = pointT ? (t >= pointT[0] ? Math.floor(pos + 1e-6) : -1) : Math.ceil(drawP * (n - 1));
+  // Value labels get a dark outline under the fill so they stay legible over a bright backdrop (a rocket plume).
+  const halo = { stroke: theme.colors.bg, strokeWidth: 8 * u, strokeLinejoin: "round" as const, paintOrder: "stroke" };
   const lastLabel = (s: LineSeries) => s.points[Math.max(0, Math.min(reached, s.points.length - 1))];
   return (
     <Stage>
@@ -338,7 +340,7 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
                       <circle cx={x} cy={y} r={8 * u} fill={theme.colors.bg} stroke={color} strokeWidth={4 * u} />
                       {series.length === 1 && k !== tipK && !annotated.has(String(s.points[k][0])) && (
                         // The first point sits on the y axis: start its label there so it clears the tick labels.
-                        <text x={k === 0 ? x - 8 * u : x} y={y - 24 * u} textAnchor={k === 0 ? "start" : "middle"} fontSize={28 * u} fontWeight={600} fill={theme.colors.text} fontFamily={theme.fonts.number}>{fmt(Number(s.points[k][1]), format)}</text>
+                        <text x={k === 0 ? x - 8 * u : x} y={y - 24 * u} textAnchor={k === 0 ? "start" : "middle"} fontSize={28 * u} fontWeight={600} fill={theme.colors.text} fontFamily={theme.fonts.number} {...halo}>{fmt(Number(s.points[k][1]), format)}</text>
                       )}
                     </g>
                   );
@@ -348,7 +350,7 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
                 <path d={d} fill="none" stroke={color} strokeWidth={5 * u} strokeLinejoin="round" strokeLinecap="round" strokeDasharray={`${len} ${len * 2}`} strokeDashoffset={len * (1 - drawn)} opacity={drawn > 0 ? 1 : 0} />
                 {(pointT ? reached >= 0 : drawP > 0.02) && (
                   // Near the right edge the label would run off the frame: right-align it above the point instead.
-                  <text {...(X(xVal(tip[0])) > W * 0.85 ? { x: X(xVal(tip[0])), y: Y(Number(tip[1])) - 28 * u, textAnchor: "end" as const } : { x: X(xVal(tip[0])) + 14 * u, y: Y(Number(tip[1])) - 14 * u })} fontSize={34 * u} fontWeight={800} fill={color} fontFamily={theme.fonts.number}>
+                  <text {...(X(xVal(tip[0])) > W * 0.85 ? { x: X(xVal(tip[0])), y: Y(Number(tip[1])) - 34 * u, textAnchor: "end" as const } : { x: X(xVal(tip[0])) + 16 * u, y: Y(Number(tip[1])) - 18 * u })} fontSize={48 * u} fontWeight={800} fill={color} fontFamily={theme.fonts.number} {...halo}>
                     {series.length > 1 ? `${s.name} ` : ""}{fmt(Number(tip[1]), format)}
                   </text>
                 )}
