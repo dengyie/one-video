@@ -84,7 +84,11 @@ export const QuoteScene: React.FC<{ text: string; author?: string; source?: stri
         <div style={{ fontSize: 180 * u, lineHeight: 0.6, color: theme.colors.accent, opacity: q * 0.8, fontFamily: "Georgia, serif" }}>“</div>
         <div style={{ fontSize: (portrait ? 58 : 60) * u, fontWeight: 700, lineHeight: 1.45, maxWidth: "86%", opacity: q, transform: `translateY(${(1 - q) * 20 * u}px)` }}>
           {times
-            ? [...text].map((c, i) => <span key={i} style={{ opacity: 0.3 + 0.7 * Math.min(1, Math.max(0, (t - times[i] + 0.1) / 0.25)) }}>{c}</span>)
+            ? [...text].map((c, i) => {
+                // Words not yet said stay faint, so a long quote builds clause by clause instead of sitting there whole.
+                const k = Math.min(1, Math.max(0, (t - times[i] + 0.1) / 0.25));
+                return <span key={i} style={{ display: "inline-block", opacity: 0.14 + 0.86 * k, transform: `translateY(${(1 - k) * 10 * u}px)` }}>{c}</span>;
+              })
             : text}
         </div>
         {(author || source) && (
@@ -160,29 +164,51 @@ export const SourcesScene: React.FC<{ title?: string; items?: string[] }> = ({ t
   const floor = scene.lines?.length ? bottom : pad;
   const o = useReveal(0.1, 0.6);
   const t = useTime();
-  const cols = !portrait && items.length > 8 ? 2 : 1;
-  // The largest size (30u down to 16u) at which the list, wrapped to its column width, fits the safe area.
-  const colW = (width - pad * 2 - 48 * u * (cols - 1)) / cols, room = height - (scene.header ? top + 20 * u : pad) - floor - 110 * u;
-  const listH = (fs: number) => {
+  // Wrapped to its column width, how tall a run of items is at font size fs.
+  const colsFor = (n: number) => (!portrait && n > 8 ? 2 : 1);
+  const room = height - (scene.header ? top + 20 * u : pad) - floor - 110 * u;
+  const listH = (list: string[], fs: number) => {
+    const cols = colsFor(list.length), colW = (width - pad * 2 - 48 * u * (cols - 1)) / cols;
     let h = 0;
-    for (let i = 0; i < items.length; i += cols) {
-      const lines = Math.max(...items.slice(i, i + cols).map((s) => Math.ceil(((textEms(s, LIST_LATIN) + 2) * fs) / (colW - 12 * u))));
+    for (let i = 0; i < list.length; i += cols) {
+      const lines = Math.max(...list.slice(i, i + cols).map((s) => Math.ceil(((textEms(s, LIST_LATIN) + 2) * fs) / (colW - 12 * u))));
       h += lines * fs * 1.4 + 14 * u;
     }
     return h;
   };
-  let fs = 30 * u;
+  // The largest size (30u down to 16u) at which a page fits the safe area.
   // 1.15: word wrapping of Latin titles leaves ragged line ends the em estimate doesn't see.
-  while (fs > 16 * u && listH(fs) * 1.15 > room) fs -= u;
+  const fit = (list: string[]) => {
+    let fs = 30 * u;
+    while (fs > 16 * u && listH(list, fs) * 1.15 > room) fs -= u;
+    return fs;
+  };
+  const chunks = (n: number) => Array.from({ length: n }, (_, k) => items.slice(Math.round((k * items.length) / n), Math.round(((k + 1) * items.length) / n)));
+  // A long list turns pages (at least ~2.4 s each) rather than shrinking below a readable 24u.
+  const maxPages = Math.max(1, Math.min(items.length, Math.floor(scene.duration / 2.4)));
+  let pages = chunks(1);
+  for (let n = 1; n <= maxPages; n++) {
+    pages = chunks(n);
+    if (Math.min(...pages.map(fit)) >= 24 * u) break;
+  }
+  const fs = Math.min(...pages.map(fit)), span = scene.duration / pages.length;
+  const page = Math.min(pages.length - 1, Math.max(0, Math.floor(t / span)));
+  const list = pages[page], first = pages.slice(0, page).reduce((n, p) => n + p.length, 0), t0 = page * span;
+  // Each page fades out over its last 0.3 s (the last page leaves with the scene transition).
+  const out = page < pages.length - 1 ? Math.min(1, Math.max(0, (t0 + span - t) / 0.3)) : 1;
+  const cols = colsFor(list.length);
   return (
     <Stage center style={{ bottom: floor }}>
-      <div style={{ fontSize: 44 * u, fontWeight: 700, marginBottom: 32 * u, opacity: o }}>{title}</div>
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, columnGap: 48 * u, rowGap: 14 * u }}>
-        {items.map((s, i) => {
-          const e = Math.min(1, Math.max(0, (t - 0.3 - i * 0.12) / 0.4));
+      <div style={{ fontSize: 44 * u, fontWeight: 700, marginBottom: 32 * u, opacity: o, display: "flex", alignItems: "baseline", gap: 20 * u }}>
+        {title}
+        {pages.length > 1 && <span style={{ fontSize: 26 * u, fontWeight: 400, color: theme.colors.muted, fontFamily: theme.fonts.number }}>{page + 1}/{pages.length}</span>}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, columnGap: 48 * u, rowGap: 14 * u, opacity: out }}>
+        {list.map((s, i) => {
+          const e = Math.min(1, Math.max(0, (t - Math.max(0.3, t0) - i * 0.12) / 0.4));
           return (
-            <div key={i} style={{ fontSize: fs, color: theme.colors.text, lineHeight: 1.4, opacity: e, display: "flex", gap: 12 * u }}>
-              <span style={{ color: theme.colors.accent, fontFamily: theme.fonts.number }}>{String(i + 1).padStart(2, "0")}</span>
+            <div key={first + i} style={{ fontSize: fs, color: theme.colors.text, lineHeight: 1.4, opacity: e, display: "flex", gap: 12 * u }}>
+              <span style={{ color: theme.colors.accent, fontFamily: theme.fonts.number }}>{String(first + i + 1).padStart(2, "0")}</span>
               <span style={{ opacity: 0.86 }}>{s}</span>
             </div>
           );

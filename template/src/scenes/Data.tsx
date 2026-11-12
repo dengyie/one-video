@@ -160,6 +160,9 @@ export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Fo
     return { s, idx, value: lerp(a, b, p), rank: lerp(rA[idx], rB[idx], p) };
   });
   const max = Math.max(1e-9, ...rows.filter((r) => r.rank < top).map((r) => r.value));
+  // Opening: bars rise from the last place up and their values count, the leader landing last
+  // (~1.9 s), so a first period held while the narrator talks about it doesn't open on a still.
+  const grow = (rank: number) => easeOut((t - 0.15 - Math.max(0, Math.min(top, series.length) - 1 - rank) * 0.15) / 0.7);
   // Fill what the Stage leaves after the title/unit lines, never the caption band.
   const stageH = height - (scene.header ? headerBottom + 20 * u : pad) - bottom;
   // 1:1 and 4:5 have no room beside the bars for the period label: it gets a strip below them.
@@ -199,12 +202,12 @@ export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Fo
       <div style={{ position: "relative", height: areaH, marginTop: 16 * u }}>
         {rows.map((r) => {
           const color = r.s.color ?? (r.s.group && groupColors[r.s.group]) ?? colorAt(theme, r.idx);
-          const visible = clamp01(top - r.rank);
+          const visible = clamp01(top - r.rank), value = r.value * grow(r.rank);
           return (
             <div key={r.s.name} style={{ position: "absolute", top: r.rank * rowH, left: 0, right: 0, height: rowH, display: "flex", alignItems: "center", opacity: visible }}>
               <div style={{ width: labelW, flex: "none", textAlign: "right", paddingRight: 18 * u, fontSize: Math.min(30, rowH / u * 0.45) * u, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.s.name}</div>
-              <div data-anchor={`bar${r.idx + 1}`} style={{ width: `${Math.max(0.5, (r.value / max) * barPct)}%`, height: rowH * 0.7, borderRadius: 6 * u, background: `linear-gradient(90deg, ${color}99, ${color})` }} />
-              <div style={{ marginLeft: 14 * u, fontFamily: theme.fonts.number, fontSize: valueFont, color: theme.colors.muted, whiteSpace: "nowrap" }}>{fmt(r.value, format)}</div>
+              <div data-anchor={`bar${r.idx + 1}`} style={{ width: `${Math.max(0.5, (value / max) * barPct)}%`, height: rowH * 0.7, borderRadius: 6 * u, background: `linear-gradient(90deg, ${color}99, ${color})` }} />
+              <div style={{ marginLeft: 14 * u, fontFamily: theme.fonts.number, fontSize: valueFont, color: theme.colors.muted, whiteSpace: "nowrap" }}>{fmt(value, format)}</div>
             </div>
           );
         })}
