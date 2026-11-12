@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { download } from "../core/http.mjs";
 import { generateImage, generateVideo } from "../generate/index.mjs";
-import { DEFAULT_PROVIDER_ORDER, DEFAULT_VIDEO_PROVIDERS, nasaFullUrl, scoreCandidate, search } from "./sources.mjs";
+import { DEFAULT_PROVIDER_ORDER, DEFAULT_VIDEO_PROVIDERS, fullUrl, scoreCandidate, search } from "./sources.mjs";
 import { clipFrames, cutClip, framesDir } from "./media.mjs";
 
 const extOf = (url, fallback) => (String(url).match(/\.(jpe?g|png|webp|mp4|webm|mov)(?:$|[?#])/i)?.[1].toLowerCase().replace("jpeg", "jpg") ?? fallback);
@@ -47,7 +47,7 @@ export async function fetchAsset(item, { publicDir, aspect = 16 / 9, gen = {} })
     chosen = ranked[item.pick ?? 0];
     if (!chosen) throw new Error(`no ${item.kind ?? "image"} results for "${item.query}"${errors.length ? ` (${errors.join("; ")})` : ""}`);
   }
-  if (chosen.provider === "nasa") chosen.url = await nasaFullUrl(chosen.pid, chosen.kind);
+  if (!chosen.url) chosen.url = await fullUrl(chosen);
   if (!chosen.url) throw new Error(`asset "${item.id}": candidate has no downloadable URL`);
   const buf = await download(chosen.url, chosen.kind === "video" ? { timeoutSec: 900 } : undefined);
   let file;

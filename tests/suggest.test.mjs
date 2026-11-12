@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { candidateItems, latinTerms, sceneBrief, sceneCandidates, sceneQueries } from "../cli/lib/assets/suggest.mjs";
+import { candidateItems, generatedItem, latinTerms, sceneBrief, sceneCandidates, sceneQueries } from "../cli/lib/assets/suggest.mjs";
+import { archiveFullUrl, licenseFromUrl } from "../cli/lib/assets/sources.mjs";
 import { suggestAssetsPrompt } from "../cli/lib/prompts/index.mjs";
 
 const research = { facts: [{ id: "f1", claim: "NVIDIA H100 shipments doubled" }] };
@@ -40,7 +41,7 @@ test("sceneCandidates ranks across queries, dedupes sources, skips known media a
     return { results: [hit("openverse", "s-wiki", "CC BY 4.0"), hit("openverse", "s-cc0", "CC0")], errors: [] };
   };
   let waited = 0;
-  const c = await sceneCandidates(["q1", "q2"], { searchFn, wait: async (ms) => { waited += ms; }, skip: new Set(["s-known"]), per: 3, providers: ["nasa", "wikimedia"] });
+  const c = await sceneCandidates(["q1", "q2"], { kind: "image", searchFn, wait: async (ms) => { waited += ms; }, skip: new Set(["s-known"]), per: 3, providers: ["nasa", "wikimedia"] });
   assert.equal(waited, 20000);
   assert.deepEqual(calls.map((x) => x[0]), ["q1", "q1", "q2"]);
   assert.equal(calls[1][1], "wikimedia");
@@ -54,10 +55,47 @@ test("candidateItems: free ids per scene, a direct url with license, author and 
     { provider: "wikimedia", kind: "image", url: "https://w/x.jpg", license: "CC BY 4.0", author: "A", title: "X", source: "https://w/File:X", width: 3000, height: 2000, query: "q" },
     { provider: "nasa", pid: "n1", kind: "image", license: "PD (NASA)", author: "NASA", source: "https://images.nasa.gov/details/n1", query: "q" },
   ];
-  const items = await candidateItems("hook", cands, { taken: new Set(["hook-1"]), fullUrl: async (pid) => `https://nasa/${pid}~orig.jpg` });
+  const items = await candidateItems("hook", cands, { taken: new Set(["hook-1"]), fullUrl: async (c) => `https://nasa/${c.pid}~orig.jpg` });
   assert.deepEqual(items.map((x) => x.id), ["hook-2", "hook-3"]);
   assert.equal(items[0].url, "https://w/x.jpg");
   assert.equal(items[0].license, "CC BY 4.0");
   assert.equal(items[1].url, "https://nasa/n1~orig.jpg");
   assert.match(items[0].note, /suggest: hook · "q" · wikimedia/);
+});
+
+test("kind both: the best clip is always among the picks, even when photos score better", async () => {
+  const searchFn = async (query, { kind }) => ({ errors: [], results: kind === "video"
+    ? [{ provider: "archive", kind: "video", source: `v-${query}`, license: "CC BY 4.0", width: 640, height: 480 }]
+    : [1, 2, 3].map((i) => ({ provider: "wikimedia", kind: "image", source: `i-${query}-${i}`, license: "CC0", width: 1920, height: 1080 })) });
+  const c = await sceneCandidates(["q1", "q2"], { searchFn, per: 2 });
+  assert.equal(c.length, 2);
+  assert.ok(c.some((x) => x.kind === "video"));
+  const photos = await sceneCandidates(["q1"], { kind: "image", searchFn, per: 2 });
+  assert.ok(photos.every((x) => x.kind === "image"));
+});
+
+test("Internet Archive: open licences only, the sharpest file that fits", async () => {
+  assert.equal(licenseFromUrl("http://creativecommons.org/licenses/publicdomain/"), "PD");
+  assert.equal(licenseFromUrl("https://creativecommons.org/publicdomain/zero/1.0/"), "CC0");
+  assert.equal(licenseFromUrl("https://creativecommons.org/licenses/by-sa/4.0/"), "CC BY-SA 4.0");
+  assert.equal(licenseFromUrl("https://creativecommons.org/licenses/by-nc-nd/4.0/"), "unknown");
+  const files = [
+    { name: "film.mpeg", size: "9000000", height: "1080" },
+    { name: "film_512kb.mp4", size: "6000000", width: "320", height: "240" },
+    { name: "film.mp4", size: "20000000", width: "854", height: "480" },
+    { name: "film.webm", size: "30000000", width: "1920", height: "1080" },
+    { name: "film 4k.mp4", size: "900000000", width: "3840", height: "2160" },
+  ];
+  assert.deepEqual(await archiveFullUrl("x y", { fetchJson: async () => ({ files }) }), { url: "https://archive.org/download/x%20y/film.mp4", width: 854, height: 480 });
+  assert.equal(await archiveFullUrl("x", { fetchJson: async () => ({ files: [files[0]] }) }), null);
+});
+
+test("generatedItem: an AI still from the visual intent, the first query kept as stock fallback", () => {
+  const taken = new Set(["hook-1"]);
+  const g = generatedItem({ id: "hook", visualIntent: "GPU 机房走廊" }, ["data center"], { taken });
+  assert.equal(g.id, "hook-2");
+  assert.match(g.generate.prompt, /^GPU 机房走廊，/);
+  assert.equal(g.query, "data center");
+  assert.ok(taken.has("hook-2"));
+  assert.equal(generatedItem({ id: "z" }, [], {}), null);
 });

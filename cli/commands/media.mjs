@@ -8,7 +8,7 @@ import { sceneLines } from "../lib/captions/index.mjs";
 import { writeMusic, synthSfx, SFX, MUSIC_PRESETS } from "../lib/audio/synth.mjs";
 import { writeWav } from "../lib/audio/wav.mjs";
 import { checkProject, printIssues } from "../lib/review/check.mjs";
-import { search, fetchAsset, scoreCandidate, sceneQueries, sceneCandidates, candidateItems, assetFileExists, depthPath, depthStep, lumaPath, framesDir, countFrames } from "../lib/assets/index.mjs";
+import { search, fetchAsset, scoreCandidate, sceneQueries, sceneCandidates, candidateItems, generatedItem, assetFileExists, depthPath, depthStep, lumaPath, framesDir, countFrames } from "../lib/assets/index.mjs";
 import { run } from "../lib/core/ffmpeg.mjs";
 import { ask } from "../lib/llm/client.mjs";
 import { AUTO_TRANSITION_SFX, DIMENSIONS, MOTION_SFX, overlaySound, sfxFile, sfxVariants } from "../lib/timeline/index.mjs";
@@ -181,11 +181,16 @@ export async function assets(args) {
     for (const s of scenes) {
       const q = queries[s.id];
       if (!q?.length) { if (s.beat !== "credits") warn(`${s.id}: no query (add "search": [...] to the scene)`); continue; }
-      const cands = await sceneCandidates(q, { kind: args.kind ?? "image", providers: args.provider ? list(args.provider) : undefined, aspect: w / h, per, skip, onWarn: (m) => warn(`${s.id}: ${m}`) });
+      const cands = await sceneCandidates(q, { kind: args.kind ?? "both", providers: args.provider ? list(args.provider) : undefined, aspect: w / h, per, skip, onWarn: (m) => warn(`${s.id}: ${m}`) });
       log(`\n${s.id}  ${q.map((x) => `"${x}"`).join(" · ")}`);
       if (!cands.length) log("   (nothing licensed found; try other words in the scene's search)");
       cands.forEach((c, i) => log(`${String(i).padStart(3)} ${c.provider.padEnd(9)} ${(c.license ?? "").padEnd(14)} ${c.width ?? "?"}x${c.height ?? "?"}  ${(c.title ?? "").slice(0, 56)}\n      ${c.source}${c.author ? ` · ${c.author.slice(0, 40)}` : ""}`));
       const items = args.write ? await candidateItems(s.id, cands, { taken }) : [];
+      // Nothing licensed: an AI still stands in (--no-generate leaves the scene empty).
+      if (args.write && !items.length && !args.noGenerate) {
+        const g = generatedItem(s, q, { taken });
+        if (g) { items.push(g); log(`   + ${g.id}: AI still (nothing licensed found)`); }
+      }
       manifest.items.push(...items);
       report.scenes.push({ id: s.id, queries: q, candidates: cands.map(({ preview: _p, ...c }) => c), ...(items.length ? { added: items.map((x) => x.id) } : {}) });
     }

@@ -1,5 +1,6 @@
-// Stock sources: keyless NASA Images (photos + video), Wikimedia Commons (photos + video) and
-// Openverse (photos); Pexels with PEXELS_API_KEY. Search, rank by licence / aspect / size.
+// Stock sources: keyless NASA Images (photos + video), Wikimedia Commons (photos + video),
+// Openverse (photos) and the Internet Archive (video: newsreels, public-domain films, CC uploads);
+// Pexels with PEXELS_API_KEY. Search, rank by licence / aspect / size.
 import { getJson } from "../core/http.mjs";
 
 const stripHtml = (s) => String(s ?? "").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
@@ -42,6 +43,17 @@ export const PROVIDERS = {
       source: r.foreign_landing_url, url: r.url, width: r.width, height: r.height,
     }));
   },
+  // Only open licences (public domain, CC0, CC BY, CC BY-SA); the file is chosen per item later
+  // (archiveFullUrl), since an item can hold a film of gigabytes next to a 480p copy.
+  async archive(query, { limit = 12, kind = "image" } = {}) {
+    if (kind !== "video") return [];
+    const q = `(${query}) AND mediatype:movies AND (licenseurl:*publicdomain* OR licenseurl:*\\/by\\/* OR licenseurl:*\\/by-sa\\/*)`;
+    const j = await getJson(`https://archive.org/advancedsearch.php?q=${enc(q)}&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=licenseurl&rows=${limit}&output=json`);
+    return (j.response?.docs ?? []).map((d) => ({
+      provider: "archive", pid: d.identifier, kind: "video", title: d.title, author: [].concat(d.creator ?? "Internet Archive")[0],
+      license: licenseFromUrl(d.licenseurl), source: `https://archive.org/details/${enc(d.identifier)}`, width: null, height: null,
+    })).filter((c) => c.license !== "unknown");
+  },
   async pexels(query, { limit = 12, kind = "image" } = {}) {
     const key = process.env.PEXELS_API_KEY;
     if (!key) throw new Error("pexels needs PEXELS_API_KEY");
@@ -78,7 +90,34 @@ async function wikimediaVideo(query, limit) {
 }
 
 export const DEFAULT_PROVIDER_ORDER = ["nasa", "wikimedia", "openverse"];
-export const DEFAULT_VIDEO_PROVIDERS = () => ["nasa", "wikimedia", ...(process.env.PEXELS_API_KEY ? ["pexels"] : [])];
+export const DEFAULT_VIDEO_PROVIDERS = () => ["nasa", "wikimedia", "archive", ...(process.env.PEXELS_API_KEY ? ["pexels"] : [])];
+
+// A Creative Commons licence URL as a short name; anything not open enough for reuse is "unknown".
+export function licenseFromUrl(url) {
+  const u = String(url ?? "").toLowerCase();
+  if (/publicdomain\/zero/.test(u)) return "CC0";
+  if (/publicdomain/.test(u)) return "PD";
+  const m = /licenses\/(by|by-sa)\/([\d.]+)/.exec(u);
+  return m ? `CC ${m[1].toUpperCase()} ${m[2]}` : "unknown";
+}
+
+// The Internet Archive item's best video file: MP4 (else WebM) at most 1080p and 400 MB, the
+// sharpest that fits. Returns { url, width, height } or null.
+export async function archiveFullUrl(identifier, { fetchJson = getJson, maxBytes = 400e6 } = {}) {
+  const j = await fetchJson(`https://archive.org/metadata/${enc(identifier)}`);
+  const files = (j.files ?? [])
+    .filter((f) => /\.(mp4|webm)$/i.test(f.name) && Number(f.size ?? 0) <= maxBytes && Number(f.height ?? 0) <= 1080)
+    .sort((a, b) => /\.mp4$/i.test(b.name) - /\.mp4$/i.test(a.name) || Number(b.height ?? 0) - Number(a.height ?? 0) || Number(b.size ?? 0) - Number(a.size ?? 0));
+  const f = files[0];
+  return f ? { url: `https://archive.org/download/${enc(identifier)}/${f.name.split("/").map(enc).join("/")}`, width: Number(f.width) || null, height: Number(f.height) || null } : null;
+}
+
+// The download URL of a search hit whose results carry no direct link (NASA, Internet Archive).
+export async function fullUrl(c) {
+  if (c.provider === "nasa") return nasaFullUrl(c.pid, c.kind);
+  if (c.provider === "archive") return (await archiveFullUrl(c.pid))?.url;
+  return c.url;
+}
 
 // NASA search results only carry thumbnails; the asset manifest lists the full renditions.
 // Video: ~large is ~1080p at a sane size; ~orig can run to gigabytes.

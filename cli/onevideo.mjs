@@ -18,7 +18,7 @@ const COMMANDS = {
   tts: [media.tts, "tts [--sample] [--dry] [--force] [--only s1,s2]   sentence-level narration → plan/timings.json"],
   music: [media.music, "music [--preset ambient|pulse|documentary|bright] [--force]   procedural BGM + SFX"],
   timeline: [media.timeline, "timeline [--force]           compile plan/timeline.json"],
-  assets: [media.assets, "assets search <query> [--provider …] [--kind video] | assets suggest [--scene id,…] [--per 3] [--kind image|video|both] [--write] [--no-llm] | assets fetch [--only id] [--force]   (suggest: licensed candidates per scene before the storyboard; generate: AI image / video)"],
+  assets: [media.assets, "assets search <query> [--provider …] [--kind video] | assets suggest [--scene id,…] [--per 3] [--kind both|image|video] [--write [--no-generate]] [--no-llm] | assets fetch [--only id] [--force]   (suggest: licensed footage + photos per scene before the storyboard, an AI still where nothing fits; generate: AI image / video)"],
   capture: [media.capture, "capture <url> --id <asset> [--device phone|tablet|desktop] [--wait ms] [--click sel,…] [--rects name=sel,…] [--full] [--dark]   real UI screenshot → public/assets/<id>.png (+ named rects)"],
   screen: [media.screen, "screen <asset> [--at s] [--threshold 40]   corners of a dark device screen in footage → footage.props.screen"],
   depth: [media.depth, "depth [asset ids] [--step N] [--force]   depth maps for parallax / text-behind-subject (VM python + ONNX)"],
@@ -59,7 +59,7 @@ else if (!COMMANDS[cmd]) {
 } else {
   try {
     // render / build / depth / stills / preview / publish --formats go to a worker when ONEVIDEO_WORKERS is set (--local: run here).
-    if (!(await dispatch(cmd, rest))) await COMMANDS[cmd][0](parseArgs(rest, { booleans: ["force", "dry", "sample", "draft", "strict", "json", "stems", "full", "dark", "local", "write", "noLlm", "prune", "noArchive", "all"] }));
+    if (!(await dispatch(cmd, rest))) await COMMANDS[cmd][0](parseArgs(rest, { booleans: ["force", "dry", "sample", "draft", "strict", "json", "stems", "full", "dark", "local", "write", "noLlm", "prune", "noArchive", "all", "noGenerate"] }));
   } catch (e) {
     console.error(`✗ ${e instanceof UserError ? e.message : e.stack ?? e.message}`);
     process.exitCode = 1;

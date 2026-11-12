@@ -1,7 +1,8 @@
 // Candidates for every scene before the storyboard is drawn: stock-search queries per scene (the
 // script's own `search`, else a chat model reading narration, visual intent and the facts it
-// cites), searched in the licensed archives, ranked, and turned into manifest items on request.
-import { DEFAULT_PROVIDER_ORDER, DEFAULT_VIDEO_PROVIDERS, nasaFullUrl, scoreCandidate, search } from "./sources.mjs";
+// cites), searched in the licensed archives (footage first, then photos), ranked, and turned into
+// manifest items on request; a scene nothing licensed fits gets an AI still to stand in.
+import { DEFAULT_PROVIDER_ORDER, DEFAULT_VIDEO_PROVIDERS, fullUrl as resolveUrl, scoreCandidate, search } from "./sources.mjs";
 import { suggestAssetsPrompt } from "../prompts/index.mjs";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -48,7 +49,8 @@ export async function sceneQueries(scenes, { research, title, per = 3, askFn }) 
 
 // Ranked candidates for one scene across its queries, one per source, skipping media already in
 // the manifest. A rate-limited archive (Wikimedia answers 429 to bursts) is tried once more.
-export async function sceneCandidates(queries, { kind = "image", providers, aspect = 16 / 9, per = 3, skip = new Set(), searchFn = search, wait = sleep, onWarn = () => {} }) {
+// kind "both": footage and photos; the best clip, when there is one, is always among the picks.
+export async function sceneCandidates(queries, { kind = "both", providers, aspect = 16 / 9, per = 3, skip = new Set(), searchFn = search, wait = sleep, onWarn = () => {} }) {
   const kinds = kind === "both" ? ["video", "image"] : [kind];
   const found = [];
   const seen = new Set(skip);
@@ -70,22 +72,36 @@ export async function sceneCandidates(queries, { kind = "image", providers, aspe
   }
   // Best first, but every query keeps its best hit in the top `per`.
   const firsts = queries.map((q) => found.find((c) => c.query === q)).filter(Boolean);
+  const clip = found.find((c) => c.kind === "video");
+  if (clip && !firsts.includes(clip)) firsts.splice(Math.max(0, Math.min(firsts.length, per - 1)), 0, clip);
   const rest = found.filter((c) => !firsts.includes(c)).sort((a, b) => a.score - b.score);
   return [...firsts, ...rest].slice(0, per);
 }
 
 // Manifest items for picked candidates: a direct url with license, author and source recorded,
 // so assets fetch downloads exactly what was shown. Ids are <scene>-<n>, unused in the manifest.
-export async function candidateItems(sceneId, candidates, { taken = new Set(), fullUrl = nasaFullUrl } = {}) {
+export async function candidateItems(sceneId, candidates, { taken = new Set(), fullUrl = resolveUrl } = {}) {
   const items = [];
   let n = 1;
   for (const c of candidates) {
     while (taken.has(`${sceneId}-${n}`)) n++;
     const id = `${sceneId}-${n}`;
     taken.add(id);
-    const url = c.provider === "nasa" ? await fullUrl(c.pid, c.kind) : c.url;
+    const url = c.url ?? (await fullUrl(c));
     if (!url) continue;
     items.push({ id, kind: c.kind, url, license: c.license, author: c.author || c.provider, title: c.title, source: c.source, ...(c.width ? { width: c.width, height: c.height } : {}), note: `suggest: ${sceneId} · "${c.query}" · ${c.provider}` });
   }
   return items;
+}
+
+// A scene nothing licensed fits: an AI still from what it should show (licensed "generated", which
+// the density gate does not count as a real asset), with the first query as a stock fallback.
+export function generatedItem(scene, queries, { taken = new Set() } = {}) {
+  let n = 1;
+  while (taken.has(`${scene.id}-${n}`)) n++;
+  const id = `${scene.id}-${n}`;
+  taken.add(id);
+  const what = scene.visualIntent || queries.join(", ");
+  if (!what) return null;
+  return { id, kind: "image", generate: { prompt: `${what}，电影感，写实，无文字`, brief: `stands in for scene ${scene.id}: nothing licensed found` }, ...(queries[0] ? { query: queries[0] } : {}), note: `suggest: ${scene.id} · AI still (no licensed match)` };
 }
