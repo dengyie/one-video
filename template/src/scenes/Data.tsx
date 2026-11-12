@@ -202,12 +202,13 @@ export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Fo
       <div style={{ position: "relative", height: areaH, marginTop: 16 * u }}>
         {rows.map((r) => {
           const color = r.s.color ?? (r.s.group && groupColors[r.s.group]) ?? colorAt(theme, r.idx);
-          const visible = clamp01(top - r.rank), value = r.value * grow(r.rank);
+          // A bar still waiting to grow shows no "0" beside it: its value fades in as the bar starts.
+          const g = grow(r.rank), visible = clamp01(top - r.rank), value = r.value * g;
           return (
             <div key={r.s.name} style={{ position: "absolute", top: r.rank * rowH, left: 0, right: 0, height: rowH, display: "flex", alignItems: "center", opacity: visible }}>
               <div style={{ width: labelW, flex: "none", textAlign: "right", paddingRight: 18 * u, fontSize: Math.min(30, rowH / u * 0.45) * u, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.s.name}</div>
               <div data-anchor={`bar${r.idx + 1}`} style={{ width: `${Math.max(0.5, (value / max) * barPct)}%`, height: rowH * 0.7, borderRadius: 6 * u, background: `linear-gradient(90deg, ${color}99, ${color})` }} />
-              <div style={{ marginLeft: 14 * u, fontFamily: theme.fonts.number, fontSize: valueFont, color: theme.colors.muted, whiteSpace: "nowrap" }}>{fmt(value, format)}</div>
+              <div style={{ marginLeft: 14 * u, fontFamily: theme.fonts.number, fontSize: valueFont, color: theme.colors.muted, whiteSpace: "nowrap", opacity: clamp01(g * 5) }}>{fmt(value, format)}</div>
             </div>
           );
         })}
