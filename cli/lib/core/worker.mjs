@@ -1,6 +1,6 @@
 // Heavy commands on a bigger machine: with ONEVIDEO_WORKERS set (ssh hosts, in order of preference),
-// render / build / depth / stills run on the first idle worker. The project stays here: it is
-// mirrored to the same path on the worker, the job runs detached there (a dropped connection only
+// render / build / depth / stills (and publish --formats) run on the idlest worker. The project stays
+// here: it is mirrored to the same path on the worker, the job runs detached there (a dropped connection only
 // pauses the log), and what it wrote comes back. The worker reads its own /etc/onevideo/env.
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -14,9 +14,12 @@ const JOBS = "/tmp/onevideo-jobs";
 export const workerHosts = (env = process.env) => (env.ONEVIDEO_WORKERS ?? "").split(/[\s,]+/).filter(Boolean);
 export const shq = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`;
 
+// publish renders the other frame sizes it is asked for (--formats 9:16,1:1).
+const heavy = (cmd, argv) => HEAVY.has(cmd) || (cmd === "publish" && argv.some((a) => a === "--formats" || a.startsWith("--formats=")));
+
 // Run where we are: not a heavy command, already on a worker, --local, or no workers configured.
 export function wantsWorker(cmd, argv, env = process.env) {
-  return HEAVY.has(cmd) && !env.ONEVIDEO_ON_WORKER && !argv.includes("--local") && workerHosts(env).length > 0;
+  return heavy(cmd, argv) && !env.ONEVIDEO_ON_WORKER && !argv.includes("--local") && workerHosts(env).length > 0;
 }
 
 const ssh = (host, script, opts = {}) => spawnSync("ssh", [...SSH, host, script], { encoding: "utf8", maxBuffer: 1 << 26, ...opts });
@@ -58,7 +61,7 @@ function rsync(args) {
 async function runJob(host, project, cmd, argv, root) {
   const id = `${basename(project).replace(/[^\w.-]/g, "_")}-${cmd}-${Date.now()}`, logf = `${JOBS}/${id}.log`, exitf = `${JOBS}/${id}.exit`;
   const job = ["set -a; [ -r /etc/onevideo/env ] && . /etc/onevideo/env; set +a", `cd ${shq(project)} || exit 97`, `ONEVIDEO_ON_WORKER=1 exec node ${shq(join(root, "cli", "onevideo.mjs"))} ${[cmd, ...argv].map(shq).join(" ")}`].join("\n");
-  const start = ssh(host, `mkdir -p ${JOBS} && cat > ${JOBS}/${id}.sh && { setsid sh -c 'sh ${JOBS}/${id}.sh > ${logf} 2>&1 < /dev/null; echo $? > ${exitf}' > /dev/null 2>&1 < /dev/null & }`, { input: job });
+  const start = ssh(host, `mkdir -p ${JOBS} && find ${JOBS} -type f -mtime +7 -delete; cat > ${JOBS}/${id}.sh && { setsid sh -c 'sh ${JOBS}/${id}.sh > ${logf} 2>&1 < /dev/null; echo $? > ${exitf}' > /dev/null 2>&1 < /dev/null & }`, { input: job });
   if (start.status !== 0) throw new Error(`worker ${host}: could not start the job: ${start.stderr?.trim()}`);
   log(`worker ${host}: ${cmd} running (log ${logf}; Ctrl-C stops following, not the job)`);
   let off = 0, down = 0;

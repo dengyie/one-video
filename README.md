@@ -70,7 +70,7 @@ apt-get install -y --no-install-recommends \
   libgbm1 libasound2 libpango-1-0-0 libcairo2 fonts-noto-cjk
 ```
 
-A small machine can hand the heavy work to a bigger one: set `ONEVIDEO_WORKERS=host1,host2` (ssh hosts, in order of preference) and `render` / `build` / `depth` / `stills` run on the idlest of them. The project stays local and is mirrored to the same path there; the job runs detached (a dropped connection only pauses the log) and its output is synced back. A worker needs the same repo checked out (`/opt/onevideo`, or `ONEVIDEO_WORKER_ROOT`), `rsync`, and its own key in `/etc/onevideo/env`; its code is brought to the local commit automatically. `--local` keeps a command here.
+A small machine can hand the heavy work to a bigger one: set `ONEVIDEO_WORKERS=host1,host2` (ssh hosts, in order of preference) and `render` / `build` / `depth` / `stills` (and `publish --formats`) run on the idlest of them. The project stays local and is mirrored to the same path there; the job runs detached (a dropped connection only pauses the log) and its output is synced back. A worker needs the same repo checked out (`/opt/onevideo`, or `ONEVIDEO_WORKER_ROOT`), `rsync`, and its own key in `/etc/onevideo/env`; its code is brought to the local commit automatically. `--local` keeps a command here.
 
 ---
 

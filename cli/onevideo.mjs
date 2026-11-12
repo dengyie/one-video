@@ -51,7 +51,7 @@ else if (!COMMANDS[cmd]) {
   process.exitCode = 2;
 } else {
   try {
-    // render / build / depth / stills go to a worker when ONEVIDEO_WORKERS is set (--local: run here).
+    // render / build / depth / stills / publish --formats go to a worker when ONEVIDEO_WORKERS is set (--local: run here).
     if (!(await dispatch(cmd, rest))) await COMMANDS[cmd][0](parseArgs(rest, { booleans: ["force", "dry", "sample", "draft", "strict", "json", "stems", "full", "dark", "local"] }));
   } catch (e) {
     console.error(`✗ ${e instanceof UserError ? e.message : e.stack ?? e.message}`);

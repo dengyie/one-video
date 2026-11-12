@@ -1,7 +1,7 @@
 // Music beat grid for cutting on the beat. Synthesized music knows its tempo; a provided track is
 // decoded once with the bundled ffmpeg and analysed (onset envelope → tempo by autocorrelation →
 // phase), and the grid is cached next to the track as <file>.beats.json for the sync compiler.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ffmpeg } from "../core/ffmpeg.mjs";
@@ -86,12 +86,18 @@ export async function ensureBeats(root, music, { preset } = {}) {
   const cache = beatsFile(file);
   // Caches from before downbeat detection are re-analysed once.
   if (existsSync(cache)) { const c = JSON.parse(readFileSync(cache, "utf8")); if (c.downbeats || String(c.source).startsWith("synth:")) return c; }
-  let wav = file;
-  if (!/\.wav$/i.test(file)) {
-    wav = join(tmpdir(), `onevideo-beats-${process.pid}.wav`);
-    await ffmpeg(["-y", "-v", "error", "-i", file, "-ac", "1", "-ar", "22050", "-c:a", "pcm_s16le", wav]);
+  let w;
+  if (/\.wav$/i.test(file)) w = readWav(file);
+  else {
+    // Other formats are decoded to a temporary WAV, removed once read.
+    const wav = join(tmpdir(), `onevideo-beats-${process.pid}.wav`);
+    try {
+      await ffmpeg(["-y", "-v", "error", "-i", file, "-ac", "1", "-ar", "22050", "-c:a", "pcm_s16le", wav]);
+      w = readWav(wav);
+    } finally {
+      rmSync(wav, { force: true });
+    }
   }
-  const w = readWav(wav);
   const res = { ...detectBeats(toMono(w, w.sampleRate), w.sampleRate), source: preset ? `synth:${preset}` : "detected" };
   writeFileSync(cache, JSON.stringify(res));
   return res;

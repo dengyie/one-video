@@ -331,7 +331,7 @@ export async function doctor() {
   const depth = media.depthTools();
   add(true, "depth", depth.missing ? `optional; ${depth.missing}` : `${depth.py} + ${depth.model}`);
   const workers = workerHosts();
-  add(true, "workers", workers.length ? `${workers.join(", ")} (render/build/depth/stills run there; --local to stay)` : "optional; unset (heavy commands run here; ONEVIDEO_WORKERS=host,…)");
+  add(true, "workers", workers.length ? `${workers.join(", ")} (render/build/depth/stills/publish --formats run there; --local to stay)` : "optional; unset (heavy commands run here; ONEVIDEO_WORKERS=host,…)");
   for (const [ok, name, detail] of checks) log(`${ok ? "✓" : "✗"} ${name.padEnd(9)} ${detail}`);
   if (checks.some(([ok]) => !ok)) process.exitCode = 1;
 }

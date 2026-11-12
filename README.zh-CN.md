@@ -72,7 +72,7 @@ apt-get install -y --no-install-recommends \
   libgbm1 libasound2 libpango-1-0-0 libcairo2 fonts-noto-cjk
 ```
 
-小内存机器可以把重活交给另一台机器：设 `ONEVIDEO_WORKERS=host1,host2`（ssh 主机名，按优先顺序），`render` / `build` / `depth` / `stills` 会挑最空闲的一台执行。项目留在本机，按相同路径同步过去，任务在 worker 上脱离终端运行（断线只暂停日志），结束后把产物同步回来。worker 需要装好同一份仓库（默认 `/opt/onevideo`，用 `ONEVIDEO_WORKER_ROOT` 改）和 `rsync`，key 写在它自己的 `/etc/onevideo/env`；代码会自动同步到本机的提交。加 `--local` 则强制在本机执行。
+小内存机器可以把重活交给另一台机器：设 `ONEVIDEO_WORKERS=host1,host2`（ssh 主机名，按优先顺序），`render` / `build` / `depth` / `stills`（以及 `publish --formats`）会挑最空闲的一台执行。项目留在本机，按相同路径同步过去，任务在 worker 上脱离终端运行（断线只暂停日志），结束后把产物同步回来。worker 需要装好同一份仓库（默认 `/opt/onevideo`，用 `ONEVIDEO_WORKER_ROOT` 改）和 `rsync`，key 写在它自己的 `/etc/onevideo/env`；代码会自动同步到本机的提交。加 `--local` 则强制在本机执行。
 
 ---
 

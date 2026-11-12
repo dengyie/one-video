@@ -9,6 +9,9 @@ test("only heavy commands go to a worker, and only when one is configured", () =
   assert.equal(wantsWorker("render", ["--draft"], env), true);
   assert.equal(wantsWorker("build", [], env), true);
   assert.equal(wantsWorker("validate", [], env), false);
+  assert.equal(wantsWorker("publish", [], env), false);
+  assert.equal(wantsWorker("publish", ["--formats", "9:16"], env), true);
+  assert.equal(wantsWorker("publish", ["--formats=1:1"], env), true);
   assert.equal(wantsWorker("render", ["--local"], env), false);
   assert.equal(wantsWorker("render", [], { ...env, ONEVIDEO_ON_WORKER: "1" }), false);
   assert.equal(wantsWorker("render", [], { ONEVIDEO_WORKERS: "" }), false);
