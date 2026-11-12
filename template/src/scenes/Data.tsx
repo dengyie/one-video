@@ -334,13 +334,16 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
                 {pts.map(([x, y], k) => {
                   // Cued, the start point waits half-lit until its value is spoken.
                   const o = pointT && k === 0 ? (reached >= 0 ? 1 : 0.5) : clamp01(((pointT ? pos : drawP * (pts.length - 1)) - k + 0.15) / 0.3);
-                  if (o <= 0) return null;
+                  // Cued, the points still ahead wait as faint markers, so the axes show where the line is going
+                  // instead of sitting empty until the narration gets there; their values stay hidden.
+                  const ghost = pointT ? 0.3 : 0;
+                  if (o <= 0 && !ghost) return null;
                   return (
-                    <g key={k} opacity={o}>
-                      <circle cx={x} cy={y} r={8 * u} fill={theme.colors.bg} stroke={color} strokeWidth={4 * u} />
-                      {series.length === 1 && k !== tipK && !annotated.has(String(s.points[k][0])) && (
+                    <g key={k}>
+                      <circle cx={x} cy={y} r={8 * u} fill={theme.colors.bg} stroke={color} strokeWidth={4 * u} opacity={Math.max(o, ghost)} />
+                      {o > 0 && series.length === 1 && k !== tipK && !annotated.has(String(s.points[k][0])) && (
                         // The first point sits on the y axis: start its label there so it clears the tick labels.
-                        <text x={k === 0 ? x - 8 * u : x} y={y - 24 * u} textAnchor={k === 0 ? "start" : "middle"} fontSize={28 * u} fontWeight={600} fill={theme.colors.text} fontFamily={theme.fonts.number} {...halo}>{fmt(Number(s.points[k][1]), format)}</text>
+                        <text x={k === 0 ? x - 8 * u : x} y={y - 24 * u} textAnchor={k === 0 ? "start" : "middle"} fontSize={28 * u} fontWeight={600} fill={theme.colors.text} fontFamily={theme.fonts.number} opacity={o} {...halo}>{fmt(Number(s.points[k][1]), format)}</text>
                       )}
                     </g>
                   );

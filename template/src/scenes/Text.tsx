@@ -87,7 +87,7 @@ export const QuoteScene: React.FC<{ text: string; author?: string; source?: stri
             ? [...text].map((c, i) => {
                 // Words not yet said stay faint, so a long quote builds clause by clause instead of sitting there whole.
                 const k = Math.min(1, Math.max(0, (t - times[i] + 0.1) / 0.25));
-                return <span key={i} style={{ display: "inline-block", opacity: 0.14 + 0.86 * k, transform: `translateY(${(1 - k) * 10 * u}px)` }}>{c}</span>;
+                return <span key={i} style={{ display: "inline-block", opacity: 0.22 + 0.78 * k, transform: `translateY(${(1 - k) * 10 * u}px)` }}>{c}</span>;
               })
             : text}
         </div>
