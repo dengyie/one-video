@@ -43,11 +43,12 @@ export const PROVIDERS = {
       source: r.foreign_landing_url, url: r.url, width: r.width, height: r.height,
     }));
   },
-  // Only open licences (public domain, CC0, CC BY, CC BY-SA); the file is chosen per item later
+  // Titles only (its full text matches stray words in long descriptions); open licences only (public
+  // domain, CC0, CC BY, CC BY-SA). The file is chosen per item later
   // (archiveFullUrl), since an item can hold a film of gigabytes next to a 480p copy.
   async archive(query, { limit = 12, kind = "image" } = {}) {
     if (kind !== "video") return [];
-    const q = `(${query}) AND mediatype:movies AND (licenseurl:*publicdomain* OR licenseurl:*\\/by\\/* OR licenseurl:*\\/by-sa\\/*)`;
+    const q = `title:(${query}) AND mediatype:movies AND (licenseurl:*publicdomain* OR licenseurl:*\\/by\\/* OR licenseurl:*\\/by-sa\\/*)`;
     const j = await getJson(`https://archive.org/advancedsearch.php?q=${enc(q)}&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=licenseurl&rows=${limit}&output=json`);
     return (j.response?.docs ?? []).map((d) => ({
       provider: "archive", pid: d.identifier, kind: "video", title: d.title, author: [].concat(d.creator ?? "Internet Archive")[0],
@@ -105,9 +106,12 @@ export function licenseFromUrl(url) {
 // sharpest that fits. Returns { url, width, height } or null.
 export async function archiveFullUrl(identifier, { fetchJson = getJson, maxBytes = 400e6 } = {}) {
   const j = await fetchJson(`https://archive.org/metadata/${enc(identifier)}`);
+  // Its mp4 is often only a 320x240 "_512kb" derivative next to a sharper original (mpeg, mov, ogv);
+  // ffmpeg reads any of them, so a file of 480 lines or more wins first, then mp4, then the sharpest.
+  const h = (f) => Number(f.height ?? 0);
   const files = (j.files ?? [])
-    .filter((f) => /\.(mp4|webm)$/i.test(f.name) && Number(f.size ?? 0) <= maxBytes && Number(f.height ?? 0) <= 1080)
-    .sort((a, b) => /\.mp4$/i.test(b.name) - /\.mp4$/i.test(a.name) || Number(b.height ?? 0) - Number(a.height ?? 0) || Number(b.size ?? 0) - Number(a.size ?? 0));
+    .filter((f) => /\.(mp4|webm|mov|mpe?g|ogv)$/i.test(f.name) && Number(f.size ?? 0) <= maxBytes && h(f) <= 1080)
+    .sort((a, b) => (h(b) >= 480) - (h(a) >= 480) || /\.mp4$/i.test(b.name) - /\.mp4$/i.test(a.name) || h(b) - h(a) || Number(b.size ?? 0) - Number(a.size ?? 0));
   const f = files[0];
   return f ? { url: `https://archive.org/download/${enc(identifier)}/${f.name.split("/").map(enc).join("/")}`, width: Number(f.width) || null, height: Number(f.height) || null } : null;
 }

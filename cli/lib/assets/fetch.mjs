@@ -7,7 +7,7 @@ import { generateImage, generateVideo } from "../generate/index.mjs";
 import { DEFAULT_PROVIDER_ORDER, DEFAULT_VIDEO_PROVIDERS, fullUrl, scoreCandidate, search } from "./sources.mjs";
 import { clipFrames, cutClip, framesDir } from "./media.mjs";
 
-const extOf = (url, fallback) => (String(url).match(/\.(jpe?g|png|webp|mp4|webm|mov)(?:$|[?#])/i)?.[1].toLowerCase().replace("jpeg", "jpg") ?? fallback);
+const extOf = (url, fallback) => (String(url).match(/\.(jpe?g|png|webp|mp4|webm|mov|mpe?g|ogv)(?:$|[?#])/i)?.[1].toLowerCase().replace("jpeg", "jpg") ?? fallback);
 
 // Resolve one manifest item to a local file; returns the updated item.
 // `gen` carries generation settings: { aspect: "16:9", image, video, llm, lookup, onWarn }. A failed

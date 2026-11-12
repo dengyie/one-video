@@ -87,7 +87,10 @@ test("Internet Archive: open licences only, the sharpest file that fits", async 
     { name: "film 4k.mp4", size: "900000000", width: "3840", height: "2160" },
   ];
   assert.deepEqual(await archiveFullUrl("x y", { fetchJson: async () => ({ files }) }), { url: "https://archive.org/download/x%20y/film.mp4", width: 854, height: 480 });
-  assert.equal(await archiveFullUrl("x", { fetchJson: async () => ({ files: [files[0]] }) }), null);
+  assert.equal(await archiveFullUrl("x", { fetchJson: async () => ({ files: [{ name: "film.avi", size: "1", height: "480" }] }) }), null);
+  // Only a 320x240 mp4 derivative: the 640x480 original is sharper.
+  const old = [{ name: "reel.mpeg", size: "186000000", width: "640", height: "480" }, { name: "reel.ogv", size: "29000000", height: "304" }, { name: "reel_512kb.mp4", size: "30000000", height: "240" }];
+  assert.equal((await archiveFullUrl("r", { fetchJson: async () => ({ files: old }) })).url, "https://archive.org/download/r/reel.mpeg");
 });
 
 test("generatedItem: an AI still from the visual intent, the first query kept as stock fallback", () => {
