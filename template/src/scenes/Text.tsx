@@ -205,7 +205,8 @@ export const SourcesScene: React.FC<{ title?: string; items?: string[] }> = ({ t
       </div>
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, columnGap: 48 * u, rowGap: 14 * u, opacity: out }}>
         {list.map((s, i) => {
-          const e = Math.min(1, Math.max(0, (t - Math.max(0.3, t0) - i * 0.12) / 0.4));
+          // The whole page is in within ~1 s, however many items it holds: a page only lasts a few seconds.
+          const e = Math.min(1, Math.max(0, (t - Math.max(0.3, t0) - i * Math.min(0.12, 0.6 / list.length)) / 0.4));
           return (
             <div key={first + i} style={{ fontSize: fs, color: theme.colors.text, lineHeight: 1.4, opacity: e, display: "flex", gap: 12 * u }}>
               <span style={{ color: theme.colors.accent, fontFamily: theme.fonts.number }}>{String(first + i + 1).padStart(2, "0")}</span>

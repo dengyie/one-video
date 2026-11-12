@@ -394,11 +394,10 @@ export const ShareScene: React.FC<{ title?: string; unit?: string; format?: Form
   const pct = (v: number) => `${((v / total) * 100).toFixed(pctDecimals)}%`;
   // Narrow frames stack the legend under the ring; a square one has to shrink the ring to fit it.
   const R = portrait ? 320 * u : narrow ? Math.min(300 * u, (height - top - bottom - (180 + (segments.length + (totalRow ? 1.4 : 0)) * 66) * u) / 2) : 300 * u, r = R * 0.62;
-  // The whole ring sweeps in on the first reveal, so the chart never shows a broken circle;
-  // each slice then lights up (and its legend row) on its own cue.
-  // A total read out first brings the whole ring with it.
+  // The whole ring sweeps in (faint) as the scene opens, alongside the faint legend, so a first cue
+  // seconds in doesn't leave the chart empty; each slice then lights up (and its legend row) on its own cue.
   const first = Math.min(...segments.map((s, i) => at(i, segments.length, s.cue)), ...(totalRow?.cue && scene.cues[totalRow.cue] !== undefined ? [scene.cues[totalRow.cue]] : []));
-  const sweep = easeInOut((t - first + 0.3) / 1.1) * Math.PI * 2;
+  const sweep = easeInOut((t - Math.min(first - 0.3, 0.2)) / 1.1) * Math.PI * 2;
   let acc = 0;
   const arcs = segments.map((s, i) => {
     const a0 = (acc / total) * Math.PI * 2;
