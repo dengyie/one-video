@@ -44,7 +44,7 @@ research → proposal → script → assets → storyboard → voice → compose
   - 无限画布镜头穿越飞行、音乐重拍吸附（`music.offset: "auto"`）与动态音效（SFX）自动对齐。
 - **深度与主体画面感知**：通过 `onevideo depth` 提取景深图与网格明度，指引运镜避让前景主体，高对比度字幕智能避障。
 - **生产级素材与 AI 生成**：
-  - NASA、Wikimedia Commons、Openverse 免 Key 检索集成。
+  - NASA、Wikimedia Commons、Openverse、Internet Archive（影片）免 Key 检索集成。
   - OpenAI 兼容文生图、图生视频回落通道，视觉模型自动质检人物畸变与跳帧。
 - **发布级质检 (Automated Post-Render QC)**：
   - 自动审查封装编码、分辨率、帧率、有效时长、真峰值电平、静音区间、冻结帧与抽帧质检报告。

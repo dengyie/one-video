@@ -391,7 +391,7 @@ export async function doctor() {
   const t = ttsConfig(cfg);
   const key = resolveApiKey(t.keyEnv, t.baseUrl);
   add(Boolean(key), "tts key", key ? `found via ${key.source}` : trustedKeyHost(t.baseUrl) ? `missing: set ${t.keyEnv}` : `missing: ${new URL(t.baseUrl).host} needs its own keyEnv variable`);
-  add(true, "pexels", process.env.PEXELS_API_KEY ? "PEXELS_API_KEY set" : "optional; unset (NASA/Wikimedia/Openverse still work)");
+  add(true, "pexels", process.env.PEXELS_API_KEY ? "PEXELS_API_KEY set" : "optional; unset (NASA/Wikimedia/Openverse/Internet Archive still work)");
   add(existsSync(join(ONEVIDEO_ROOT, "template", "src", "index.ts")), "template", join(ONEVIDEO_ROOT, "template"));
   // Generation and review share the relay key; listing the model order is enough here (no calls).
   const genKey = (c) => resolveApiKey(c.keyEnv, c.baseUrl);

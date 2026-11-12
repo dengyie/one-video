@@ -43,7 +43,7 @@ onevideo init <dir> --pipeline data-explainer|documentary|shorts|promo [--style 
 onevideo status | validate [--strict] | approve <stage> [--note …]
 onevideo tts [--sample|--dry|--force|--only a,b]   # 逐句合成 → plan/timings.json（含响度归一化）
 onevideo music [--preset ambient|pulse|documentary|bright]
-onevideo assets suggest [--scene a,b] [--per 3] [--kind image|video|both] [--write] [--no-llm]   # 按场景出检索词并找授权候选 → plan/asset-suggestions.json；--write 追加进 assets.json
+onevideo assets suggest [--scene a,b] [--per 3] [--kind image|video|both] [--write [--no-generate]] [--no-llm]   # 按场景出检索词并找授权候选（默认图片+视频，每场景保证一条动态镜头）→ plan/asset-suggestions.json；--write 追加进 assets.json，无候选的场景补 AI 图
 onevideo assets search <q> [--provider nasa,wikimedia,openverse,pexels] | assets fetch [--only a,b] [--force]   # 含 generate：AI 生图 / 生视频
 onevideo depth [asset ids] [--step N]               # 深度图 + 亮度网格：主体穿越、关键词避让、自动加底、字幕避让
 onevideo capture <url> --id x [--device phone|tablet|desktop] [--click sel] [--rects name=sel,…] [--full] [--dark]   # 真实界面截图（自起无头 Chrome）

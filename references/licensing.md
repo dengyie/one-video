@@ -15,11 +15,12 @@
 
 ## 来源与优先级
 
-`onevideo assets fetch` 按 NASA Images → Wikimedia Commons → Openverse 搜索（都不需要 key），按“授权开放度 + 画幅贴合度 + 分辨率”打分取第一名。`PEXELS_API_KEY` 存在时可用 Pexels 的图片和视频。
+`onevideo assets fetch` 的图片按 NASA Images → Wikimedia Commons → Openverse、视频按 NASA → Wikimedia → Internet Archive 搜索（都不需要 key），按“授权开放度 + 画幅贴合度 + 分辨率”打分取第一名。`PEXELS_API_KEY` 存在时可用 Pexels 的图片和视频。
 
 - **NASA**：美国政府作品，通常是公有领域。注意 NASA 标志本身和含人物肖像的照片有额外限制。
 - **Wikimedia**：逐张看授权，搜索时已过滤 NC/ND。
 - **Openverse**：只请求可商用、可修改的结果。
+- **Internet Archive**：只取条目 licenseurl 是公有领域 / CC0 / CC BY / CC BY-SA 的影片（按标题检索），没有 licenseurl 或带 NC/ND 的一律不要；下载 1080p 以内最清晰的版本，mp4 只是 240p 派生件时改取原始文件。署名照搬条目的 creator。
 
 ## 不要用
 
