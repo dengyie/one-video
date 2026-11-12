@@ -106,12 +106,14 @@ export function licenseFromUrl(url) {
 // sharpest that fits. Returns { url, width, height } or null.
 export async function archiveFullUrl(identifier, { fetchJson = getJson, maxBytes = 400e6 } = {}) {
   const j = await fetchJson(`https://archive.org/metadata/${enc(identifier)}`);
-  // Its mp4 is often only a 320x240 "_512kb" derivative next to a sharper original (mpeg, mov, ogv);
-  // ffmpeg reads any of them, so a file of 480 lines or more wins first, then mp4, then the sharpest.
+  // Its mp4 is often only a 320x240 "_512kb" derivative next to a sharper original or ogv: of 480
+  // lines or more, mp4 first; below that, simply the sharpest. Containers are the ones Remotion's
+  // ffmpeg build reads (it has no MPEG program stream demuxer, so no .mpeg originals).
   const h = (f) => Number(f.height ?? 0);
+  const mp4 = (f) => /\.mp4$/i.test(f.name);
   const files = (j.files ?? [])
-    .filter((f) => /\.(mp4|webm|mov|mpe?g|ogv)$/i.test(f.name) && Number(f.size ?? 0) <= maxBytes && h(f) <= 1080)
-    .sort((a, b) => (h(b) >= 480) - (h(a) >= 480) || /\.mp4$/i.test(b.name) - /\.mp4$/i.test(a.name) || h(b) - h(a) || Number(b.size ?? 0) - Number(a.size ?? 0));
+    .filter((f) => /\.(mp4|webm|mov|ogv|avi)$/i.test(f.name) && Number(f.size ?? 0) <= maxBytes && h(f) <= 1080)
+    .sort((a, b) => (h(b) >= 480) - (h(a) >= 480) || (h(a) >= 480 ? mp4(b) - mp4(a) : 0) || h(b) - h(a) || Number(b.size ?? 0) - Number(a.size ?? 0));
   const f = files[0];
   return f ? { url: `https://archive.org/download/${enc(identifier)}/${f.name.split("/").map(enc).join("/")}`, width: Number(f.width) || null, height: Number(f.height) || null } : null;
 }

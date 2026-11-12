@@ -20,7 +20,7 @@
 - **NASA**：美国政府作品，通常是公有领域。注意 NASA 标志本身和含人物肖像的照片有额外限制。
 - **Wikimedia**：逐张看授权，搜索时已过滤 NC/ND。
 - **Openverse**：只请求可商用、可修改的结果。
-- **Internet Archive**：只取条目 licenseurl 是公有领域 / CC0 / CC BY / CC BY-SA 的影片（按标题检索），没有 licenseurl 或带 NC/ND 的一律不要；下载 1080p 以内最清晰的版本，mp4 只是 240p 派生件时改取原始文件。署名照搬条目的 creator。
+- **Internet Archive**：只取条目 licenseurl 是公有领域 / CC0 / CC BY / CC BY-SA 的影片（按标题检索），没有 licenseurl 或带 NC/ND 的一律不要；下载 1080p 以内最清晰的版本，mp4 只是 240p 派生件时改取更清晰的 ogv / avi（Remotion 自带的 ffmpeg 读不了 .mpeg 原件）。署名照搬条目的 creator。
 
 ## 不要用
 
