@@ -53,7 +53,8 @@ function syncCode(host, root) {
 
 function rsync(args) {
   // No owner/group: files come back owned by whoever runs the CLI here, not the worker's uid.
-  const r = spawnSync("rsync", ["-rlptz", "--mkpath", "-e", `ssh ${SSH.join(" ")}`, ...args], { stdio: "inherit" });
+  // -H: out/<name>.mp4 is a hard link to its version, one file on both sides.
+  const r = spawnSync("rsync", ["-rlptzH", "--mkpath", "-e", `ssh ${SSH.join(" ")}`, ...args], { stdio: "inherit" });
   if (r.status !== 0) throw new Error(`rsync ${args.slice(-2).join(" → ")} exited ${r.status}`);
 }
 
