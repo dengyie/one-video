@@ -134,13 +134,17 @@ export async function nasaFullUrl(nasaId, kind = "image") {
 
 const LICENSE_RANK = (l) => (/^(pd|public domain|cc0|pdm)/i.test(l) ? 0 : /pexels/i.test(l) ? 0.5 : /by-sa|by sa/i.test(l) ? 1.5 : /by/i.test(l) ? 1 : 3);
 
-// Lower is better: license openness, aspect fit to the frame, and resolution.
+// Lower is better: license openness, aspect fit to the frame, resolution, the archive's own
+// relevance order (`rank`, 0 = its best match) and, for footage, how much there is to search
+// through for the usable seconds.
 export function scoreCandidate(c, targetAspect = 16 / 9) {
-  let s = LICENSE_RANK(c.license);
+  let s = LICENSE_RANK(c.license) + Math.min(c.rank ?? 0, 10) * 0.2;
   if (c.width && c.height) {
     s += Math.abs(Math.log(c.width / c.height / targetAspect)) * 2;
-    if (Math.max(c.width, c.height) < 1280) s += 1.5;
+    const long = Math.max(c.width, c.height);
+    if (long < 1280) s += long < 640 ? 3 : 1.5;
   } else s += 0.6;
+  if (c.kind === "video" && c.duration > 600) s += c.duration > 1800 ? 1.5 : 0.75;
   return s;
 }
 
@@ -157,7 +161,7 @@ export async function search(query, { providers = DEFAULT_PROVIDER_ORDER, kind =
     if (!fn) { errors.push(`unknown provider "${name}"`); continue; }
     if (blocked.has(name)) continue;
     try {
-      results.push(...(await fn(query, { limit, kind })));
+      results.push(...(await fn(query, { limit, kind })).map((c, rank) => ({ rank, ...c })));
     } catch (e) {
       if (challenged(e.message)) {
         blocked.add(name);

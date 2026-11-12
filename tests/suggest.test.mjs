@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { candidateItems, generatedItem, latinTerms, sceneBrief, sceneCandidates, sceneQueries } from "../cli/lib/assets/suggest.mjs";
-import { archiveFullUrl, licenseFromUrl } from "../cli/lib/assets/sources.mjs";
+import { archiveFullUrl, licenseFromUrl, scoreCandidate } from "../cli/lib/assets/sources.mjs";
 import { suggestAssetsPrompt } from "../cli/lib/prompts/index.mjs";
 
 const research = { facts: [{ id: "f1", claim: "NVIDIA H100 shipments doubled" }] };
@@ -111,4 +111,11 @@ test("sceneQueries asks again for the scenes a cut-short reply left out", async 
   const q = await sceneQueries(scenes, { askFn });
   assert.deepEqual([q.a, q.b, q.c], [["qa"], ["qb"], ["qc"]]);
   assert.deepEqual(asked, [["abc", 3000], ["bc", 3000]]);
+});
+
+test("scoreCandidate: the archive's best match, sharp and short footage come first", () => {
+  const base = { kind: "video", license: "PD", width: 1920, height: 1080 };
+  assert.ok(scoreCandidate({ ...base, rank: 0 }) < scoreCandidate({ ...base, rank: 4 }));
+  assert.ok(scoreCandidate({ ...base, width: 1280, height: 720 }) < scoreCandidate({ ...base, width: 312, height: 176 }));
+  assert.ok(scoreCandidate({ ...base, duration: 60 }) < scoreCandidate({ ...base, duration: 3715 }));
 });
