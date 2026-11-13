@@ -178,10 +178,10 @@ export const SourcesScene: React.FC<{ title?: string; items?: string[] }> = ({ t
     }
     return h;
   };
-  // The largest size (30u down to 16u) at which a page fits the safe area.
+  // The largest size (34u down to 16u) at which a page fits the safe area.
   // 1.15: word wrapping of Latin titles leaves ragged line ends the em estimate doesn't see.
   const fit = (list: string[]) => {
-    let fs = 30 * u;
+    let fs = 34 * u;
     while (fs > 16 * u && listH(list, fs) * 1.15 > room) fs -= u;
     return fs;
   };
@@ -212,7 +212,7 @@ export const SourcesScene: React.FC<{ title?: string; items?: string[] }> = ({ t
           return (
             <div key={first + i} style={{ fontSize: fs, color: theme.colors.text, lineHeight: 1.4, opacity: e, display: "flex", gap: 12 * u }}>
               <span style={{ color: theme.colors.accent, fontFamily: theme.fonts.number }}>{String(first + i + 1).padStart(2, "0")}</span>
-              <span style={{ opacity: 0.86 }}>{s}</span>
+              <span style={{ opacity: 0.92 }}>{s}</span>
             </div>
           );
         })}
