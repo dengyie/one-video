@@ -210,12 +210,15 @@ test("layoutGate: overlays over spoken captions, off-frame, tiny or stacked stic
   assert.deepEqual(run({ type: "kinetic", props: { align: "center" }, shots: [{ t: 0, zoom: 1.15, x: 0.5, y: 0.5 }] }), []);
   assert.ok(run({ type: "kinetic", props: {}, shots: [{ t: 0, zoom: 1.4, x: 0.5, y: 0.5 }] }).some((i) => /maxTextZoom/.test(i.msg)));
 
-  // A keyword parked on a map pin once the camera has flown in to it; a globe is not checked.
+  // A keyword parked on a map pin once the camera has flown in to it.
   const map = (y, extra = {}) => ({ type: "map", cues: { sg: 1 }, props: { views: [{ center: [105, 12], zoom: 2.2 }, { center: [103.8, 1.4], zoom: 9, cue: "sg" }], pins: [{ lon: 103.82, lat: 1.35, label: "总部", cue: "sg" }], ...extra }, overlays: [{ ...word(y), t: 2 }] });
   assert.ok(run(map(0.6)).some((i) => /covers the map pin/.test(i.msg)));
   assert.ok(run(map(0.45)).some((i) => /covers the map label "总部"/.test(i.msg)));
   assert.ok(!run(map(0.25)).some((i) => /covers the map/.test(i.msg)));
-  assert.ok(!run(map(0.6, { mode: "globe" })).some((i) => /covers the map/.test(i.msg)));
+  // Every element it covers is named; a globe centres the view at mid-frame.
+  assert.ok(run(map(0.5)).some((i) => /covers the map pin, label "总部"/.test(i.msg)));
+  assert.ok(run(map(0.5, { mode: "globe" })).some((i) => /covers the map pin/.test(i.msg)));
+  assert.ok(!run(map(0.62, { mode: "globe" })).some((i) => /covers the map/.test(i.msg)));
   // Country labels: centred on the country, or dropped under a pin that sits there.
   const us = (y, extra = {}) => ({ type: "map", cues: {}, props: { views: [{ center: [-98, 39], zoom: 3 }], highlight: [{ id: "840", label: "美国" }], ...extra }, overlays: [{ type: "word", text: "关税", x: 0.53, y, t: 2, end: 5 }] });
   assert.ok(run(us(0.4)).some((i) => /covers the map label "美国"/.test(i.msg)));

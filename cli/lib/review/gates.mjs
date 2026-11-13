@@ -278,7 +278,7 @@ export function echoGate(timeline, config) {
 // the shot track, so the caption band is mapped into the scene's own coordinates at each moment.
 // - an overlay over a spoken caption (error): the caption is unreadable or the sticker is cut;
 // - an overlay partly out of frame, two stickers on top of each other, a sticker too small to read,
-//   a keyword or sticker over a map pin, its label or a country label;
+//   a keyword or sticker over a map pin or a pin, country or route label;
 // - a shot pushed in so far that left-aligned or wide text leaves the frame.
 const BOXED = new Set(["image", "icon", "lottie", "stamp"]);
 const LEFT_TEXT = (sc, portrait) => (sc.type === "kinetic" && sc.props?.align === "left") || sc.type === "bullets" || (sc.type === "chapter" && !portrait);
@@ -304,16 +304,17 @@ function overlayBox(o, width, height) {
 }
 const meets = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
 
-// Map pins, pin labels and country labels at scene time t, as frame-fraction boxes: the Map
-// scene's mercator projection, camera path between views and label placement, re-done without
-// d3 (country labels sit on a precomputed geoCentroid). A globe is skipped.
+// Map pins, pin labels, country labels and route labels at scene time t, as frame-fraction
+// boxes: the Map scene's mercator or globe projection, camera path between views and label
+// placement, re-done without d3 (country labels sit on a precomputed geoCentroid).
 const PACE = { slow: 1.35, medium: 1, fast: 0.7 };
 const easeIO = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
 const textWidth = (text) => [...text].reduce((a, c) => a + (c.charCodeAt(0) > 0x2e80 ? 1 : 0.6), 0) * 28 + 36;
-function mapBoxes(sc, t, width, height, pace) {
+export function mapBoxes(sc, t, width, height, pace = 1) {
   const p = sc.props ?? {};
-  const pins = p.pins ?? [], hls = (p.highlight ?? []).filter((h) => h.label);
-  if (p.mode === "globe" || (!pins.length && !hls.length)) return [];
+  const pins = p.pins ?? [], routes = p.routes ?? [];
+  if (!pins.length && !routes.some((x) => x.label) && !(p.highlight ?? []).some((h) => h.label)) return [];
+  const globe = p.mode === "globe";
   const portrait = height >= width * 1.5;
   const u = Math.min(width, height) / 1080;
   const reveal = (i, n, cue) => {
@@ -321,7 +322,7 @@ function mapBoxes(sc, t, width, height, pace) {
     const first = 0.35 * pace, span = Math.max(0, Math.min(sc.duration * 0.55, n * 1.4 * pace) - first);
     return n <= 1 ? first : first + (span * i) / (n - 1);
   };
-  const vs = p.views?.length ? p.views : [{ center: [20, 20], zoom: 1 }];
+  const vs = p.views?.length ? p.views : [{ center: globe ? [105, 25] : [20, 20], zoom: 1 }];
   const fly = p.fly ?? 1.6;
   let c = vs[0].center, z = Math.log(vs[0].zoom);
   for (let i = 1; i < vs.length; i++) {
@@ -334,18 +335,24 @@ function mapBoxes(sc, t, width, height, pace) {
     c = [c[0] + d * k, c[1] + (v.center[1] - c[1]) * k];
     z += (Math.log(v.zoom) - z) * k;
   }
-  const s = (width / (2 * Math.PI)) * Math.exp(z), r = Math.PI / 180;
+  const r = Math.PI / 180, lon0 = c[0] + (p.spin ?? 0) * t;
   const merc = (lat) => Math.log(Math.tan(Math.PI / 4 + (Math.max(-85, Math.min(85, lat)) * r) / 2));
-  const proj = (lon, lat) => {
-    let dl = (lon - c[0] - (p.spin ?? 0) * t) % 360;
+  // Orthographic: a point on the far side (as visibleOnGlobe judges it) has no position.
+  const s = (globe ? Math.min(width, height) * 0.42 : width / (2 * Math.PI)) * Math.exp(z);
+  const proj = (lon, lat, any = false) => {
+    let dl = (lon - lon0) % 360;
     if (dl > 180) dl -= 360;
     if (dl < -180) dl += 360;
-    return [width / 2 + s * dl * r, height * (portrait ? 0.5 : 0.54) - s * (merc(lat) - merc(c[1]))];
+    if (!globe) return [width / 2 + s * dl * r, height * (portrait ? 0.5 : 0.54) - s * (merc(lat) - merc(c[1]))];
+    const [f, f0, l] = [lat * r, c[1] * r, dl * r];
+    if (!any && Math.sin(f) * Math.sin(f0) + Math.cos(f) * Math.cos(f0) * Math.cos(l) <= 0.05) return null;
+    return [width / 2 + s * Math.cos(f) * Math.sin(l), height / 2 - s * (Math.cos(f0) * Math.sin(f) - Math.sin(f0) * Math.cos(f) * Math.cos(l))];
   };
   const placed = [], shown = [], out = [];
   for (const [i, pn] of pins.entries()) {
-    if (t < reveal(i, pins.length, pn.cue)) continue;
-    const [x, y] = proj(pn.lon, pn.lat);
+    const xy = t >= reveal(i, pins.length, pn.cue) && proj(pn.lon, pn.lat);
+    if (!xy) continue;
+    const [x, y] = xy;
     shown.push([x, y]);
     out.push({ what: "pin", box: [x - 14 * u, y - 14 * u, x + 14 * u, y + 14 * u] });
     if (!pn.label) continue;
@@ -361,12 +368,22 @@ function mapBoxes(sc, t, width, height, pace) {
   const detail = p.detail && p.detail !== "auto" ? p.detail : Math.exp(z) > 2.2 ? "50m" : "110m";
   for (const [i, h] of (p.highlight ?? []).entries()) {
     const at = h.label && t >= reveal(i, p.highlight.length, h.cue) + 0.3 && countryCentroid(h.id, detail);
-    if (!at) continue;
-    const [cx, cy] = proj(at[0], at[1]);
+    const xy = at && proj(at[0], at[1]);
+    if (!xy) continue;
+    const [cx, cy] = xy;
     const w = textWidth(h.label) * u, lh = 52 * u;
     const pin = shown.find(([x, y]) => Math.abs(x - cx) < w / 2 + 14 * u && Math.abs(y - cy) < lh / 2 + 14 * u);
     const [x, y] = pin ? [pin[0], pin[1] + 22 * u + lh / 2] : [cx, cy];
     out.push({ what: `label "${h.label}"`, box: [x - w / 2, y - lh / 2, x + w / 2, y + lh / 2] });
+  }
+  // Route labels sit 40u above the great-circle midpoint once the line is mostly drawn.
+  const vec = ([lon, lat]) => [Math.cos(lat * r) * Math.cos(lon * r), Math.cos(lat * r) * Math.sin(lon * r), Math.sin(lat * r)];
+  for (const [i, rt] of routes.entries()) {
+    if (!rt.label || t <= reveal(i, routes.length, rt.cue) + (rt.duration ?? 1.4) * 0.6) continue;
+    const [a, b] = [vec(rt.from), vec(rt.to)], m = a.map((v, k) => v + b[k]);
+    const [x, y] = proj(Math.atan2(m[1], m[0]) / r, Math.atan2(m[2], Math.hypot(m[0], m[1])) / r, true);
+    const w = textWidth(rt.label) * u, lh = 52 * u;
+    out.push({ what: `label "${rt.label}"`, box: [x - w / 2, y - 40 * u - lh / 2, x + w / 2, y - 40 * u + lh / 2] });
   }
   return out.map((m) => ({ ...m, box: [m.box[0] / width, m.box[1] / height, m.box[2] / width, m.box[3] / height] }));
 }
@@ -396,9 +413,9 @@ export function layoutGate(timeline, config) {
       if (hit) out.push(issue("error", "layout", `${name} sits in the caption band while "${hit.text}" is spoken — move it above y ${portrait ? 0.7 : 0.8} or to a side`));
       for (const p of placed) if (p.o.t < o.end && o.t < p.o.end && meets(p.box, box)) out.push(issue("warn", "layout", `${name} overlaps overlay ${p.i} (${p.o.type}) — space them out or stagger their times`));
       if (sc.type === "map") {
-        let pin = null;
-        for (let t = o.t; t < o.end && !pin; t += 0.25) pin = mapBoxes(sc, t, width, height, pace).find((m) => meets(m.box, box));
-        if (pin) out.push(issue("warn", "layout", `${name} covers the map ${pin.what} — move it clear of the pins and labels or show it after the camera has moved on`));
+        const hits = new Set();
+        for (let t = o.t; t < o.end; t += 0.25) for (const m of mapBoxes(sc, t, width, height, pace)) if (meets(m.box, box)) hits.add(m.what);
+        if (hits.size) out.push(issue("warn", "layout", `${name} covers the map ${[...hits].join(", ")} — move it clear of the pins and labels or show it after the camera has moved on`));
       }
       placed.push({ i, o, box });
     }
