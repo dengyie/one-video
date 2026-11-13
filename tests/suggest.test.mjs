@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { join } from "node:path";
 import { candidateItems, generatedItem, latinTerms, sceneBrief, sceneCandidates, sceneQueries } from "../cli/lib/assets/suggest.mjs";
 import { archiveFullUrl, licenseFromUrl, scoreCandidate } from "../cli/lib/assets/sources.mjs";
 import { suggestAssetsPrompt } from "../cli/lib/prompts/index.mjs";
@@ -128,4 +129,27 @@ test("scoreCandidate: the archive's best match, sharp and short footage come fir
   assert.ok(scoreCandidate({ ...base, rank: 0 }) < scoreCandidate({ ...base, rank: 4 }));
   assert.ok(scoreCandidate({ ...base, width: 1280, height: 720 }) < scoreCandidate({ ...base, width: 312, height: 176 }));
   assert.ok(scoreCandidate({ ...base, duration: 60 }) < scoreCandidate({ ...base, duration: 3715 }));
+});
+
+test("pickClipWindow: a long film is cut around the frame a vision model picks, not at its title card", async () => {
+  const { pickClipWindow, sampleTimes, windowAround } = await import("../cli/lib/assets/media.mjs");
+  assert.deepEqual(sampleTimes(160, 4), [20, 60, 100, 140]);
+  assert.equal(windowAround(5, 160), 0);
+  assert.equal(windowAround(155, 160), 140);
+  const { mkdtempSync: mk, writeFileSync: wf } = await import("node:fs");
+  const { tmpdir: td } = await import("node:os");
+  const grab = async (_src, t, out) => { wf(out, Buffer.from([0xff, 0xd8, t])); return out; };
+  let seen;
+  const askFn = async (o) => { seen = o; return { data: { best: 5, reason: "street crowd" }, model: "m" }; };
+  const w = await pickClipWindow(join(mk(join(td(), "ov-")), "x.ogv"), { brief: "stock market crowd", probe: async () => ({ format: { duration: "172.3" } }), grab, askFn });
+  assert.equal(seen.images.length, 8);
+  assert.match(seen.prompt, /Never a title card/);
+  assert.match(seen.prompt, /stock market crowd/);
+  assert.deepEqual(w, { clip: [windowAround(sampleTimes(172.3)[5], 172.3), 20], pick: { model: "m", at: sampleTimes(172.3)[5], reason: "street crowd" } });
+  // A model that fails: skip the opening fifth. A short source is cut from its start.
+  const warns = [];
+  const f = await pickClipWindow("x", { probe: async () => ({ format: { duration: "200" } }), grab, askFn: async () => { throw new Error("down"); }, onWarn: (m) => warns.push(m) });
+  assert.deepEqual(f, { clip: [40, 20], pick: null });
+  assert.match(warns[0], /skipping the opening fifth/);
+  assert.equal(await pickClipWindow("x", { probe: async () => ({ format: { duration: "35" } }), grab, askFn }), null);
 });

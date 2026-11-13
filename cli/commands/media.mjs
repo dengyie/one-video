@@ -140,7 +140,7 @@ export async function assets(args) {
     const manifest = readJson(paths.assets, { items: [] });
     const only = list(args.only);
     let changed = 0, failed = 0;
-    const gen = { aspect: config.aspect ?? "16:9", image: config.image, video: config.video, llm: config.llm, onWarn: warn, lookup: (id) => manifest.items.find((x) => x.id === id) };
+    const gen = { aspect: config.aspect ?? "16:9", image: config.image, video: config.video, llm: config.llm, ask, onWarn: warn, lookup: (id) => manifest.items.find((x) => x.id === id) };
     // Several at once (an AI still takes minutes on the relay; --jobs, default 3); clips animated from
     // a generated still come in a second round, after the stills.
     const todo = manifest.items.map((_, i) => i).filter((i) => {

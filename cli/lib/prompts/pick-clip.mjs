@@ -1,0 +1,3 @@
+// Vision prompt: pick where in a long source film the short clip should be cut.
+export const pickClipPrompt = ({ count, times, brief }) => `These are ${count} frames (in order, 0-based) sampled across one source film, at ${times.map((t) => `${Math.round(t)}s`).join(", ")}. A short silent clip will be cut around one of them for a narrated video.${brief ? `\nWhat the clip should show: ${brief}` : ""}
+Pick the frame that best shows that, in live action: real people, places or things in motion. Never a title card, credits, a countdown leader, a black or blank frame, or mostly text. Reply only JSON {"best": <index>, "reason": "<one sentence>"}.`;

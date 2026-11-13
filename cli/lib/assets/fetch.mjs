@@ -5,12 +5,13 @@ import { join } from "node:path";
 import { download } from "../core/http.mjs";
 import { generateImage, generateVideo } from "../generate/index.mjs";
 import { DEFAULT_PROVIDER_ORDER, DEFAULT_VIDEO_PROVIDERS, fullUrl, scoreCandidate, search } from "./sources.mjs";
-import { clipFrames, cutClip, framesDir } from "./media.mjs";
+import { clipFrames, cutClip, framesDir, pickClipWindow } from "./media.mjs";
 
 const extOf = (url, fallback) => (String(url).match(/\.(jpe?g|png|webp|mp4|webm|mov|ogv|avi)(?:$|[?#])/i)?.[1].toLowerCase().replace("jpeg", "jpg") ?? fallback);
 
 // Resolve one manifest item to a local file; returns the updated item.
-// `gen` carries generation settings: { aspect: "16:9", image, video, llm, lookup, onWarn }. A failed
+// `gen` carries generation settings: { aspect: "16:9", image, video, llm, ask, lookup, onWarn } (`ask`,
+// the LLM client's, also picks where a long film is cut). A failed
 // generation falls back to the stock search when the item also has a query.
 export async function fetchAsset(item, { publicDir, aspect = 16 / 9, gen = {} }) {
   const dir = join(publicDir, "assets");
@@ -55,7 +56,14 @@ export async function fetchAsset(item, { publicDir, aspect = 16 / 9, gen = {} })
     file = `assets/${item.id}.mp4`;
     const raw = join(dir, `${item.id}.src.${extOf(chosen.url, "mp4")}`);
     writeFileSync(raw, buf);
-    try { Object.assign(chosen, await cutClip(raw, join(publicDir, file), item.clip)); } finally { rmSync(raw, { force: true }); }
+    try {
+      // No window given: one is picked once and kept in the manifest, so a refetch cuts the same.
+      if (!item.clip) {
+        const w = await pickClipWindow(raw, { brief: [item.query, chosen.title].filter(Boolean).join(" · "), llm: gen.llm, askFn: gen.ask, onWarn: (m) => (gen.onWarn ?? (() => {}))(`${item.id}: ${m}`) });
+        if (w) item = { ...item, clip: w.clip, ...(w.pick ? { clipPick: w.pick } : {}) };
+      }
+      Object.assign(chosen, await cutClip(raw, join(publicDir, file), item.clip));
+    } finally { rmSync(raw, { force: true }); }
     await clipFrames(join(publicDir, file), join(publicDir, framesDir(file)));
   } else {
     file = `assets/${item.id}.${extOf(chosen.url, "jpg")}`;
