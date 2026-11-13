@@ -37,7 +37,14 @@ export async function pickClipWindow(src, { brief, llm, askFn, grab = grabFrame,
     if (!askFn) throw new Error("no vision model");
     const frames = [];
     for (const [i, t] of times.entries()) frames.push(await grab(src, t, join(tmp, `${i}.jpg`)));
-    const { data, model } = await askFn({ prompt: pickClipPrompt({ count: times.length, times, brief }), images: frames, json: true, maxTokens: 2500, config: { llm } });
+    // A reply that does not describe every frame did not see them (a relay can drop the images and the
+    // model still answers): asked once more, then treated as no answer — never as "nothing fits".
+    let data, model;
+    for (let attempt = 0; ; attempt++) {
+      ({ data, model } = await askFn({ prompt: pickClipPrompt({ count: times.length, times, brief }), images: frames, json: true, maxTokens: 2500, config: { llm } }));
+      if (Array.isArray(data?.frames) && data.frames.length === times.length && data.frames.every((f) => String(f ?? "").trim())) break;
+      if (attempt) throw new Error(`${model} described ${Array.isArray(data?.frames) ? data.frames.length : "none"} of ${times.length} frames twice`);
+    }
     // -1: nothing in the film shows the brief; cut past the opening and say so (another pick or query is due).
     if (data?.best === -1) {
       onWarn(`no frame of this film shows "${brief}" (${model}: ${String(data.reason ?? "").slice(0, 120)}); try the next pick or another query`);

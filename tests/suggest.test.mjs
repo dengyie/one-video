@@ -154,7 +154,7 @@ test("pickClipWindow: a long film is cut around the frame a vision model picks, 
   const { tmpdir: td } = await import("node:os");
   const grab = async (_src, t, out) => { wf(out, Buffer.from([0xff, 0xd8, t])); return out; };
   let seen;
-  const askFn = async (o) => { seen = o; return { data: { frames: ["title card", "", "", "", "", "a street crowd"], best: 5, reason: "street crowd" }, model: "m" }; };
+  const askFn = async (o) => { seen = o; return { data: { frames: ["title card", "b", "c", "d", "e", "a street crowd", "g", "h"], best: 5, reason: "street crowd" }, model: "m" }; };
   const w = await pickClipWindow(join(mk(join(td(), "ov-")), "x.ogv"), { brief: "stock market crowd", probe: async () => ({ format: { duration: "172.3" } }), grab, askFn });
   assert.equal(seen.images.length, 8);
   assert.match(seen.prompt, /Never a cartoon or animation, a title card/);
@@ -166,8 +166,17 @@ test("pickClipWindow: a long film is cut around the frame a vision model picks, 
   const f = await pickClipWindow("x", { probe: async () => ({ format: { duration: "200" } }), grab, askFn: async () => { throw new Error("down"); }, onWarn: (m) => warns.push(m) });
   assert.deepEqual(f, { clip: [40, 20], pick: null });
   assert.match(warns[0], /skipping the opening fifth/);
-  const off = await pickClipWindow("x", { brief: "trading floor", probe: async () => ({ format: { duration: "200" } }), grab, askFn: async () => ({ data: { best: -1, reason: "a talk show" }, model: "m" }), onWarn: (m) => warns.push(m) });
+  const off = await pickClipWindow("x", { brief: "trading floor", probe: async () => ({ format: { duration: "200" } }), grab, askFn: async () => ({ data: { frames: Array(8).fill("a host at a desk"), best: -1, reason: "a talk show" }, model: "m" }), onWarn: (m) => warns.push(m) });
   assert.deepEqual(off, { clip: [40, 20], pick: { model: "m", at: null, reason: "a talk show", fits: false } });
   assert.match(warns[1], /no frame of this film shows "trading floor".*try the next pick/);
+  // A reply that saw no frames is asked again, and twice is no answer: never "nothing fits".
+  let calls = 0;
+  const blind = async () => (++calls === 1 ? { data: { best: -1, reason: "no images were provided" }, model: "m" } : { data: { frames: ["a", "b"], best: -1 }, model: "m" });
+  assert.deepEqual(await pickClipWindow("x", { probe: async () => ({ format: { duration: "200" } }), grab, askFn: blind, onWarn: (m) => warns.push(m) }), { clip: [40, 20], pick: null });
+  assert.equal(calls, 2);
+  assert.match(warns.at(-1), /described 2 of 8 frames twice; skipping the opening fifth/);
+  let again = 0;
+  const flaky = async () => (++again === 1 ? { data: {}, model: "m" } : { data: { frames: Array(8).fill("x"), best: 2, reason: "r" }, model: "m" });
+  assert.equal((await pickClipWindow("x", { probe: async () => ({ format: { duration: "200" } }), grab, askFn: flaky })).pick.at, sampleTimes(200)[2]);
   assert.equal(await pickClipWindow("x", { probe: async () => ({ format: { duration: "35" } }), grab, askFn }), null);
 });
