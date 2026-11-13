@@ -27,6 +27,9 @@ export function latinTerms(text, max = 3) {
 // scene id → queries. Scenes with `search` keep theirs; the rest go to the model in one call, with
 // room for every scene (a reply cut short parses as a partial object), and the scenes a reply left
 // out are asked once more on their own before falling back to the names in the script.
+// A scene's queries: a bare list, or {queries, still}.
+const listOf = (v) => (Array.isArray(v) ? v : Array.isArray(v?.queries) ? v.queries : []);
+
 export async function sceneQueries(scenes, { research, title, per = 3, askFn }) {
   const out = {};
   const open = [];
@@ -43,13 +46,18 @@ export async function sceneQueries(scenes, { research, title, per = 3, askFn }) 
   };
   if (askFn) {
     await askFor(open);
-    const missing = open.filter((s) => !Array.isArray(data[s.id]) || !data[s.id].length);
+    const missing = open.filter((s) => !listOf(data[s.id]).length);
     if (missing.length && missing.length < open.length) await askFor(missing);
   }
+  const stills = {};
   for (const s of open) {
-    const q = Array.isArray(data[s.id]) ? data[s.id].filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim()) : [];
+    const q = listOf(data[s.id]).filter((x) => typeof x === "string" && x.trim()).map((x) => x.trim());
     out[s.id] = q.length ? q.slice(0, per) : latinTerms(s.text, per);
+    const still = data[s.id]?.still;
+    if (typeof still === "string" && still.trim()) stills[s.id] = still.trim();
   }
+  // What an AI still of each scene should show (generatedItem), kept apart from the queries.
+  out._stills = stills;
   if (data._error) out._error = data._error;
   return out;
 }
@@ -101,17 +109,18 @@ export async function candidateItems(sceneId, candidates, { taken = new Set(), f
   return items;
 }
 
-// An AI still of what the scene should show, drawn through the relay (licensed "generated", which the
+// An AI still of what the scene should show (`still`, written by the query model, or the script's
+// visualIntent; never the queries, which name people), drawn through the relay (licensed "generated", which the
 // density gate does not count as a real asset): next to the licensed picks, which for a current
 // topic are often old film or near misses, or alone when nothing licensed fits. The first query is
 // the stock fallback. It never draws a real person's face or a company's logo: a made-up photo of
 // either would pass for the real thing in a factual video.
-export function generatedItem(scene, queries, { taken = new Set(), alone = true } = {}) {
+export function generatedItem(scene, queries, { taken = new Set(), alone = true, still } = {}) {
+  const what = still || scene.visualIntent;
+  if (!what) return null;
   let n = 1;
   while (taken.has(`${scene.id}-${n}`)) n++;
   const id = `${scene.id}-${n}`;
   taken.add(id);
-  const what = scene.visualIntent || queries.join(", ");
-  if (!what) return null;
-  return { id, kind: "image", generate: { prompt: `${what}，电影感，写实，无文字；不出现可辨认的真实人物面孔，不出现公司或品牌标志`, brief: `scene ${scene.id}: ${alone ? "stands in, nothing licensed found" : "on-brief option next to licensed picks"}` }, ...(queries[0] ? { query: queries[0] } : {}), note: `suggest: ${scene.id} · AI still${alone ? " (no licensed match)" : ""}` };
+  return { id, kind: "image", generate: { prompt: `${what}. Cinematic, photorealistic, no text. No real or recognizable person: anyone shown is an anonymous figure from behind or out of focus. No company or brand logos.`, brief: `scene ${scene.id}: ${alone ? "stands in, nothing licensed found" : "on-brief option next to licensed picks"}` }, ...(queries[0] ? { query: queries[0] } : {}), note: `suggest: ${scene.id} · AI still${alone ? " (no licensed match)" : ""}` };
 }

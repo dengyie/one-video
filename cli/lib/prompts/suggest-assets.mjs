@@ -5,4 +5,6 @@ For each scene below, write ${per} short English search queries (2–5 words eac
 
 ${scenes.map((s) => `[${s.id}] ${s.text}`).join("\n")}
 
-Reply only JSON {"<scene id>": ["query", …], …} with every scene id above.`;
+Also write, for each scene, "still": one English sentence describing a photo an image model could draw for it — the setting, objects, light and mood only. Name no real person, company, brand or logo; people appear only as anonymous figures, seen from behind or out of focus. A made-up picture of a real person would pass for the real thing.
+
+Reply only JSON {"<scene id>": {"queries": ["query", …], "still": "…"}, …} with every scene id above.`;

@@ -193,7 +193,7 @@ export async function assets(args) {
       // One AI still per scene, on brief: an option next to the licensed picks, or the stand-in when
       // nothing licensed fits (--no-generate leaves only licensed picks).
       if (args.write && !args.noGenerate) {
-        const g = generatedItem(s, q, { taken, alone: !items.length });
+        const g = generatedItem(s, q, { taken, alone: !items.length, still: queries._stills?.[s.id] });
         if (g) { items.push(g); log(`   + ${g.id}: AI still${items.length > 1 ? "" : " (nothing licensed found)"}`); }
       }
       manifest.items.push(...items);

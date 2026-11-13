@@ -17,12 +17,13 @@ test("sceneBrief joins what is said, the visual intent and the cited facts; lati
 test("sceneQueries: the script's own search wins, the model fills the rest, names when it fails", async () => {
   const scenes = [{ id: "a", search: ["Santa Clara campus"] }, { id: "b", narration: "NVIDIA 的 H100" }, { id: "c", narration: "OpenAI 的订单" }, { id: "z", beat: "credits" }];
   let prompt = "";
-  const askFn = async (o) => { prompt ||= o.prompt; return { data: { b: ["NVIDIA H100 GPU", "data center racks"], c: [] } }; };
+  const askFn = async (o) => { prompt ||= o.prompt; return { data: { b: { queries: ["NVIDIA H100 GPU", "data center racks"], still: "rows of GPU servers in a dim hall" }, c: [] } }; };
   const q = await sceneQueries(scenes, { research, per: 2, askFn });
   assert.deepEqual(q.a, ["Santa Clara campus"]);
   assert.deepEqual(q.b, ["NVIDIA H100 GPU", "data center racks"]);
   assert.deepEqual(q.c, ["OpenAI"]);
   assert.equal(q.z, undefined);
+  assert.deepEqual(q._stills, { b: "rows of GPU servers in a dim hall" });
   assert.match(prompt, /\[b\] NVIDIA 的 H100/);
   assert.ok(!/\[a\]/.test(prompt));
   const failed = await sceneQueries([{ id: "b", narration: "NVIDIA 的 H100" }], { askFn: async () => { throw new Error("down"); } });
@@ -99,12 +100,14 @@ test("generatedItem: an AI still from the visual intent, the first query kept as
   const taken = new Set(["hook-1"]);
   const g = generatedItem({ id: "hook", visualIntent: "GPU 机房走廊" }, ["data center"], { taken });
   assert.equal(g.id, "hook-2");
-  assert.match(g.generate.prompt, /^GPU 机房走廊，/);
-  assert.match(g.generate.prompt, /不出现可辨认的真实人物面孔，不出现公司或品牌标志/);
+  assert.match(g.generate.prompt, /^GPU 机房走廊\. Cinematic/);
+  assert.match(g.generate.prompt, /No real or recognizable person.*No company or brand logos/);
   assert.equal(g.query, "data center");
   assert.ok(taken.has("hook-2"));
-  assert.equal(generatedItem({ id: "z" }, [], {}), null);
-  assert.match(generatedItem({ id: "hook" }, ["gpu"], { taken, alone: false }).note, /AI still$/);
+  // The model's still wins over the visual intent; the queries alone (they name people) never make one.
+  assert.match(generatedItem({ id: "hook", visualIntent: "x" }, [], { taken, still: "an empty keynote stage" }).generate.prompt, /^an empty keynote stage\./);
+  assert.equal(generatedItem({ id: "z" }, ["Jensen Huang Donald Trump"], {}), null);
+  assert.match(generatedItem({ id: "hook" }, ["gpu"], { taken, alone: false, still: "s" }).note, /AI still$/);
 });
 
 test("sceneQueries asks again for the scenes a cut-short reply left out", async () => {
