@@ -9,6 +9,9 @@ import { clipFrames, cutClip, framesDir, pickClipWindow } from "./media.mjs";
 
 const extOf = (url, fallback) => (String(url).match(/\.(jpe?g|png|webp|mp4|webm|mov|ogv|avi)(?:$|[?#])/i)?.[1].toLowerCase().replace("jpeg", "jpg") ?? fallback);
 
+// A hit's download URL; null when its files are unreadable or the lookup fails.
+const resolve = (c) => fullUrl(c).catch(() => null);
+
 // Resolve one manifest item to a local file; returns the updated item.
 // `gen` carries generation settings: { aspect: "16:9", image, video, llm, ask, lookup, onWarn } (`ask`,
 // the LLM client's, also picks where a long film is cut). A failed
@@ -47,8 +50,13 @@ export async function fetchAsset(item, { publicDir, aspect = 16 / 9, gen = {} })
     const ranked = results.filter((c) => c.kind === (item.kind ?? "image")).sort((a, b) => scoreCandidate(a, aspect) - scoreCandidate(b, aspect));
     chosen = ranked[item.pick ?? 0];
     if (!chosen) throw new Error(`no ${item.kind ?? "image"} results for "${item.query}"${errors.length ? ` (${errors.join("; ")})` : ""}`);
+    // A hit with no file we can read (an archive item holding only .mpeg, say): the next few, unless pinned by pick.
+    for (const c of item.pick == null ? ranked.slice(0, 5) : [chosen]) {
+      c.url ??= await resolve(c);
+      if (c.url) { chosen = c; break; }
+    }
   }
-  if (!chosen.url) chosen.url = await fullUrl(chosen);
+  if (!chosen.url) chosen.url = await resolve(chosen);
   if (!chosen.url) throw new Error(`asset "${item.id}": candidate has no downloadable URL`);
   const buf = await download(chosen.url, chosen.kind === "video" ? { timeoutSec: 900 } : undefined);
   let file;
