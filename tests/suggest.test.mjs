@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { candidateItems, generatedItem, latinTerms, sceneBrief, sceneCandidates, sceneQueries } from "../cli/lib/assets/suggest.mjs";
-import { archiveFullUrl, licenseFromUrl, scoreCandidate } from "../cli/lib/assets/sources.mjs";
+import { PROVIDERS, archiveFullUrl, licenseFromUrl, scoreCandidate } from "../cli/lib/assets/sources.mjs";
 import { suggestAssetsPrompt } from "../cli/lib/prompts/index.mjs";
 
 const research = { facts: [{ id: "f1", claim: "NVIDIA H100 shipments doubled" }] };
@@ -95,6 +95,20 @@ test("Internet Archive: open licences only, the sharpest file that fits", async 
   assert.equal((await archiveFullUrl("r", { fetchJson: async () => ({ files: old }) })).url, "https://archive.org/download/r/reel.ogv");
   old.push({ name: "reel.avi", size: "90000000", height: "480" });
   assert.equal((await archiveFullUrl("r", { fetchJson: async () => ({ files: old }) })).url, "https://archive.org/download/r/reel.avi");
+});
+
+test("Internet Archive search: the whole phrase, footage collections first, each film once", async () => {
+  const urls = [];
+  const doc = (identifier, licenseurl = "http://creativecommons.org/licenses/publicdomain/") => ({ identifier, title: identifier, licenseurl });
+  const getJsonFn = async (u) => {
+    urls.push(decodeURIComponent(u));
+    return { response: { docs: /collection:/.test(decodeURIComponent(u)) ? [doc("machine-master-or-slave"), doc("no-licence", null)] : [doc("wall-street-mystery"), doc("machine-master-or-slave")] } };
+  };
+  const hits = await PROVIDERS.archive('factory "workers', { kind: "video", getJsonFn });
+  assert.deepEqual(hits.map((h) => h.pid), ["machine-master-or-slave", "wall-street-mystery"]);
+  assert.match(urls[0], /title:\("factory  workers"\) OR subject:.*collection:\(prelinger OR universal_newsreels OR fedflix\)/);
+  assert.match(urls[1], /q=title:\("factory  workers"\) AND mediatype:movies AND \(licenseurl/);
+  assert.deepEqual(await PROVIDERS.archive("x", { kind: "image", getJsonFn }), []);
 });
 
 test("generatedItem: an AI still from the visual intent, the first query kept as stock fallback", () => {

@@ -43,17 +43,26 @@ export const PROVIDERS = {
       source: r.foreign_landing_url, url: r.url, width: r.width, height: r.height,
     }));
   },
-  // Titles only (its full text matches stray words in long descriptions); open licences only (public
-  // domain, CC0, CC BY, CC BY-SA). The file is chosen per item later
-  // (archiveFullUrl), since an item can hold a film of gigabytes next to a 480p copy.
-  async archive(query, { limit = 12, kind = "image" } = {}) {
+  // Two passes, the phrase as a whole ("wall street" never matches "Wall-Garants"), open licences only
+  // (public domain, CC0, CC BY, CC BY-SA): first the footage collections (Prelinger's ephemeral films,
+  // Universal newsreels, FedFlix) by title, subject or description; then any film by title alone (its
+  // full text matches stray words in long descriptions, and most of it is talks and vlogs).
+  // The file is chosen per item later (archiveFullUrl), since an item can hold a film of gigabytes
+  // next to a 480p copy.
+  async archive(query, { limit = 12, kind = "image", getJsonFn = getJson } = {}) {
     if (kind !== "video") return [];
-    const q = `title:(${query}) AND mediatype:movies AND (licenseurl:*publicdomain* OR licenseurl:*\\/by\\/* OR licenseurl:*\\/by-sa\\/*)`;
-    const j = await getJson(`https://archive.org/advancedsearch.php?q=${enc(q)}&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=licenseurl&rows=${limit}&output=json`);
-    return (j.response?.docs ?? []).map((d) => ({
+    const phrase = `"${String(query).replace(/["\\]/g, " ").trim()}"`;
+    const open = "mediatype:movies AND (licenseurl:*publicdomain* OR licenseurl:*\\/by\\/* OR licenseurl:*\\/by-sa\\/*)";
+    const ask = (q) => getJsonFn(`https://archive.org/advancedsearch.php?q=${enc(`${q} AND ${open}`)}&fl[]=identifier&fl[]=title&fl[]=creator&fl[]=licenseurl&rows=${limit}&sort[]=downloads+desc&output=json`);
+    const [footage, titled] = await Promise.all([
+      ask(`(title:(${phrase}) OR subject:(${phrase}) OR description:(${phrase})) AND collection:(${ARCHIVE_FOOTAGE.join(" OR ")})`),
+      ask(`title:(${phrase})`),
+    ]);
+    const seen = new Set();
+    return [...(footage.response?.docs ?? []), ...(titled.response?.docs ?? [])].filter((d) => !seen.has(d.identifier) && seen.add(d.identifier)).map((d) => ({
       provider: "archive", pid: d.identifier, kind: "video", title: d.title, author: [].concat(d.creator ?? "Internet Archive")[0],
       license: licenseFromUrl(d.licenseurl), source: `https://archive.org/details/${enc(d.identifier)}`, width: null, height: null,
-    })).filter((c) => c.license !== "unknown");
+    })).filter((c) => c.license !== "unknown").slice(0, limit);
   },
   async pexels(query, { limit = 12, kind = "image" } = {}) {
     const key = process.env.PEXELS_API_KEY;
@@ -117,6 +126,9 @@ export async function archiveFullUrl(identifier, { fetchJson = getJson, maxBytes
   const f = files[0];
   return f ? { url: `https://archive.org/download/${enc(identifier)}/${f.name.split("/").map(enc).join("/")}`, width: Number(f.width) || null, height: Number(f.height) || null } : null;
 }
+
+// Internet Archive collections of filmed footage (rather than lectures, streams and uploads).
+export const ARCHIVE_FOOTAGE = ["prelinger", "universal_newsreels", "fedflix"];
 
 // The download URL of a search hit whose results carry no direct link (NASA, Internet Archive).
 export async function fullUrl(c) {

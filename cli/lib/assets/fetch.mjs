@@ -12,6 +12,12 @@ const extOf = (url, fallback) => (String(url).match(/\.(jpe?g|png|webp|mp4|webm|
 // A hit's download URL; null when its files are unreadable or the lookup fails.
 const resolve = (c) => fullUrl(c).catch(() => null);
 
+// The first of `hits` with a file we can read (its url resolved on the way), or null.
+async function nextReadable(hits) {
+  for (const h of hits) if ((h.url ??= await resolve(h))) return h;
+  return null;
+}
+
 // Resolve one manifest item to a local file; returns the updated item.
 // `gen` carries generation settings: { aspect: "16:9", image, video, llm, ask, lookup, onWarn } (`ask`,
 // the LLM client's, also picks where a long film is cut). A failed
@@ -42,41 +48,49 @@ export async function fetchAsset(item, { publicDir, aspect = 16 / 9, gen = {} })
   }
 
   let chosen = null;
+  let ranked = [];
   if (item.url) chosen = { url: item.url, license: item.license, author: item.author, title: item.title, source: item.source ?? item.url, provider: "url", kind: item.kind ?? "image" };
   else {
     if (!item.query) throw new Error(`asset "${item.id}" needs one of: url, query, generate`);
     const providers = item.provider ? [].concat(item.provider) : item.kind === "video" ? DEFAULT_VIDEO_PROVIDERS() : DEFAULT_PROVIDER_ORDER;
     const { results, errors } = await search(item.query, { providers, kind: item.kind ?? "image" });
-    const ranked = results.filter((c) => c.kind === (item.kind ?? "image")).sort((a, b) => scoreCandidate(a, aspect) - scoreCandidate(b, aspect));
+    ranked = results.filter((c) => c.kind === (item.kind ?? "image")).sort((a, b) => scoreCandidate(a, aspect) - scoreCandidate(b, aspect));
     chosen = ranked[item.pick ?? 0];
     if (!chosen) throw new Error(`no ${item.kind ?? "image"} results for "${item.query}"${errors.length ? ` (${errors.join("; ")})` : ""}`);
-    // A hit with no file we can read (an archive item holding only .mpeg, say): the next few, unless pinned by pick.
-    for (const c of item.pick == null ? ranked.slice(0, 5) : [chosen]) {
-      c.url ??= await resolve(c);
-      if (c.url) { chosen = c; break; }
-    }
   }
-  if (!chosen.url) chosen.url = await resolve(chosen);
-  if (!chosen.url) throw new Error(`asset "${item.id}": candidate has no downloadable URL`);
-  const buf = await download(chosen.url, chosen.kind === "video" ? { timeoutSec: 900 } : undefined);
+  // Unless pinned (url, pick), the next few hits stand in for one with no file we can read (an
+  // archive item holding only .mpeg) and, for films, one where no frame fits the query.
+  const tries = item.url || item.pick != null ? [chosen] : ranked.slice(0, 5);
+  let films = 0;
   let file;
-  if (chosen.kind === "video") {
+  for (const [n, c] of tries.entries()) {
+    c.url ??= await resolve(c);
+    if (!c.url) continue;
+    chosen = c;
+    const buf = await download(c.url, c.kind === "video" ? { timeoutSec: 900 } : undefined);
+    if (c.kind !== "video") {
+      file = `assets/${item.id}.${extOf(c.url, "jpg")}`;
+      writeFileSync(join(publicDir, file), buf);
+      break;
+    }
     file = `assets/${item.id}.mp4`;
-    const raw = join(dir, `${item.id}.src.${extOf(chosen.url, "mp4")}`);
+    const raw = join(dir, `${item.id}.src.${extOf(c.url, "mp4")}`);
     writeFileSync(raw, buf);
+    let cut = item;
     try {
-      // No window given: one is picked once and kept in the manifest, so a refetch cuts the same.
+      // No window given: one is picked once and kept with the film's url, so a refetch cuts the same.
       if (!item.clip) {
         const w = await pickClipWindow(raw, { brief: item.query, llm: gen.llm, askFn: gen.ask, onWarn: (m) => (gen.onWarn ?? (() => {}))(`${item.id}: ${m}`) });
-        if (w) item = { ...item, clip: w.clip, ...(w.pick ? { clipPick: w.pick } : {}) };
+        if (w) cut = { ...item, clip: w.clip, ...(w.pick ? { clipPick: w.pick } : {}), ...(c.provider !== "url" ? { url: c.url } : {}) };
+        if (w?.pick?.fits === false && ++films < 3 && (await nextReadable(tries.slice(n + 1)))) { (gen.onWarn ?? (() => {}))(`${item.id}: trying the next hit`); continue; }
       }
-      Object.assign(chosen, await cutClip(raw, join(publicDir, file), item.clip));
+      Object.assign(chosen, await cutClip(raw, join(publicDir, file), cut.clip));
+      item = cut;
     } finally { rmSync(raw, { force: true }); }
     await clipFrames(join(publicDir, file), join(publicDir, framesDir(file)));
-  } else {
-    file = `assets/${item.id}.${extOf(chosen.url, "jpg")}`;
-    writeFileSync(join(publicDir, file), buf);
+    break;
   }
+  if (!file) throw new Error(`asset "${item.id}": candidate has no downloadable URL`);
   return {
     ...item,
     file,
