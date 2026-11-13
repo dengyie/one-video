@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, timingsGate, normalizeLicense, summarize, questionGate, echoGate, layoutGate, densityGate } from "../cli/lib/review/gates.mjs";
+import { screenEvents } from "../cli/lib/review/gates.mjs";
+import { checkNotes, noteKind } from "../cli/lib/review/look-check.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { example } from "./helpers.mjs";
 
@@ -244,4 +246,38 @@ test("densityGate: assets per minute, AI-generated ones counted, bare text scene
   const bare = densityGate(tl([sc("a", "media", 50, { overlays: photos(8) }), sc("q", "quote", 8), sc("k", "kinetic", 4), sc("c", "bar-race", 9), sc("s", "sources", 9)]), assets, {});
   assert.deepEqual(msgs(bare, "density").filter((m) => /no photo/.test(m)).length, 1);
   assert.ok(bare.some((i) => /scene "q"/.test(i.msg)));
+});
+
+// A hand-built timeline: scene a 0–10s with a cue at 3s, a weak drift at 5s and a real push at 6s;
+// scene b 10–20s with only an overlay at 12s.
+const lookTl = () => ({ duration: 20, scenes: [
+  { id: "a", type: "media", start: 0, duration: 10, cues: { v: 3 }, shots: [{ t: 0, zoom: 1 }, { t: 5, zoom: 1.02 }, { t: 6, zoom: 1.15 }], overlays: [] },
+  { id: "b", type: "media", start: 10, duration: 10, cues: {}, shots: [{ t: 0, zoom: 1 }], overlays: [{ t: 2 }] },
+] });
+
+test("screenEvents: every on-screen change in timeline time, barely-moving shots marked weak", () => {
+  const ev = screenEvents(lookTl());
+  assert.deepEqual(ev.filter((e) => e.scene === "a").map((e) => [e.t, e.what, !!e.weak]),
+    [[0, "scene", false], [0, "shot", false], [3, "cue", false], [5, "shot", true], [6, "shot", false]]);
+  assert.deepEqual(ev.filter((e) => e.what === "overlay").map((e) => e.t), [12]);
+  const rot = screenEvents({ scenes: [{ id: "r", start: 0, duration: 5, shots: [{ t: 0 }, { t: 2, rotate: 4 }] }] });
+  assert.equal(rot.find((e) => e.t === 2).weak, undefined); // a turn of the frame is a change
+});
+
+test("checkNotes: still/late notes the timeline contradicts are marked doubtful, others kept as they are", () => {
+  const notes = [
+    { t: 4, issue: "画面静止无变化", span: [2, 7] }, // cue 3, push 6: never more than 3s
+    { t: 15, kind: "still", issue: "背景单调", span: [13, 19] }, // nothing after the 12s overlay
+    { t: 2.5, issue: "数值到后面才出现" }, // cue at 3s, on its word
+    { t: 16, kind: "late", issue: "标签没出现" }, // no reveal after 16s
+    { t: 8, issue: "文字压住人脸" },
+  ];
+  assert.equal(checkNotes(lookTl(), notes), 2);
+  assert.deepEqual(notes.map((n) => n.check?.doubtful), [true, false, true, false, undefined]);
+  assert.match(notes[0].check.why, /3\.0s cue, 6\.0s shot/);
+  assert.doesNotMatch(notes[0].check.why, /5\.0s/); // the weak drift does not count
+  assert.match(notes[2].check.why, /cue reveals at 3\.0s/);
+  assert.equal(noteKind({ issue: "x", kind: "late" }), "late");
+  assert.equal(noteKind({ issue: "时间轴约5秒无新元素" }), "still");
+  assert.equal(checkNotes(null, notes), 0);
 });

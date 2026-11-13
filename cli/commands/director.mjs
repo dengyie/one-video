@@ -9,6 +9,7 @@ import { lookPrompt, sceneLine } from "../lib/prompts/index.mjs";
 import { busyWindows, cellTime, sceneAt, sheetPlan, writeSheets } from "../lib/vision/sheet.mjs";
 import { resolveVideo } from "../lib/publish/renders.mjs";
 import { videoPath } from "./render.mjs";
+import { checkNotes } from "../lib/review/look-check.mjs";
 import { buildHandoff, handoffPath, handoffRel } from "../lib/publish/handoff.mjs";
 
 export { sceneAt, sheetPlan, writeSheets };
@@ -67,7 +68,7 @@ export async function look(args) {
         // The stamped time read off the cell, snapped to it; the cell index only when no usable time came back.
         const read = Number(n.t), k = Number.isFinite(read) && read >= s.t0 && read <= s.t0 + s.cells * s.step ? Math.floor((read - s.t0) / s.step) : Number(n.cell) || 0;
         const t = cellTime(s, Math.max(0, Math.min(s.cells - 1, k)));
-        notes.push({ t, scene: sceneAt(tl, t), severity: ["high", "medium", "low"].includes(n.severity) ? n.severity : "medium", issue: String(n.issue ?? ""), fix: String(n.fix ?? "") });
+        notes.push({ t, scene: sceneAt(tl, t), severity: ["high", "medium", "low"].includes(n.severity) ? n.severity : "medium", ...(typeof n.kind === "string" && { kind: n.kind }), ...(Array.isArray(n.span) && { span: n.span }), issue: String(n.issue ?? ""), fix: String(n.fix ?? "") });
       }
       log(`  sheet ${k + 1}: ${data.score ?? "?"}/10 (${model})${data.truncated ? " [reply cut off; kept complete notes]" : ""} ${data.summary ?? ""}`);
     } catch (e) {
@@ -76,13 +77,16 @@ export async function look(args) {
   }
   if (!reviews.length) throw new UserError("no sheet was reviewed; check the model list (onevideo doctor) or pass --models");
   notes.sort((a, b) => a.t - b.t);
+  // "Nothing changes here" and "shows up late" are checked against the timeline's own events.
+  const doubtful = checkNotes(tl, notes);
   const scored = reviews.filter((r) => r.score);
   const score = scored.length ? +(scored.reduce((a, r) => a + r.score, 0) / scored.length).toFixed(1) : null;
   const result = { at: new Date().toISOString(), video: relative(project.root, video), score, reviews, notes };
   writeJson(join(outDir, "look.json"), result);
   log(`score ${score ?? "?"}/10 over ${reviews.length}/${sheets.length} sheet(s)`);
   const icon = { high: "✗", medium: "⚠", low: "·" };
-  for (const n of notes) log(`${icon[n.severity]} ${n.t.toFixed(1).padStart(5)}s ${String(n.scene ?? "").padEnd(10)} ${n.issue}${n.fix ? `\n         → ${n.fix}` : ""}`);
+  for (const n of notes) log(`${n.check?.doubtful ? "?" : icon[n.severity]} ${n.t.toFixed(1).padStart(5)}s ${String(n.scene ?? "").padEnd(10)} ${n.issue}${n.fix ? `\n         → ${n.fix}` : ""}${n.check?.doubtful ? `\n         ? ${n.check.why}` : ""}`);
+  if (doubtful) log(`? ${doubtful} note(s) the timeline contradicts: check those stills before acting on them`);
   if (!notes.length) warn("no notes returned; check the sheets yourself");
   log(`→ ${relative(project.root, join(outDir, "look.json"))} (a second opinion: confirm on the sheets or with stills before changing the storyboard)`);
 }

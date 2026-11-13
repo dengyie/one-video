@@ -46,6 +46,7 @@ test("prompt builders are pure and fill every field", () => {
   assert.match(lookPrompt({ sheet: { cells: 24, t0: 10, step: 1, times: [10.6] }, scenes: "" }), /moved a little off transitions/);
   assert.match(look, /Pay extra attention to: captions\./);
   assert.match(look, /within ~1s after the cell/);
+  assert.match(look, /"kind": "still\|late\|other", "span"/);
   const line = sceneLine({ id: "v", type: "line-chart", start: 39.333, duration: 18, lines: [{ start: 2.25, text: "约3500亿" }], cues: { draw: 0.6, a: 8.122, b: 8.122, c: 0, d: null } });
   assert.equal(line, "- v (line-chart) 39.3–57.3s: [41.6s] 约3500亿 · reveals at 39.9, 47.5s");
   assert.doesNotMatch(sceneLine({ id: "t", type: "title", start: 0, duration: 3, lines: [] }), /reveals/);

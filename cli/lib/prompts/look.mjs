@@ -8,8 +8,9 @@ ${scenes}
 
 Visuals land on the word, not the line: a value that shows up at its reveal time is in sync even though its line began earlier, and cells ${s.step}s apart catch count-ups, line draws and fades mid-move. Do not report a value as late or missing when a reveal for it falls within ~${Math.max(1, s.step)}s after the cell.
 Judge what a viewer sees: stretches where nothing new happens on screen (more than ~4 s), text that is hard to read or collides with other text or covers the subject, awkward composition or cropping, a visual that does not match its narration line, jarring or repetitive transitions, blank/black/broken frames, inconsistent look between scenes. Ignore things that are fine. ${focus ? `Pay extra attention to: ${focus}.` : ""}
+Tag each note: kind "still" when nothing new happens on screen (give span: the stretch you mean), "late" when something shows up after its narration or is missing, "other" for anything else; span is optional for other kinds.
 Keep it short: at most 5 notes, the most important first, each issue and fix under 40 characters.
-Reply only JSON: {"score": <1-10 for this stretch>, "summary": "<one sentence, Chinese>", "notes": [{"t": <seconds stamped on the cell>, "cell": <i>, "severity": "high|medium|low", "issue": "<Chinese>", "fix": "<concrete change, Chinese>"}]}`;
+Reply only JSON: {"score": <1-10 for this stretch>, "summary": "<one sentence, Chinese>", "notes": [{"t": <seconds stamped on the cell>, "cell": <i>, "severity": "high|medium|low", "kind": "still|late|other", "span": [<from s>, <to s>], "issue": "<Chinese>", "fix": "<concrete change, Chinese>"}]}`;
 
 // A timeline scene as one prompt line: id, type, span and its narration lines with times.
 // Resolved cues become "reveals": when a cued element appears, so a vision model does not expect it at the line's start.
