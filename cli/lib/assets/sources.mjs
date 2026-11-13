@@ -2,6 +2,7 @@
 // Openverse (photos) and the Internet Archive (video: newsreels, public-domain films, CC uploads);
 // Pexels with PEXELS_API_KEY. Search, rank by licence / aspect / size.
 import { getJson } from "../core/http.mjs";
+import { normalizeLicense } from "../core/license.mjs";
 
 const stripHtml = (s) => String(s ?? "").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
 const enc = encodeURIComponent;
@@ -33,7 +34,7 @@ export const PROVIDERS = {
           url: ii.thumburl || ii.url, width: ii.thumbwidth || ii.width, height: ii.thumbheight || ii.height, mime: ii.mime,
         };
       })
-      .filter((c) => /^image\/(jpeg|png|webp)/.test(c.mime ?? "") && !/\b(NC|ND)\b|non-?commercial/i.test(c.license));
+      .filter((c) => /^image\/(jpeg|png|webp)/.test(c.mime ?? "") && normalizeLicense(c.license));
   },
   async openverse(query, { limit = 12 } = {}) {
     const j = await getJson(`https://api.openverse.org/v1/images/?q=${enc(query)}&license_type=commercial,modification&page_size=${limit}`);
@@ -96,7 +97,7 @@ async function wikimediaVideo(query, limit) {
         url: d?.src ?? v.url, width: d?.width ?? v.width, height: d?.height ?? v.height, duration: v.duration,
       };
     })
-    .filter((c) => c.url && !/\b(NC|ND)\b|non-?commercial/i.test(c.license));
+    .filter((c) => c.url && normalizeLicense(c.license));
 }
 
 export const DEFAULT_PROVIDER_ORDER = ["nasa", "wikimedia", "openverse"];

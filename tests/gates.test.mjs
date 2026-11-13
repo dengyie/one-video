@@ -64,6 +64,7 @@ test("normalizeLicense is an allowlist", () => {
   assert.equal(normalizeLicense("PD (NASA)"), "pd");
   assert.equal(normalizeLicense("CC BY-SA 4.0"), "cc-by-sa");
   assert.equal(normalizeLicense("CC BY 2.0"), "cc-by");
+  assert.equal(normalizeLicense("GODL-India"), null);
   assert.equal(normalizeLicense("CC BY-NC 4.0"), null);
   assert.equal(normalizeLicense("All rights reserved"), null);
 });

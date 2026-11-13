@@ -1,9 +1,12 @@
 // Pre-compose gates: catch structural, factual and pacing problems before spending a render.
 import { validate, loadSchema } from "../core/schema.mjs";
+import { normalizeLicense } from "../core/license.mjs";
 import { extractNumbers, parseNumber, spokenLength, normalizeForMatch } from "../core/text.mjs";
 import { timingHashes } from "../voice/tts.mjs";
 import { sceneLines } from "../captions/lines.mjs";
 import { captionBand } from "../captions/layout.mjs";
+
+export { normalizeLicense };
 export { captionGate } from "../captions/gate.mjs";
 
 export const STATIC_TYPES = new Set(["quote", "bullets", "title", "chapter", "sources"]);
@@ -132,20 +135,6 @@ export function rateGate(script, timings, config) {
     if (rate < g.syllablesPerSec[0] || rate > g.syllablesPerSec[1]) out.push(issue("warn", "rate", `scene "${s.id}" speaks ${rate.toFixed(1)} syllables/s (expected ${g.syllablesPerSec.join("–")})`));
   }
   return out;
-}
-
-// Allowlist, not denylist: anything not recognised as reusable blocks the render.
-export function normalizeLicense(l) {
-  const s = String(l ?? "").trim().toLowerCase().replace(/[-_]/g, " ");
-  if (/^(pd|public domain|pdm|cc0|pd \(nasa\))/.test(s) || s.includes("public domain")) return "pd";
-  if (s === "generated") return "generated";
-  if (s.includes("pexels")) return "pexels";
-  if (s.includes("pixabay")) return "pixabay";
-  if (/\b(nc|nd)\b|non ?commercial|no ?deriv/.test(s)) return null;
-  if (/^cc by sa\b/.test(s)) return "cc-by-sa";
-  if (/^cc by\b/.test(s)) return "cc-by";
-  if (s === "own" || s === "self") return "own";
-  return null;
 }
 
 export function assetsGate(assets, config = {}) {
