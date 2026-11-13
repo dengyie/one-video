@@ -70,6 +70,13 @@ export const MapScene: React.FC<{
     return m;
   }, [highlight]);
   const hlStart = highlight.map((h, i) => at(i, highlight.length, h.cue));
+  // Screen position and label fade of each visible pin (null when off the map or behind the globe).
+  const pinAt = pins.map((pn, i) => {
+    const xy = proj([pn.lon, pn.lat]);
+    if (!xy || (globe && !visibleOnGlobe([pn.lon, pn.lat], [lon, view.center[1]]))) return null;
+    const s = pn.cue ? cueOr(scene, pn.cue, 0) : at(i, pins.length);
+    return { i, x: xy[0], y: xy[1], text: pn.label, o: easeOut((t - s - 0.15) / 0.4) };
+  });
   const appear = easeOut(t / 0.6);
   // Style borders are translucent whites: enough to read land against the sea on any theme.
   const land = theme.colors.border;
@@ -130,12 +137,7 @@ export const MapScene: React.FC<{
           );
         })}
       </svg>
-      {placePinLabels(pins.map((pn, i) => {
-        const xy = proj([pn.lon, pn.lat]);
-        if (!xy || !pn.label || (globe && !visibleOnGlobe([pn.lon, pn.lat], [lon, view.center[1]]))) return null;
-        const s = pn.cue ? cueOr(scene, pn.cue, 0) : at(i, pins.length);
-        return { i, x: xy[0], y: xy[1], text: pn.label, o: easeOut((t - s - 0.15) / 0.4) };
-      }), u).map((l) => <Label key={`p${l.i}`} x={l.x} y={l.y} o={l.o} text={l.text} />)}
+      {placePinLabels(pinAt.map((p) => p && p.text ? { ...p, text: p.text } : null), u).map((l) => <Label key={`p${l.i}`} x={l.x} y={l.y} o={l.o} text={l.text} />)}
       {highlight.map((h, i) => {
         if (!h.label) return null;
         const f = feats.find((x) => String(x.id) === h.id);
@@ -145,7 +147,11 @@ export const MapScene: React.FC<{
         const xy = proj(c);
         if (!xy) return null;
         const o = easeOut((t - hlStart[i] - 0.3) / 0.5);
-        return <Label key={`h${i}`} x={xy[0]} y={xy[1]} o={o} text={h.label} center color={h.color ?? colorAt(theme, i)} />;
+        // A country label centred on a visible pin would hide it: it drops below the pin instead.
+        const w = labelWidth(h.label) * u, lh = 52 * u;
+        const under = pinAt.find((p) => p && p.o > 0 && Math.abs(p.x - xy[0]) < w / 2 + 14 * u && Math.abs(p.y - xy[1]) < lh / 2 + 14 * u);
+        const y = under ? under.y + 22 * u + lh / 2 : xy[1];
+        return <Label key={`h${i}`} x={under ? under.x : xy[0]} y={y} o={o} text={h.label} center color={h.color ?? colorAt(theme, i)} />;
       })}
       {routes.map((r, i) => {
         if (!r.label) return null;
@@ -174,6 +180,9 @@ const Label: React.FC<{ x: number; y: number; o: number; text: string; center?: 
   );
 };
 
+// Label width in u, estimated from the text (CJK ≈ 1em per char at 28u, plus padding).
+const labelWidth = (text: string) => [...text].reduce((a, c) => a + (c.charCodeAt(0) > 0x2e80 ? 1 : 0.6), 0) * 28 + 36;
+
 // Pin labels go right of their pin; when one would overlap an earlier label it flips to the
 // left, then steps down until clear. Width is estimated from the text (CJK ≈ 1em per char).
 function placePinLabels(items: ({ i: number; x: number; y: number; text: string; o: number } | null)[], u: number) {
@@ -182,7 +191,7 @@ function placePinLabels(items: ({ i: number; x: number; y: number; text: string;
   const hit = (b: { x: number; y: number; w: number; h: number }) => placed.some((p) => b.x < p.x + p.w && p.x < b.x + b.w && b.y < p.y + p.h && p.y < b.y + b.h);
   for (const it of items) {
     if (!it || it.o <= 0) continue;
-    const w = ([...it.text].reduce((a, c) => a + (c.charCodeAt(0) > 0x2e80 ? 1 : 0.6), 0) * 28 + 36) * u, h = 52 * u;
+    const w = labelWidth(it.text) * u, h = 52 * u;
     let box = { x: it.x + 22 * u, y: it.y - 26 * u - h / 2, w, h };
     if (hit(box)) box = { ...box, x: it.x - 22 * u - w };
     for (let k = 0; k < 6 && hit(box); k++) box = { ...box, y: box.y + h + 6 * u };
