@@ -68,6 +68,13 @@ test("normalizeLicense is an allowlist", () => {
   assert.equal(normalizeLicense("All rights reserved"), null);
 });
 
+test("schemaGate: assets accept the clipPick that fetch writes", () => {
+  const item = (clipPick) => ({ items: [{ id: "f", kind: "video", url: "https://x/f.webm", license: "Public domain", clip: [3, 20], clipPick }] });
+  assert.deepEqual(schemaGate("assets", item({ model: "m", at: 3, saw: "a street", reason: "r" })).filter((i) => i.level === "error"), []);
+  assert.deepEqual(schemaGate("assets", item({ model: "m", at: null, reason: null, fits: false })).filter((i) => i.level === "error"), []);
+  assert.ok(schemaGate("assets", item({ model: "m", at: 3, typo: 1 })).some((i) => i.level === "error"));
+});
+
 test("assetsGate: a film that fits nothing is flagged; two windows of one film are not the same media", () => {
   const film = { kind: "video", file: "assets/a.mp4", license: "PD", source: "https://archive.org/details/f", width: 1280, height: 720 };
   const issues = assetsGate({ items: [

@@ -224,6 +224,18 @@
           "type": "object",
           "description": "generated video: the vision check of the take (score, issues by second, kept [start, seconds])"
         },
+        "clipPick": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "video: how the vision model placed the auto clip — the frame second it picked (null: none fits), what it saw there, fits:false when nothing in the film shows the query",
+          "properties": {
+            "model": { "type": "string" },
+            "at": { "type": ["number", "null"] },
+            "saw": { "type": "string" },
+            "reason": { "type": ["string", "null"] },
+            "fits": { "type": "boolean" }
+          }
+        },
         "fallback": {
           "type": "object",
           "additionalProperties": false,
