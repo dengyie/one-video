@@ -32,10 +32,15 @@ export async function pickClipWindow(src, { brief, llm, askFn, grab = grabFrame,
   const times = sampleTimes(duration);
   const tmp = mkdtempSync(join(tmpdir(), "ov-pick-"));
   try {
+    if (!askFn) throw new Error("no vision model");
     const frames = [];
     for (const [i, t] of times.entries()) frames.push(await grab(src, t, join(tmp, `${i}.jpg`)));
-    if (!askFn) throw new Error("no vision model");
     const { data, model } = await askFn({ prompt: pickClipPrompt({ count: times.length, times, brief }), images: frames, json: true, maxTokens: 1500, config: { llm } });
+    // -1: nothing in the film shows the brief; cut past the opening and say so (another pick or query is due).
+    if (data?.best === -1) {
+      onWarn(`no frame of this film shows "${brief}" (${model}: ${String(data.reason ?? "").slice(0, 120)}); try pick: 1 or another query`);
+      return { clip: [windowAround(duration * 0.2 + CLIP_MAX / 2, duration), CLIP_MAX], pick: { model, at: null, reason: data.reason ?? null, fits: false } };
+    }
     if (!Number.isInteger(data?.best) || data.best < 0 || data.best >= times.length) throw new Error(`no frame index in reply`);
     return { clip: [windowAround(times[data.best], duration), CLIP_MAX], pick: { model, at: times[data.best], reason: data.reason ?? null } };
   } catch (e) {

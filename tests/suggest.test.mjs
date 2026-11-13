@@ -151,5 +151,8 @@ test("pickClipWindow: a long film is cut around the frame a vision model picks, 
   const f = await pickClipWindow("x", { probe: async () => ({ format: { duration: "200" } }), grab, askFn: async () => { throw new Error("down"); }, onWarn: (m) => warns.push(m) });
   assert.deepEqual(f, { clip: [40, 20], pick: null });
   assert.match(warns[0], /skipping the opening fifth/);
+  const off = await pickClipWindow("x", { brief: "trading floor", probe: async () => ({ format: { duration: "200" } }), grab, askFn: async () => ({ data: { best: -1, reason: "a talk show" }, model: "m" }), onWarn: (m) => warns.push(m) });
+  assert.deepEqual(off, { clip: [40, 20], pick: { model: "m", at: null, reason: "a talk show", fits: false } });
+  assert.match(warns[1], /no frame of this film shows "trading floor".*try pick: 1/);
   assert.equal(await pickClipWindow("x", { probe: async () => ({ format: { duration: "35" } }), grab, askFn }), null);
 });
