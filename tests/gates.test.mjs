@@ -68,6 +68,19 @@ test("normalizeLicense is an allowlist", () => {
   assert.equal(normalizeLicense("All rights reserved"), null);
 });
 
+test("assetsGate: a film that fits nothing is flagged; two windows of one film are not the same media", () => {
+  const film = { kind: "video", file: "assets/a.mp4", license: "PD", source: "https://archive.org/details/f", width: 1280, height: 720 };
+  const issues = assetsGate({ items: [
+    { ...film, id: "a", clip: [10, 20] },
+    { ...film, id: "b", clip: [300, 20], query: "stock market", clipPick: { model: "m", at: null, reason: "all animation", fits: false } },
+    { ...film, id: "c", clip: [10, 20] },
+  ] });
+  assert.deepEqual(issues.map((i) => i.msg.replace(/\(.*$/, "").trim()), [
+    'asset "b": no frame of its film shows "stock market"',
+    'assets "a" and "c" are the same source media',
+  ]);
+});
+
 test("assetsGate requires attribution for CC BY and blocks unknown licenses", () => {
   const issues = assetsGate({ items: [
     { id: "a", file: "assets/a.jpg", license: "CC BY 4.0" },

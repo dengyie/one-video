@@ -23,7 +23,9 @@ export async function cutClip(src, dest, clip) {
 // across the film go to a vision model, which picks the one that shows the brief in live action; the
 // clip is cut around it. Without a model the opening fifth is skipped. Returns { clip, pick } or null.
 export const sampleTimes = (duration, k = 8) => Array.from({ length: k }, (_, i) => +((duration * (i + 0.5)) / k).toFixed(2));
-export const windowAround = (t, duration, seconds = CLIP_MAX) => +Math.max(0, Math.min(t - seconds / 2, duration - seconds)).toFixed(2);
+// The window opens on `t`: a scene plays its clip from the start, often for only a few seconds, so
+// the frame that was checked is the one on screen first.
+export const windowFrom = (t, duration, seconds = CLIP_MAX) => +Math.max(0, Math.min(t, duration - seconds)).toFixed(2);
 
 // `askFn` is the LLM client's ask (passed in: assets sits below llm); frames go to it as JPEG paths.
 export async function pickClipWindow(src, { brief, llm, askFn, grab = grabFrame, probe = ffprobe, onWarn = () => {} } = {}) {
@@ -39,13 +41,13 @@ export async function pickClipWindow(src, { brief, llm, askFn, grab = grabFrame,
     // -1: nothing in the film shows the brief; cut past the opening and say so (another pick or query is due).
     if (data?.best === -1) {
       onWarn(`no frame of this film shows "${brief}" (${model}: ${String(data.reason ?? "").slice(0, 120)}); try the next pick or another query`);
-      return { clip: [windowAround(duration * 0.2 + CLIP_MAX / 2, duration), CLIP_MAX], pick: { model, at: null, reason: data.reason ?? null, fits: false } };
+      return { clip: [windowFrom(duration * 0.2, duration), CLIP_MAX], pick: { model, at: null, reason: data.reason ?? null, fits: false } };
     }
     if (!Number.isInteger(data?.best) || data.best < 0 || data.best >= times.length) throw new Error(`no frame index in reply`);
-    return { clip: [windowAround(times[data.best], duration), CLIP_MAX], pick: { model, at: times[data.best], ...(data.frames?.[data.best] ? { saw: String(data.frames[data.best]) } : {}), reason: data.reason ?? null } };
+    return { clip: [windowFrom(times[data.best], duration), CLIP_MAX], pick: { model, at: times[data.best], ...(data.frames?.[data.best] ? { saw: String(data.frames[data.best]) } : {}), reason: data.reason ?? null } };
   } catch (e) {
     onWarn(`clip window: ${e.message.split("\n")[0].slice(0, 160)}; skipping the opening fifth instead`);
-    return { clip: [windowAround(duration * 0.2 + CLIP_MAX / 2, duration), CLIP_MAX], pick: null };
+    return { clip: [windowFrom(duration * 0.2, duration), CLIP_MAX], pick: null };
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

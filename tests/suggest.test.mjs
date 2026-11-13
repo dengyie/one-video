@@ -146,10 +146,10 @@ test("scoreCandidate: the archive's best match, sharp and short footage come fir
 });
 
 test("pickClipWindow: a long film is cut around the frame a vision model picks, not at its title card", async () => {
-  const { pickClipWindow, sampleTimes, windowAround } = await import("../cli/lib/assets/media.mjs");
+  const { pickClipWindow, sampleTimes, windowFrom } = await import("../cli/lib/assets/media.mjs");
   assert.deepEqual(sampleTimes(160, 4), [20, 60, 100, 140]);
-  assert.equal(windowAround(5, 160), 0);
-  assert.equal(windowAround(155, 160), 140);
+  assert.equal(windowFrom(5, 160), 5);
+  assert.equal(windowFrom(155, 160), 140);
   const { mkdtempSync: mk, writeFileSync: wf } = await import("node:fs");
   const { tmpdir: td } = await import("node:os");
   const grab = async (_src, t, out) => { wf(out, Buffer.from([0xff, 0xd8, t])); return out; };
@@ -160,7 +160,7 @@ test("pickClipWindow: a long film is cut around the frame a vision model picks, 
   assert.match(seen.prompt, /Never a cartoon or animation, a title card/);
   assert.match(seen.prompt, /First describe what each frame literally shows/);
   assert.match(seen.prompt, /stock market crowd/);
-  assert.deepEqual(w, { clip: [windowAround(sampleTimes(172.3)[5], 172.3), 20], pick: { model: "m", at: sampleTimes(172.3)[5], saw: "a street crowd", reason: "street crowd" } });
+  assert.deepEqual(w, { clip: [windowFrom(sampleTimes(172.3)[5], 172.3), 20], pick: { model: "m", at: sampleTimes(172.3)[5], saw: "a street crowd", reason: "street crowd" } });
   // A model that fails: skip the opening fifth. A short source is cut from its start.
   const warns = [];
   const f = await pickClipWindow("x", { probe: async () => ({ format: { duration: "200" } }), grab, askFn: async () => { throw new Error("down"); }, onWarn: (m) => warns.push(m) });

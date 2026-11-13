@@ -162,8 +162,10 @@ export function assetsGate(assets, config = {}) {
     }
     if (a.width && a.height && Math.min(a.width, a.height) < minShort) out.push(issue("warn", "assets", `asset "${a.id}" is ${a.width}x${a.height}; short side < ${minShort}px will look soft`));
     if (a.fallback) { out.push(issue("warn", "assets", `asset "${a.id}" is still "${a.fallback.from}" standing in for its generated clip (${a.fallback.reason || "generation failed"}); run onevideo assets fetch --only ${a.id} to try again`)); continue; }
-    // Captures of one page in different states (clicked, other device) are different screens.
-    const key = a.capture ? JSON.stringify([a.source, a.capture.device, a.capture.click ?? [], a.capture.full, a.capture.dark]) : a.source;
+    if (a.clipPick?.fits === false) out.push(issue("warn", "assets", `asset "${a.id}": no frame of its film shows "${a.query ?? "its query"}" (${a.clipPick.model}: ${String(a.clipPick.reason ?? "").slice(0, 120)}); give it another query or a url and fetch again`));
+    // Captures of one page in different states (clicked, other device) are different screens; windows
+    // cut from one long film are different shots.
+    const key = a.capture ? JSON.stringify([a.source, a.capture.device, a.capture.click ?? [], a.capture.full, a.capture.dark]) : a.kind === "video" && a.clip ? JSON.stringify([a.source, a.clip]) : a.source;
     if (key) {
       if (seen.has(key)) out.push(issue("warn", "assets", `assets "${seen.get(key)}" and "${a.id}" are the same source media`));
       else seen.set(key, a.id);
