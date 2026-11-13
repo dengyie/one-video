@@ -35,7 +35,7 @@ voice                        → captions, audio, core
 generate                     → prompts, llm, vision, assets/media, core
 assets                       → generate, prompts, core
 timeline                     → captions, vision, library, audio, assets/media, core
-review                       → timeline, captions, voice, core
+review                       → timeline, captions, voice, library, core
 publish                      → review, timeline, captions, voice, core
 archive                      → core
 commands                     → 以上任意

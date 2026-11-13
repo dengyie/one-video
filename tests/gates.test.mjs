@@ -216,6 +216,12 @@ test("layoutGate: overlays over spoken captions, off-frame, tiny or stacked stic
   assert.ok(run(map(0.45)).some((i) => /covers the map label "总部"/.test(i.msg)));
   assert.ok(!run(map(0.25)).some((i) => /covers the map/.test(i.msg)));
   assert.ok(!run(map(0.6, { mode: "globe" })).some((i) => /covers the map/.test(i.msg)));
+  // Country labels: centred on the country, or dropped under a pin that sits there.
+  const us = (y, extra = {}) => ({ type: "map", cues: {}, props: { views: [{ center: [-98, 39], zoom: 3 }], highlight: [{ id: "840", label: "美国" }], ...extra }, overlays: [{ type: "word", text: "关税", x: 0.53, y, t: 2, end: 5 }] });
+  assert.ok(run(us(0.4)).some((i) => /covers the map label "美国"/.test(i.msg)));
+  assert.ok(!run(us(0.75)).some((i) => /covers the map/.test(i.msg)));
+  const sg = (y) => map(y, { highlight: [{ id: "702", label: "新加坡", cue: "sg" }], pins: [{ lon: 103.82, lat: 1.35, cue: "sg" }] });
+  assert.ok(run(sg(0.66)).some((i) => /covers the map label "新加坡"/.test(i.msg)));
 });
 
 test("densityGate: assets per minute, AI-generated ones counted, bare text scenes flagged", () => {

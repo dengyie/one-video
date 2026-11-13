@@ -13,7 +13,7 @@ const ALLOWED = {
   captions: ["vision", "core"], voice: ["captions", "audio", "core"],
   generate: ["prompts", "llm", "vision", "assets", "core"], assets: ["generate", "prompts", "core"], archive: ["core"],
   timeline: ["captions", "vision", "library", "audio", "assets", "core"],
-  review: ["timeline", "captions", "voice", "core"], publish: ["review", "timeline", "captions", "voice", "core"],
+  review: ["timeline", "captions", "voice", "library", "core"], publish: ["review", "timeline", "captions", "voice", "core"],
 };
 
 const imports = (file) => [...readFileSync(file, "utf8").matchAll(/(?:from|import\()\s*["'](\.[^"']+)["']/g)].map((m) => m[1]);

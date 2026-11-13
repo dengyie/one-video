@@ -44,3 +44,16 @@ export function resolveCountry(ref) {
   for (const [num, zh] of Object.values(ISO)) if (zh === r) return num;
   return atlasNames().get(r.toLowerCase()) ?? null;
 }
+
+// Where the Map scene centres a country's label: d3 geoCentroid of the 50m feature, or of the
+// 110m one where it differs, per id. Entries are [lon, lat], [lon, lat, lon110, lat110], or
+// [lon, lat, null] for a country only the 50m atlas has. tests/geo.test.mjs keeps it in step
+// with world-atlas; ONEVIDEO_WRITE_CENTROIDS=1 rewrites it.
+let centroids = null;
+export function countryCentroid(id, detail = "50m") {
+  centroids ??= JSON.parse(readFileSync(new URL("./country-centroids.json", import.meta.url), "utf8"));
+  const c = centroids[id];
+  if (!c) return null;
+  if (detail !== "110m") return [c[0], c[1]];
+  return c[2] === null ? null : c.length === 4 ? [c[2], c[3]] : [c[0], c[1]];
+}

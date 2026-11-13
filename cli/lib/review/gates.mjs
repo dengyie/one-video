@@ -5,6 +5,7 @@ import { extractNumbers, parseNumber, spokenLength, normalizeForMatch } from "..
 import { timingHashes } from "../voice/tts.mjs";
 import { sceneLines } from "../captions/lines.mjs";
 import { captionBand } from "../captions/layout.mjs";
+import { countryCentroid } from "../library/geo.mjs";
 
 export { normalizeLicense };
 export { captionGate } from "../captions/gate.mjs";
@@ -277,7 +278,7 @@ export function echoGate(timeline, config) {
 // the shot track, so the caption band is mapped into the scene's own coordinates at each moment.
 // - an overlay over a spoken caption (error): the caption is unreadable or the sticker is cut;
 // - an overlay partly out of frame, two stickers on top of each other, a sticker too small to read,
-//   a keyword or sticker over a map pin or its label;
+//   a keyword or sticker over a map pin, its label or a country label;
 // - a shot pushed in so far that left-aligned or wide text leaves the frame.
 const BOXED = new Set(["image", "icon", "lottie", "stamp"]);
 const LEFT_TEXT = (sc, portrait) => (sc.type === "kinetic" && sc.props?.align === "left") || sc.type === "bullets" || (sc.type === "chapter" && !portrait);
@@ -303,15 +304,16 @@ function overlayBox(o, width, height) {
 }
 const meets = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
 
-// Map pins and their labels at scene time t, as frame-fraction boxes: the Map scene's mercator
-// projection, camera path between views and label placement, re-done without d3. A globe is skipped.
+// Map pins, pin labels and country labels at scene time t, as frame-fraction boxes: the Map
+// scene's mercator projection, camera path between views and label placement, re-done without
+// d3 (country labels sit on a precomputed geoCentroid). A globe is skipped.
 const PACE = { slow: 1.35, medium: 1, fast: 0.7 };
 const easeIO = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
 const textWidth = (text) => [...text].reduce((a, c) => a + (c.charCodeAt(0) > 0x2e80 ? 1 : 0.6), 0) * 28 + 36;
-function mapPinBoxes(sc, t, width, height, pace) {
+function mapBoxes(sc, t, width, height, pace) {
   const p = sc.props ?? {};
-  const pins = p.pins ?? [];
-  if (p.mode === "globe" || !pins.length) return [];
+  const pins = p.pins ?? [], hls = (p.highlight ?? []).filter((h) => h.label);
+  if (p.mode === "globe" || (!pins.length && !hls.length)) return [];
   const portrait = height >= width * 1.5;
   const u = Math.min(width, height) / 1080;
   const reveal = (i, n, cue) => {
@@ -334,13 +336,17 @@ function mapPinBoxes(sc, t, width, height, pace) {
   }
   const s = (width / (2 * Math.PI)) * Math.exp(z), r = Math.PI / 180;
   const merc = (lat) => Math.log(Math.tan(Math.PI / 4 + (Math.max(-85, Math.min(85, lat)) * r) / 2));
-  const placed = [], out = [];
-  for (const [i, pn] of pins.entries()) {
-    if (t < reveal(i, pins.length, pn.cue)) continue;
-    let dl = (pn.lon - c[0] - (p.spin ?? 0) * t) % 360;
+  const proj = (lon, lat) => {
+    let dl = (lon - c[0] - (p.spin ?? 0) * t) % 360;
     if (dl > 180) dl -= 360;
     if (dl < -180) dl += 360;
-    const x = width / 2 + s * dl * r, y = height * (portrait ? 0.5 : 0.54) - s * (merc(pn.lat) - merc(c[1]));
+    return [width / 2 + s * dl * r, height * (portrait ? 0.5 : 0.54) - s * (merc(lat) - merc(c[1]))];
+  };
+  const placed = [], shown = [], out = [];
+  for (const [i, pn] of pins.entries()) {
+    if (t < reveal(i, pins.length, pn.cue)) continue;
+    const [x, y] = proj(pn.lon, pn.lat);
+    shown.push([x, y]);
     out.push({ what: "pin", box: [x - 14 * u, y - 14 * u, x + 14 * u, y + 14 * u] });
     if (!pn.label) continue;
     // Right of the pin; flipped left or stepped down past an earlier label, as placePinLabels does.
@@ -350,6 +356,17 @@ function mapPinBoxes(sc, t, width, height, pace) {
     for (let k = 0; k < 6 && placed.some((q) => meets(q, b)); k++) b = [b[0], b[1] + h + 6 * u, b[2], b[3] + h + 6 * u];
     placed.push(b);
     out.push({ what: `label "${pn.label}"`, box: b });
+  }
+  // Country labels centre on the country; one that would hide a visible pin drops below it.
+  const detail = p.detail && p.detail !== "auto" ? p.detail : Math.exp(z) > 2.2 ? "50m" : "110m";
+  for (const [i, h] of (p.highlight ?? []).entries()) {
+    const at = h.label && t >= reveal(i, p.highlight.length, h.cue) + 0.3 && countryCentroid(h.id, detail);
+    if (!at) continue;
+    const [cx, cy] = proj(at[0], at[1]);
+    const w = textWidth(h.label) * u, lh = 52 * u;
+    const pin = shown.find(([x, y]) => Math.abs(x - cx) < w / 2 + 14 * u && Math.abs(y - cy) < lh / 2 + 14 * u);
+    const [x, y] = pin ? [pin[0], pin[1] + 22 * u + lh / 2] : [cx, cy];
+    out.push({ what: `label "${h.label}"`, box: [x - w / 2, y - lh / 2, x + w / 2, y + lh / 2] });
   }
   return out.map((m) => ({ ...m, box: [m.box[0] / width, m.box[1] / height, m.box[2] / width, m.box[3] / height] }));
 }
@@ -380,8 +397,8 @@ export function layoutGate(timeline, config) {
       for (const p of placed) if (p.o.t < o.end && o.t < p.o.end && meets(p.box, box)) out.push(issue("warn", "layout", `${name} overlaps overlay ${p.i} (${p.o.type}) — space them out or stagger their times`));
       if (sc.type === "map") {
         let pin = null;
-        for (let t = o.t; t < o.end && !pin; t += 0.25) pin = mapPinBoxes(sc, t, width, height, pace).find((m) => meets(m.box, box));
-        if (pin) out.push(issue("warn", "layout", `${name} covers the map ${pin.what} — move it clear of the pins or show it after the camera has moved on`));
+        for (let t = o.t; t < o.end && !pin; t += 0.25) pin = mapBoxes(sc, t, width, height, pace).find((m) => meets(m.box, box));
+        if (pin) out.push(issue("warn", "layout", `${name} covers the map ${pin.what} — move it clear of the pins and labels or show it after the camera has moved on`));
       }
       placed.push({ i, o, box });
     }
