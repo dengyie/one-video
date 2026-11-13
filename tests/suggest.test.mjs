@@ -103,6 +103,7 @@ test("generatedItem: an AI still from the visual intent, the first query kept as
   assert.equal(g.query, "data center");
   assert.ok(taken.has("hook-2"));
   assert.equal(generatedItem({ id: "z" }, [], {}), null);
+  assert.match(generatedItem({ id: "hook" }, ["gpu"], { taken, alone: false }).note, /AI still$/);
 });
 
 test("sceneQueries asks again for the scenes a cut-short reply left out", async () => {

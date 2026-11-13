@@ -186,10 +186,11 @@ export async function assets(args) {
       if (!cands.length) log("   (nothing licensed found; try other words in the scene's search)");
       cands.forEach((c, i) => log(`${String(i).padStart(3)} ${c.kind === "video" ? "clip " : "photo"} ${c.provider.padEnd(9)} ${(c.license ?? "").padEnd(14)} ${c.width ?? "?"}x${c.height ?? "?"}${c.duration ? ` ${Math.round(c.duration)}s` : ""}  ${(c.title ?? "").slice(0, 56)}\n      ${c.source}${c.author ? ` · ${c.author.slice(0, 40)}` : ""}`));
       const items = args.write ? await candidateItems(s.id, cands, { taken }) : [];
-      // Nothing licensed: an AI still stands in (--no-generate leaves the scene empty).
-      if (args.write && !items.length && !args.noGenerate) {
-        const g = generatedItem(s, q, { taken });
-        if (g) { items.push(g); log(`   + ${g.id}: AI still (nothing licensed found)`); }
+      // One AI still per scene, on brief: an option next to the licensed picks, or the stand-in when
+      // nothing licensed fits (--no-generate leaves only licensed picks).
+      if (args.write && !args.noGenerate) {
+        const g = generatedItem(s, q, { taken, alone: !items.length });
+        if (g) { items.push(g); log(`   + ${g.id}: AI still${items.length > 1 ? "" : " (nothing licensed found)"}`); }
       }
       manifest.items.push(...items);
       report.scenes.push({ id: s.id, queries: q, candidates: cands.map(({ preview: _p, ...c }) => c), ...(items.length ? { added: items.map((x) => x.id) } : {}) });

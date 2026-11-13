@@ -101,14 +101,16 @@ export async function candidateItems(sceneId, candidates, { taken = new Set(), f
   return items;
 }
 
-// A scene nothing licensed fits: an AI still from what it should show (licensed "generated", which
-// the density gate does not count as a real asset), with the first query as a stock fallback.
-export function generatedItem(scene, queries, { taken = new Set() } = {}) {
+// An AI still of what the scene should show, drawn through the relay (licensed "generated", which the
+// density gate does not count as a real asset): next to the licensed picks, which for a current
+// topic are often old film or near misses, or alone when nothing licensed fits. The first query is
+// the stock fallback.
+export function generatedItem(scene, queries, { taken = new Set(), alone = true } = {}) {
   let n = 1;
   while (taken.has(`${scene.id}-${n}`)) n++;
   const id = `${scene.id}-${n}`;
   taken.add(id);
   const what = scene.visualIntent || queries.join(", ");
   if (!what) return null;
-  return { id, kind: "image", generate: { prompt: `${what}，电影感，写实，无文字`, brief: `stands in for scene ${scene.id}: nothing licensed found` }, ...(queries[0] ? { query: queries[0] } : {}), note: `suggest: ${scene.id} · AI still (no licensed match)` };
+  return { id, kind: "image", generate: { prompt: `${what}，电影感，写实，无文字`, brief: `scene ${scene.id}: ${alone ? "stands in, nothing licensed found" : "on-brief option next to licensed picks"}` }, ...(queries[0] ? { query: queries[0] } : {}), note: `suggest: ${scene.id} · AI still${alone ? " (no licensed match)" : ""}` };
 }
