@@ -190,6 +190,12 @@ test("layoutGate: overlays over spoken captions, off-frame, tiny or stacked stic
   assert.ok(run({ overlays: [img(0.97, 0.3, 300)] }).some((i) => /off the frame/.test(i.msg)));
   assert.ok(run({ overlays: [img(0.8, 0.3, 160)] }).some((i) => /thumbnail/.test(i.msg)));
   assert.ok(run({ overlays: [img(0.4, 0.3, 300), img(0.45, 0.32, 300)] }).some((i) => /overlaps overlay 0/.test(i.msg)));
+  // A keyword clear of the band at first, carried into it by a push-in partway through the line.
+  const word = (y) => ({ type: "word", text: "≈48亿美元", x: 0.5, y, t: 0, end: 5 });
+  const push = [{ t: 0, zoom: 1, x: 0.5, y: 0.5 }, { t: 2, zoom: 1.16, x: 0.5, y: 0.45, ease: 0.6 }];
+  assert.deepEqual(run({ overlays: [word(0.74)] }), []);
+  assert.ok(run({ overlays: [word(0.74)], shots: push }).some((i) => i.level === "error" && /word "≈48亿美元"\) sits in the caption band/.test(i.msg)));
+  assert.deepEqual(run({ overlays: [word(0.6)], shots: push }), []);
 
   const left = run({ type: "kinetic", props: { align: "left" }, shots: [{ t: 0, zoom: 1.15, x: 0.5, y: 0.5 }] });
   assert.ok(left.some((i) => /left edge/.test(i.msg)));

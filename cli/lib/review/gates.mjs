@@ -282,9 +282,15 @@ const TEXT_TYPES = new Set([...STATIC_TYPES, "kinetic"]);
 export const LAYOUT_DEFAULTS = { minSticker: 240, maxTextZoom: 1.25 };
 
 function overlayBox(o, width, height) {
-  if (o.on || !BOXED.has(o.type) || (o.x === undefined && o.y === undefined)) return null;
+  if (o.on || (!BOXED.has(o.type) && o.type !== "word") || (o.x === undefined && o.y === undefined)) return null;
   const u = Math.min(width, height) / 1080;
   const x = o.x ?? 0.5, y = o.y ?? 0.5;
+  // A keyword is one line at `size` px (CJK ≈ 1em per character, the rest ≈ 0.6em).
+  if (o.type === "word") {
+    const size = (o.size ?? 150) * u;
+    const w = [...(o.text ?? "")].reduce((a, c) => a + (c.charCodeAt(0) > 0x2e80 ? 1 : 0.6), 0) * size / width, h = size / height;
+    return [x - w / 2, y - h / 2, x + w / 2, y + h / 2];
+  }
   // A stamp's box is its text at `size` px per character plus padding; the rest are size×size.
   const w = (o.type === "stamp" ? ((o.size ?? 72) * [...(o.text ?? "")].length + 80) : (o.size ?? 160)) * u / width;
   const h = (o.type === "stamp" ? (o.size ?? 72) * 1.5 : (o.size ?? 160)) * u / height;
@@ -308,7 +314,13 @@ export function layoutGate(timeline, config) {
       const name = `scene "${sc.id}" overlay ${i} (${o.type}${o.asset ? ` ${o.asset}` : ""}${o.text ? ` "${o.text}"` : ""})`;
       if (box[0] < -0.01 || box[1] < -0.01 || box[2] > 1.01 || box[3] > 1.01) out.push(issue("warn", "layout", `${name} runs off the frame at x ${o.x ?? 0.5}, y ${o.y ?? 0.5} — move it inward`));
       if (o.type === "image" && (o.size ?? 160) < g.minSticker) out.push(issue("warn", "layout", `${name}: size ${o.size ?? 160} reads as a thumbnail — use ${g.minSticker}+ or make it a backdrop / photo-stack (gates.minSticker)`));
-      const hit = spoken.find((c) => c.scene === sc.id && !c.top && c.start - sc.start < o.end && o.t < c.end - sc.start && meets(box, captionBand(sc.shots, Math.max(o.t, c.start - sc.start), portrait)));
+      // The band is checked through the whole overlap: a push-in partway through can carry the overlay into it.
+      const inBand = (c) => {
+        const a = Math.max(o.t, c.start - sc.start), b = Math.min(o.end, c.end - sc.start);
+        for (let t = a; t < b; t += 0.25) if (meets(box, captionBand(sc.shots, t, portrait))) return true;
+        return false;
+      };
+      const hit = spoken.find((c) => c.scene === sc.id && !c.top && inBand(c));
       if (hit) out.push(issue("error", "layout", `${name} sits in the caption band while "${hit.text}" is spoken — move it above y ${portrait ? 0.7 : 0.8} or to a side`));
       for (const p of placed) if (p.o.t < o.end && o.t < p.o.end && meets(p.box, box)) out.push(issue("warn", "layout", `${name} overlaps overlay ${p.i} (${p.o.type}) — space them out or stagger their times`));
       placed.push({ i, o, box });
