@@ -271,9 +271,12 @@ test("checkNotes: still/late notes the timeline contradicts are marked doubtful,
     { t: 2.5, issue: "数值到后面才出现" }, // cue at 3s, on its word
     { t: 16, kind: "late", issue: "标签没出现" }, // no reveal after 16s
     { t: 8, issue: "文字压住人脸" },
+    { t: 9, scene: "a", issue: "画面无变化", span: [8, 12] }, // b's start and overlay are not a's
+    { t: 4, issue: "0-7秒画面静止" }, // span read off the wording: 0→3 cue→6 push→7
+    { t: 15, issue: "画面偏空" }, // composition, not stillness
   ];
-  assert.equal(checkNotes(lookTl(), notes), 2);
-  assert.deepEqual(notes.map((n) => n.check?.doubtful), [true, false, true, false, undefined]);
+  assert.equal(checkNotes(lookTl(), notes), 3);
+  assert.deepEqual(notes.map((n) => n.check?.doubtful), [true, false, true, false, undefined, false, true, undefined]);
   assert.match(notes[0].check.why, /3\.0s cue, 6\.0s shot/);
   assert.doesNotMatch(notes[0].check.why, /5\.0s/); // the weak drift does not count
   assert.match(notes[2].check.why, /cue reveals at 3\.0s/);

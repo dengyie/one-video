@@ -4,7 +4,8 @@
 // contradicts is kept but marked doubtful, with what the timeline has there.
 import { screenEvents } from "./gates.mjs";
 
-const STILL = /静止|无变化|没有变化|无新|没有新|空档|空白|偏空|单调|停留过久|长时间不变/;
+// Wording about the frame not changing; "偏空" (sparse) or "单调" (same backdrop) are about composition, not events.
+const STILL = /静止|无变化|没有变化|无新|没有新|空档|空白|长时间不变/;
 const LATE = /才出现|未显示|没显示|没有出现|未出现|滞后|延迟|晚了|偏晚|缺少画面|无对应|无画面/;
 
 // What kind of claim a note makes: the model's own `kind` when it gave one, else read off the wording.
@@ -16,9 +17,12 @@ export function noteKind(n) {
   return "other";
 }
 
-// The stretch a "still" note is about: its span when it named one (and the span covers t), else 2s each side.
+// The stretch a "still" note is about: its span, or one written in the issue ("33-37s", "103–111秒"),
+// when it covers t; else 2s each side.
+const SPAN = /(\d+(?:\.\d+)?)\s*[-–~至到]\s*(\d+(?:\.\d+)?)\s*(?:s|秒)/;
 function window(n) {
-  const [a, b] = Array.isArray(n.span) ? n.span.map(Number) : [];
+  const said = `${n.issue ?? ""}`.match(SPAN);
+  const [a, b] = Array.isArray(n.span) ? n.span.map(Number) : said ? [Number(said[1]), Number(said[2])] : [];
   if (Number.isFinite(a) && Number.isFinite(b) && b - a >= 1 && b - a <= 20 && a <= n.t + 1 && b >= n.t - 1) return [a, b];
   return [n.t - 2, n.t + 2];
 }
@@ -28,9 +32,11 @@ function window(n) {
 // late:  a cue reveal or overlay entrance lands within `lead` seconds after the cell: it is timed on its word.
 export function checkNotes(timeline, notes, { maxGap = 3, lead = 3 } = {}) {
   if (!timeline?.scenes?.length) return 0;
-  const events = screenEvents(timeline).filter((e) => !e.weak);
+  const all = screenEvents(timeline).filter((e) => !e.weak);
   let doubtful = 0;
   for (const n of notes) {
+    // Only the note's own scene: the next scene starting is not evidence that this one moves.
+    const events = n.scene ? all.filter((e) => e.scene === n.scene) : all;
     const kind = noteKind(n);
     if (kind === "still") {
       const [a, b] = window(n);
