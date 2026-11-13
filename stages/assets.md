@@ -9,7 +9,7 @@
 第一版片子差，多半不是文案，而是画面没东西可看。所以素材在分镜之前定：
 
 1. `onevideo assets suggest`：按 script 的每个场景出 2–3 个英文检索词（场景里写了 `search: [...]` 就用它，其余一次 LLM 调用补齐，回复被截断时只对缺的场景再问一次，仍失败才退回旁白里的英文名词），默认图片和视频一起找（`--kind both`）：图片在 NASA / Wikimedia / Openverse，视频在 NASA / Wikimedia / Internet Archive（有 key 时都加 Pexels），每场景取 `--per` 条且保证至少一条动态镜头，写进 `plan/asset-suggestions.json`（每条带许可、作者、出处、尺寸和命中的检索词）。已在清单里的来源会跳过；某个源 429 时等 20 秒只重试它；被 Cloudflare 挑战拦下（403）的源本次运行内不再请求。
-2. 挑：看候选，把要用的写进 `assets.json`（`--write` 直接把全部候选按 `<场景>-<n>` 追加进去，再删掉不要的；并给每个场景补一张按 visualIntent 经 API 站生成的 AI 图——当下题材的授权素材常是老胶片或擦边，AI 图给分镜一个贴题的选项，没有授权候选时它就是替身；`--no-generate` 关掉。AI 图不计入密度门控）。宁多勿少——分镜时用不上的可以不引用。
+2. 挑：看候选，把要用的写进 `assets.json`（`--write` 直接把全部候选按 `<场景>-<n>` 追加进去，再删掉不要的；并给每个场景补一张按 visualIntent 经 API 站生成的 AI 图——当下题材的授权素材常是老胶片或擦边，AI 图给分镜一个贴题的选项，没有授权候选时它就是替身；`--no-generate` 关掉。AI 图不画可辨认的真实人物和公司标志，纪实片里以假乱真会误导；也不计入密度门控）。宁多勿少——分镜时用不上的可以不引用。
 3. `onevideo assets fetch` 下载，再把 `public/assets/` 里的实物（不是候选列表）给用户看，通过后 `onevideo approve assets`。之后 fetch 改了清单，该阶段会变 stale，需要再给用户看。
 4. 分镜按手里的素材写。
 
@@ -54,7 +54,7 @@
 onevideo assets suggest                                            # 每场景的授权候选 → plan/asset-suggestions.json
 onevideo assets suggest --scene hook,ipo --per 5 --kind image --write  # 指定场景、只要图片、直接追加进清单
 onevideo assets search "falcon heavy" --provider nasa,wikimedia   # 单个检索词看候选
-onevideo assets fetch                                              # 下载缺失项 → public/assets/
+onevideo assets fetch                                              # 下载缺失项 → public/assets/（默认 3 个并发，--jobs 调）
 onevideo assets fetch --only launch --force                        # 重取单个
 ```
 

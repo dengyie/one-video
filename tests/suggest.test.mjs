@@ -100,6 +100,7 @@ test("generatedItem: an AI still from the visual intent, the first query kept as
   const g = generatedItem({ id: "hook", visualIntent: "GPU 机房走廊" }, ["data center"], { taken });
   assert.equal(g.id, "hook-2");
   assert.match(g.generate.prompt, /^GPU 机房走廊，/);
+  assert.match(g.generate.prompt, /不出现可辨认的真实人物面孔，不出现公司或品牌标志/);
   assert.equal(g.query, "data center");
   assert.ok(taken.has("hook-2"));
   assert.equal(generatedItem({ id: "z" }, [], {}), null);
