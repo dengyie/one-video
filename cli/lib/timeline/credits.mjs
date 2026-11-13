@@ -11,10 +11,12 @@ export function researchSources(research) {
   return [...seen.values()];
 }
 
-// On-screen credits for the sources scene: research sources, then every asset's attribution.
-export function sourceList(research, assets, extra = []) {
+// On-screen credits for the sources scene: research sources, then the attribution of every asset
+// the video shows (`used`: ids the storyboard references; candidates left unused are not credited).
+export function sourceList(research, assets, extra = [], used = null) {
   const out = researchSources(research).map((s) => s.line);
   for (const a of assets?.items ?? []) {
+    if (used && !used.has(a.id)) continue;
     const line = `${a.kind === "video" ? "视频" : "图片"}：${credit(a)}`;
     if (!out.includes(line)) out.push(line);
   }

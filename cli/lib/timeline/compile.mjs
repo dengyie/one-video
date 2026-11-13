@@ -197,7 +197,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       const s2 = rampShots(props.ramp, shots, duration);
       if (s2.length) shots = s2;
     }
-    if (sb.type === "sources" && !props.items?.length && props.auto !== false) props.items = sourceList(research, assets, libraryCredits);
+    if (sb.type === "sources" && !props.items?.length && props.auto !== false) props.items = sourceList(research, assets, libraryCredits, collectAssetRefs(storyboard.scenes));
     if (sb.type === "map") for (const h of props.highlight ?? []) {
       const id = resolveCountry(h.id);
       if (id) h.id = id; else errors.push(`scene "${sb.id}" map highlight: unknown country "${h.id}" (use a Natural Earth numeric id, ISO alpha-2 or English name)`);

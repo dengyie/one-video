@@ -43,6 +43,8 @@ test("sourceList appends asset credits; generated assets credit the model", () =
   const list = sourceList({ facts: [] }, { items: [{ title: "Falcon", author: "NASA", license: "PD (NASA)" }, { license: "generated", author: "gpt-image-2.5" }] });
   assert.deepEqual(list, ["图片：Falcon · NASA · PD (NASA)", "图片：AI 生成 · gpt-image-2.5"]);
   assert.equal(credit({ license: "generated" }), "AI 生成 · image model");
+  const used = sourceList({ facts: [] }, { items: [{ id: "a", title: "A", license: "CC0" }, { id: "b", title: "B", license: "CC0" }] }, [], new Set(["b"]));
+  assert.deepEqual(used, ["图片：B · CC0"]);
 });
 
 test("compileTimeline on the SpaceX example: frames, captions, cues, chapters, music credit", () => {
