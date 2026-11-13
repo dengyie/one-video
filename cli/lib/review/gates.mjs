@@ -137,7 +137,9 @@ export function rateGate(script, timings, config) {
   return out;
 }
 
-export function assetsGate(assets, config = {}) {
+// `used` (ids the compiled timeline renders), when given, limits the softness warning to assets on
+// screen: a low-res candidate left unpicked in the manifest costs nothing.
+export function assetsGate(assets, config = {}, used) {
   const out = [];
   const minShort = config.gates?.minImageShortSide ?? 720;
   const seen = new Map();
@@ -149,7 +151,7 @@ export function assetsGate(assets, config = {}) {
       if (!norm) out.push(issue("error", "licensing", `asset "${a.id}" license "${a.license}" is not on the allowlist (PD/CC0, CC BY, CC BY-SA, Pexels, Pixabay, generated, own)`));
       else if (["cc-by", "cc-by-sa"].includes(norm) && (!a.author || !a.source)) out.push(issue("error", "licensing", `asset "${a.id}" (${a.license}) needs author and source for attribution`));
     }
-    if (a.width && a.height && Math.min(a.width, a.height) < minShort) out.push(issue("warn", "assets", `asset "${a.id}" is ${a.width}x${a.height}; short side < ${minShort}px will look soft`));
+    if (a.width && a.height && Math.min(a.width, a.height) < minShort && (!used || used.has(a.id))) out.push(issue("warn", "assets", `asset "${a.id}" is ${a.width}x${a.height}; short side < ${minShort}px will look soft`));
     if (a.fallback) { out.push(issue("warn", "assets", `asset "${a.id}" is still "${a.fallback.from}" standing in for its generated clip (${a.fallback.reason || "generation failed"}); run onevideo assets fetch --only ${a.id} to try again`)); continue; }
     if (a.clipPick?.fits === false) out.push(issue("warn", "assets", `asset "${a.id}": no frame of its film shows "${a.query ?? "its query"}" (${a.clipPick.model}: ${String(a.clipPick.reason ?? "").slice(0, 120)}); give it another query or a url and fetch again`));
     // Captures of one page in different states (clicked, other device) are different screens; windows

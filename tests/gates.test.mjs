@@ -89,6 +89,14 @@ test("assetsGate: a film that fits nothing is flagged; two windows of one film a
   ]);
 });
 
+test("assetsGate: a soft asset is flagged only when the timeline shows it", () => {
+  const items = [{ id: "low", file: "assets/low.webm", license: "PD", width: 640, height: 480 }, { id: "hd", file: "assets/hd.jpg", license: "PD", width: 1920, height: 1080 }];
+  const soft = (used) => assetsGate({ items }, {}, used).filter((i) => /look soft/.test(i.msg)).length;
+  assert.equal(soft(), 1);
+  assert.equal(soft(new Set(["low", "hd"])), 1);
+  assert.equal(soft(new Set(["hd"])), 0);
+});
+
 test("assetsGate requires attribution for CC BY and blocks unknown licenses", () => {
   const issues = assetsGate({ items: [
     { id: "a", file: "assets/a.jpg", license: "CC BY 4.0" },

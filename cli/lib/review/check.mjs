@@ -40,11 +40,12 @@ export function checkProject(project, { needTimings = false } = {}) {
   }
   if (boardOk) {
     issues.push(...storyboardGate(plan.storyboard, plan.script, config, plan.assets));
-    if (plan.assets) issues.push(...assetsGate(plan.assets, config));
+    if (plan.assets && !plan.timings) issues.push(...assetsGate(plan.assets, config));
     if (plan.timings) {
       issues.push(...timingsGate(plan.script, plan.timings, config));
       issues.push(...rateGate(plan.script, plan.timings, config));
       const res = compileTimeline({ config, script: plan.script, storyboard: plan.storyboard, timings: plan.timings, assets: plan.assets, research: plan.research, root: project.root });
+      if (plan.assets) issues.push(...assetsGate(plan.assets, config, res.timeline && new Set(Object.keys(res.timeline.assets ?? {}))));
       issues.push(...res.errors.map((msg) => ({ level: "error", gate: "timeline", msg })));
       issues.push(...res.warnings.map((msg) => ({ level: "warn", gate: "timeline", msg })));
       if (res.timeline) issues.push(...rhythmGate(res.timeline, config), ...echoGate(res.timeline, config), ...deviceGate(res.timeline, config), ...layoutGate(res.timeline, config), ...densityGate(res.timeline, plan.assets, config));
