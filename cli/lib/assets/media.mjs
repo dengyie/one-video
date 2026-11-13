@@ -35,14 +35,14 @@ export async function pickClipWindow(src, { brief, llm, askFn, grab = grabFrame,
     if (!askFn) throw new Error("no vision model");
     const frames = [];
     for (const [i, t] of times.entries()) frames.push(await grab(src, t, join(tmp, `${i}.jpg`)));
-    const { data, model } = await askFn({ prompt: pickClipPrompt({ count: times.length, times, brief }), images: frames, json: true, maxTokens: 1500, config: { llm } });
+    const { data, model } = await askFn({ prompt: pickClipPrompt({ count: times.length, times, brief }), images: frames, json: true, maxTokens: 2500, config: { llm } });
     // -1: nothing in the film shows the brief; cut past the opening and say so (another pick or query is due).
     if (data?.best === -1) {
       onWarn(`no frame of this film shows "${brief}" (${model}: ${String(data.reason ?? "").slice(0, 120)}); try the next pick or another query`);
       return { clip: [windowAround(duration * 0.2 + CLIP_MAX / 2, duration), CLIP_MAX], pick: { model, at: null, reason: data.reason ?? null, fits: false } };
     }
     if (!Number.isInteger(data?.best) || data.best < 0 || data.best >= times.length) throw new Error(`no frame index in reply`);
-    return { clip: [windowAround(times[data.best], duration), CLIP_MAX], pick: { model, at: times[data.best], reason: data.reason ?? null } };
+    return { clip: [windowAround(times[data.best], duration), CLIP_MAX], pick: { model, at: times[data.best], ...(data.frames?.[data.best] ? { saw: String(data.frames[data.best]) } : {}), reason: data.reason ?? null } };
   } catch (e) {
     onWarn(`clip window: ${e.message.split("\n")[0].slice(0, 160)}; skipping the opening fifth instead`);
     return { clip: [windowAround(duration * 0.2 + CLIP_MAX / 2, duration), CLIP_MAX], pick: null };

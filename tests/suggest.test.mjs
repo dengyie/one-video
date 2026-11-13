@@ -154,12 +154,13 @@ test("pickClipWindow: a long film is cut around the frame a vision model picks, 
   const { tmpdir: td } = await import("node:os");
   const grab = async (_src, t, out) => { wf(out, Buffer.from([0xff, 0xd8, t])); return out; };
   let seen;
-  const askFn = async (o) => { seen = o; return { data: { best: 5, reason: "street crowd" }, model: "m" }; };
+  const askFn = async (o) => { seen = o; return { data: { frames: ["title card", "", "", "", "", "a street crowd"], best: 5, reason: "street crowd" }, model: "m" }; };
   const w = await pickClipWindow(join(mk(join(td(), "ov-")), "x.ogv"), { brief: "stock market crowd", probe: async () => ({ format: { duration: "172.3" } }), grab, askFn });
   assert.equal(seen.images.length, 8);
-  assert.match(seen.prompt, /Never a title card/);
+  assert.match(seen.prompt, /Never a cartoon or animation, a title card/);
+  assert.match(seen.prompt, /First describe what each frame literally shows/);
   assert.match(seen.prompt, /stock market crowd/);
-  assert.deepEqual(w, { clip: [windowAround(sampleTimes(172.3)[5], 172.3), 20], pick: { model: "m", at: sampleTimes(172.3)[5], reason: "street crowd" } });
+  assert.deepEqual(w, { clip: [windowAround(sampleTimes(172.3)[5], 172.3), 20], pick: { model: "m", at: sampleTimes(172.3)[5], saw: "a street crowd", reason: "street crowd" } });
   // A model that fails: skip the opening fifth. A short source is cut from its start.
   const warns = [];
   const f = await pickClipWindow("x", { probe: async () => ({ format: { duration: "200" } }), grab, askFn: async () => { throw new Error("down"); }, onWarn: (m) => warns.push(m) });
