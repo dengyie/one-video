@@ -42,7 +42,8 @@ test("prompt builders are pure and fill every field", () => {
   const ins = inspectClipPrompt({ cells: 12, t0: 0.25, step: 0.5, prompt: "p" });
   assert.match(ins, /12 cells; cell i shows t = 0\.25s \+ i×0\.5s\./);
   const look = lookPrompt({ sheet: { cells: 24, t0: 10, step: 1 }, scenes: "- a (title) 0.0–3.0s: ", focus: "captions" });
-  assert.match(look, /cell i shows t = 10\.5s \+ i×1s, and each cell is stamped with its time/);
+  assert.match(look, /cell i shows about t = 10\.5s \+ i×1s, and each cell is stamped with its exact time/);
+  assert.match(lookPrompt({ sheet: { cells: 24, t0: 10, step: 1, times: [10.6] }, scenes: "" }), /moved a little off transitions/);
   assert.match(look, /Pay extra attention to: captions\./);
   assert.match(look, /within ~1s after the cell/);
   const line = sceneLine({ id: "v", type: "line-chart", start: 39.333, duration: 18, lines: [{ start: 2.25, text: "约3500亿" }], cues: { draw: 0.6, a: 8.122, b: 8.122, c: 0, d: null } });

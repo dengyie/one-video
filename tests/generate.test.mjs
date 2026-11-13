@@ -10,7 +10,7 @@ import { ask, parseJsonReply } from "../cli/lib/llm/client.mjs";
 import { request } from "../cli/lib/core/http.mjs";
 import { validateNamed } from "../cli/lib/core/schema.mjs";
 import { sheetPlan, sceneAt, writeSheets } from "../cli/commands/director.mjs";
-import { stampTime } from "../cli/lib/vision/sheet.mjs";
+import { busyWindows, cellTime, settle, stampTime } from "../cli/lib/vision/sheet.mjs";
 import { REMOTION_BIN, ffmpeg, ffprobe } from "../cli/lib/core/ffmpeg.mjs";
 
 // A stand-in relay: `routes[path]` answers (req, body) → [status, json | Buffer]; calls are logged.
@@ -197,6 +197,23 @@ test("contact sheet geometry and scene lookup", () => {
   const tl = { scenes: [{ id: "a", start: 0 }, { id: "b", start: 11.6 }] };
   assert.equal(sceneAt(tl, 11.6), "b");
   assert.equal(sceneAt(tl, 3), "a");
+});
+
+test("look cells step off transitions, overlay entrances and reveals", () => {
+  const tl = { fps: 30, scenes: [
+    { id: "a", start: 0, transitionIn: { frames: 0 }, overlays: [{ t: 2.8, end: 6 }], cues: { x: 0 } },
+    { id: "b", start: 7, transitionIn: { frames: 24, lead: 12 }, overlays: [], cues: { k: 3 } },
+  ] };
+  const busy = busyWindows(tl);
+  assert.deepEqual(busy.map(([a, b]) => [+a.toFixed(2), +b.toFixed(2)]), [[2.8, 3.4], [5.5, 6], [6.45, 7.55], [10, 10.6]]);
+  // A cell on an entrance moves to the nearest clear moment (here just before it), inside its own interval; a clear one stays.
+  assert.equal(settle(3, 2, busy), 2.8);
+  assert.equal(settle(7, 2, busy), 7.6);
+  assert.equal(settle(4.5, 2, busy), 4.5);
+  // Nothing clear within ±0.4 step: the nominal time stands.
+  assert.equal(settle(7, 0.5, busy), 7);
+  assert.equal(cellTime({ t0: 0, step: 2, times: [1, 3.5] }, 1), 3.5);
+  assert.equal(cellTime({ t0: 0, step: 2 }, 1), 3);
 });
 
 test("video generation: submit, poll, download, cut; image-to-video sends the still", { skip: !existsSync(REMOTION_BIN) && "needs template deps (ffmpeg)" }, async () => {

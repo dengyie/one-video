@@ -1,7 +1,7 @@
 // Vision prompt: review one contact sheet of a rendered video as a film editor.
 // One sheet per call: relays cap a reply's tokens (reasoning included), so a whole-video review
 // in one answer comes back cut off.
-export const lookPrompt = ({ sheet: s, scenes, focus }) => `You are reviewing a rendered narrated video as a film editor. The image is a contact sheet: each cell is one frame, read row by row, left to right, cell 0 first. ${s.cells} cells; cell i shows t = ${s.t0 + s.step / 2}s + i×${s.step}s, and each cell is stamped with its time in its top-left corner: use the stamp to say where you saw something.
+export const lookPrompt = ({ sheet: s, scenes, focus }) => `You are reviewing a rendered narrated video as a film editor. The image is a contact sheet: each cell is one frame, read row by row, left to right, cell 0 first. ${s.cells} cells; cell i shows about t = ${s.t0 + s.step / 2}s + i×${s.step}s${s.times ? " (moved a little off transitions and entrances, so most cells show settled frames)" : ""}, and each cell is stamped with its exact time in its top-left corner: use the stamp to say where you saw something.
 
 Timeline around this stretch (scene id, type, start–end seconds, narration lines with their times, and "reveals": the moments a chart value, card or point is timed to appear, on the spoken word itself rather than the start of its line):
 ${scenes}

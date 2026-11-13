@@ -6,7 +6,7 @@ import { join, relative } from "node:path";
 import { UserError, loadProject, readJson, writeJson, log, warn } from "../lib/core/project.mjs";
 import { ask, imagePart, llmConfig } from "../lib/llm/client.mjs";
 import { lookPrompt, sceneLine } from "../lib/prompts/index.mjs";
-import { cellTime, sceneAt, sheetPlan, writeSheets } from "../lib/vision/sheet.mjs";
+import { busyWindows, cellTime, sceneAt, sheetPlan, writeSheets } from "../lib/vision/sheet.mjs";
 import { resolveVideo } from "../lib/publish/renders.mjs";
 import { videoPath } from "./render.mjs";
 import { buildHandoff, handoffPath, handoffRel } from "../lib/publish/handoff.mjs";
@@ -49,9 +49,11 @@ export async function look(args) {
   const { file: video, offset } = target(project, args.video);
   const tl = existsSync(project.paths.timeline) ? readJson(project.paths.timeline) : null;
   const outDir = join(project.paths.out, "qc");
-  const { sheets: raw } = await writeSheets(video, outDir, { fps: args.fps !== undefined ? Number(args.fps) : undefined, ...range(args, offset), width: 400, shift: offset });
+  // Cells are nudged off transitions and entrances: half-drawn frames were most of look's false alarms.
+  const busy = busyWindows(tl).map(([a, b]) => [a - offset, b - offset]);
+  const { sheets: raw } = await writeSheets(video, outDir, { fps: args.fps !== undefined ? Number(args.fps) : undefined, ...range(args, offset), width: 400, shift: offset, busy });
   // Timeline time from here on: a part render's cells are shifted by where it starts.
-  const sheets = raw.map((s) => ({ ...s, t0: +(s.t0 + offset).toFixed(3) }));
+  const sheets = raw.map((s) => ({ ...s, t0: +(s.t0 + offset).toFixed(3), times: s.times?.map((t) => +(t + offset).toFixed(2)) }));
   const config = { llm: { ...project.config.llm, ...(args.models ? { models: String(args.models).split(",") } : {}) } };
   log(`look: ${sheets.length} sheet(s) → ${llmConfig(config).models.join(" / ")}`);
   const reviews = [], notes = [];

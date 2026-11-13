@@ -26,8 +26,32 @@ export function sheetPlan(duration, { fps, from = 0, to = duration, cols = 6, pe
 // The scene playing at t (seconds) on a compiled timeline.
 export const sceneAt = (timeline, t) => timeline?.scenes?.findLast((s) => s.start <= t + 1e-6)?.id ?? null;
 
-// Sample mid-interval so a cell shows its second, not the cut at its edge.
-export const cellTime = (s, i) => +(s.t0 + s.step * (i + 0.5)).toFixed(2);
+// Sample mid-interval so a cell shows its second, not the cut at its edge. A sheet written with
+// `busy` windows carries the times it actually sampled.
+export const cellTime = (s, i) => s.times?.[i] ?? +(s.t0 + s.step * (i + 0.5)).toFixed(2);
+
+// When a compiled timeline is moving rather than holding: transitions across each cut, overlays
+// sliding in and out, cued reveals landing. A frame from one of these reads to a vision model as a
+// half-drawn or broken frame. Seconds on the timeline.
+export function busyWindows(timeline) {
+  const fps = timeline?.fps ?? 30, out = [];
+  for (const sc of timeline?.scenes ?? []) {
+    const tr = sc.transitionIn;
+    if (tr?.frames) out.push([sc.start - (tr.lead ?? 0) / fps - 0.15, sc.start + (tr.frames - (tr.lead ?? 0)) / fps + 0.15]);
+    for (const o of sc.overlays ?? []) out.push([sc.start + o.t, sc.start + o.t + 0.6], [sc.start + o.end - 0.5, sc.start + o.end]);
+    for (const c of Object.values(sc.cues ?? {})) if (Number.isFinite(c) && c > 0.05) out.push([sc.start + c, sc.start + c + 0.6]);
+  }
+  return out;
+}
+
+// The cell's sample moved, inside its own interval, to the nearest moment outside every busy
+// window; unchanged when it is already clear or nothing nearby is.
+export function settle(t, step, busy) {
+  const free = (x) => !busy.some(([a, b]) => x > a && x < b);
+  if (!busy?.length || free(t)) return t;
+  for (let d = 0.1; d <= step * 0.4 + 1e-6; d += 0.1) for (const x of [t + d, t - d]) if (free(x)) return +x.toFixed(2);
+  return t;
+}
 
 // Remotion's ffmpeg build has scale but no fps/tile filters, so cells are pulled one by one as raw
 // RGB and tiled here; the grid goes out as PNG and ffmpeg re-encodes it to JPEG.
@@ -81,6 +105,7 @@ async function frameRgb(video, t, w, h, tmp) {
 }
 
 // `shift` moves the stamped times onto the timeline (a part render starts later).
+// `busy` (video seconds, see busyWindows) nudges each cell off transitions and entrances.
 // `pair: { video, shift }` stacks a second video into every cell (it on top, this one below), at
 // the same moment shifted by `shift` seconds: an older version of the cut against the new one.
 export async function writeSheets(video, outDir, opts = {}) {
@@ -99,6 +124,7 @@ export async function writeSheets(video, outDir, opts = {}) {
   try {
     for (const [k, s] of plan.entries()) {
       s.file = join(outDir, `${prefix}-${String(k + 1).padStart(2, "0")}.jpg`);
+      if (opts.busy?.length) s.times = Array.from({ length: s.cells }, (_, i) => settle(cellTime(s, i), s.step, opts.busy));
       const W = s.cols * w + (s.cols + 1) * PAD, H = s.rows * ch + (s.rows + 1) * PAD;
       const grid = Buffer.alloc(W * H * 3);
       const blit = (cell, x0, y0) => { for (let y = 0; y < h; y++) cell.copy(grid, ((y0 + y) * W + x0) * 3, y * w * 3, (y + 1) * w * 3); };
