@@ -189,14 +189,15 @@ test("layoutGate: overlays over spoken captions, off-frame, tiny or stacked stic
   assert.ok(run({ type: "kinetic", props: {}, shots: [{ t: 0, zoom: 1.4, x: 0.5, y: 0.5 }] }).some((i) => /maxTextZoom/.test(i.msg)));
 });
 
-test("densityGate: real assets per minute, generated ones excluded, bare text scenes flagged", () => {
+test("densityGate: assets per minute, AI-generated ones counted, bare text scenes flagged", () => {
   const sc = (id, type, duration, extra = {}) => ({ id, type, duration, props: {}, overlays: [], ...extra });
   const tl = (scenes) => ({ duration: scenes.reduce((s, x) => s + x.duration, 0), scenes });
   const assets = { items: [{ id: "g", generate: { prompt: "x" } }, { id: "p1", license: "CC0" }] };
   const photos = (n) => Array.from({ length: n }, (_, i) => ({ type: "image", asset: `p${i}` }));
 
   const thin = densityGate(tl([sc("a", "media", 60, { props: { asset: "p1" }, overlays: [{ type: "image", asset: "g" }] })]), assets, {});
-  assert.ok(thin.some((i) => i.level === "error" && /1 real assets in 60s/.test(i.msg)));
+  assert.ok(thin.some((i) => i.level === "error" && /2 assets \(1 AI-generated\) in 60s/.test(i.msg)));
+  assert.deepEqual(densityGate(tl([sc("a", "media", 60, { overlays: [...photos(7), { type: "image", asset: "g" }] })]), assets, {}), []);
   const mid = densityGate(tl([sc("a", "media", 60, { overlays: photos(5) })]), assets, {});
   assert.deepEqual(mid.map((i) => i.level), ["warn"]);
   assert.deepEqual(densityGate(tl([sc("a", "media", 60, { overlays: photos(8) })]), assets, {}), []);

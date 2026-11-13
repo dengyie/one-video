@@ -336,8 +336,8 @@ export function layoutGate(timeline, config) {
   return out;
 }
 
-// Material density on the compiled timeline: distinct real assets (photos, footage, captures,
-// logos; generated ones do not count) per minute, and text-only scenes held with nothing to look at.
+// Material density on the compiled timeline: distinct assets (photos, footage, captures, logos and
+// AI-generated stills and clips alike) per minute, and text-only scenes held with nothing to look at.
 // Charts, maps and timelines are their own evidence and are not flagged.
 export const DENSITY_DEFAULTS = { minAssetsPerMinute: 4, goodAssetsPerMinute: 8, bareTextMax: 6 };
 function assetRefs(v, out = new Set()) {
@@ -349,17 +349,17 @@ export function densityGate(timeline, assets, config) {
   const g = { ...DENSITY_DEFAULTS, ...(config.gates ?? {}) };
   if (!g.minAssetsPerMinute && !g.goodAssetsPerMinute) return [];
   const generated = new Set((assets?.items ?? []).filter((a) => a.generate || normalizeLicense(a.license) === "generated").map((a) => a.id));
-  const real = (refs) => [...refs].filter((r) => !generated.has(r));
   const out = [];
   const minutes = Math.max(timeline.duration, 1) / 60;
-  const n = real(assetRefs(timeline.scenes)).length;
-  const rate = n / minutes;
-  const msg = `${n} real assets in ${Math.round(timeline.duration)}s (${rate.toFixed(1)}/min)`;
+  const refs = [...assetRefs(timeline.scenes)];
+  const rate = refs.length / minutes;
+  const ai = refs.filter((r) => generated.has(r)).length;
+  const msg = `${refs.length} assets${ai ? ` (${ai} AI-generated)` : ""} in ${Math.round(timeline.duration)}s (${rate.toFixed(1)}/min)`;
   if (g.minAssetsPerMinute && rate < g.minAssetsPerMinute) out.push(issue("error", "density", `${msg}; min ${g.minAssetsPerMinute}/min — run onevideo assets suggest and put photos/footage behind the talk (gates.minAssetsPerMinute, 0 disables)`));
   else if (g.goodAssetsPerMinute && rate < g.goodAssetsPerMinute) out.push(issue("warn", "density", `${msg}; ${g.goodAssetsPerMinute}/min reads as well-sourced — onevideo assets suggest finds more (gates.goodAssetsPerMinute)`));
   for (const sc of timeline.scenes) {
     if (!TEXT_TYPES.has(sc.type) || sc.type === "sources" || sc.duration <= g.bareTextMax) continue;
-    if (!real(assetRefs(sc)).length) out.push(issue("warn", "density", `scene "${sc.id}" is ${sc.duration.toFixed(1)}s of ${sc.type} text with no photo, footage or logo — add a backdrop, photo-stack or image overlay`));
+    if (!assetRefs(sc).size) out.push(issue("warn", "density", `scene "${sc.id}" is ${sc.duration.toFixed(1)}s of ${sc.type} text with no photo, footage or logo — add a backdrop, photo-stack or image overlay`));
   }
   return out;
 }
