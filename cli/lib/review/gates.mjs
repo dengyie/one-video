@@ -276,7 +276,8 @@ export function echoGate(timeline, config) {
 // would otherwise catch only after a full render. Boxes are frame fractions; overlays ride with
 // the shot track, so the caption band is mapped into the scene's own coordinates at each moment.
 // - an overlay over a spoken caption (error): the caption is unreadable or the sticker is cut;
-// - an overlay partly out of frame, two stickers on top of each other, a sticker too small to read;
+// - an overlay partly out of frame, two stickers on top of each other, a sticker too small to read,
+//   a keyword or sticker over a map pin or its label;
 // - a shot pushed in so far that left-aligned or wide text leaves the frame.
 const BOXED = new Set(["image", "icon", "lottie", "stamp"]);
 const LEFT_TEXT = (sc, portrait) => (sc.type === "kinetic" && sc.props?.align === "left") || sc.type === "bullets" || (sc.type === "chapter" && !portrait);
@@ -302,10 +303,62 @@ function overlayBox(o, width, height) {
 }
 const meets = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
 
+// Map pins and their labels at scene time t, as frame-fraction boxes: the Map scene's mercator
+// projection, camera path between views and label placement, re-done without d3. A globe is skipped.
+const PACE = { slow: 1.35, medium: 1, fast: 0.7 };
+const easeIO = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const textWidth = (text) => [...text].reduce((a, c) => a + (c.charCodeAt(0) > 0x2e80 ? 1 : 0.6), 0) * 28 + 36;
+function mapPinBoxes(sc, t, width, height, pace) {
+  const p = sc.props ?? {};
+  const pins = p.pins ?? [];
+  if (p.mode === "globe" || !pins.length) return [];
+  const portrait = height >= width * 1.5;
+  const u = Math.min(width, height) / 1080;
+  const reveal = (i, n, cue) => {
+    if (cue && sc.cues?.[cue] !== undefined) return sc.cues[cue];
+    const first = 0.35 * pace, span = Math.max(0, Math.min(sc.duration * 0.55, n * 1.4 * pace) - first);
+    return n <= 1 ? first : first + (span * i) / (n - 1);
+  };
+  const vs = p.views?.length ? p.views : [{ center: [20, 20], zoom: 1 }];
+  const fly = p.fly ?? 1.6;
+  let c = vs[0].center, z = Math.log(vs[0].zoom);
+  for (let i = 1; i < vs.length; i++) {
+    const v = vs[i], start = v.cue ? sc.cues?.[v.cue] ?? 0 : v.at ?? reveal(i, vs.length);
+    const k = easeIO((t - (start - fly)) / fly);
+    if (k <= 0) break;
+    let d = v.center[0] - c[0];
+    if (d > 180) d -= 360;
+    if (d < -180) d += 360;
+    c = [c[0] + d * k, c[1] + (v.center[1] - c[1]) * k];
+    z += (Math.log(v.zoom) - z) * k;
+  }
+  const s = (width / (2 * Math.PI)) * Math.exp(z), r = Math.PI / 180;
+  const merc = (lat) => Math.log(Math.tan(Math.PI / 4 + (Math.max(-85, Math.min(85, lat)) * r) / 2));
+  const placed = [], out = [];
+  for (const [i, pn] of pins.entries()) {
+    if (t < reveal(i, pins.length, pn.cue)) continue;
+    let dl = (pn.lon - c[0] - (p.spin ?? 0) * t) % 360;
+    if (dl > 180) dl -= 360;
+    if (dl < -180) dl += 360;
+    const x = width / 2 + s * dl * r, y = height * (portrait ? 0.5 : 0.54) - s * (merc(pn.lat) - merc(c[1]));
+    out.push({ what: "pin", box: [x - 14 * u, y - 14 * u, x + 14 * u, y + 14 * u] });
+    if (!pn.label) continue;
+    // Right of the pin; flipped left or stepped down past an earlier label, as placePinLabels does.
+    const w = textWidth(pn.label) * u, h = 52 * u;
+    let b = [x + 22 * u, y - 26 * u - h / 2, x + 22 * u + w, y - 26 * u + h / 2];
+    if (placed.some((q) => meets(q, b))) b = [x - 22 * u - w, b[1], x - 22 * u, b[3]];
+    for (let k = 0; k < 6 && placed.some((q) => meets(q, b)); k++) b = [b[0], b[1] + h + 6 * u, b[2], b[3] + h + 6 * u];
+    placed.push(b);
+    out.push({ what: `label "${pn.label}"`, box: b });
+  }
+  return out.map((m) => ({ ...m, box: [m.box[0] / width, m.box[1] / height, m.box[2] / width, m.box[3] / height] }));
+}
+
 export function layoutGate(timeline, config) {
   const g = { ...LAYOUT_DEFAULTS, ...(config.gates ?? {}) };
   const { width, height } = timeline;
   const portrait = height >= width * 1.5;
+  const pace = PACE[timeline.theme?.motion?.pace] ?? 1;
   const out = [];
   const spoken = timeline.captions?.enabled !== false && timeline.captions?.style !== "none" ? timeline.captions.items ?? [] : [];
   for (const sc of timeline.scenes) {
@@ -325,6 +378,11 @@ export function layoutGate(timeline, config) {
       const hit = spoken.find((c) => c.scene === sc.id && !c.top && inBand(c));
       if (hit) out.push(issue("error", "layout", `${name} sits in the caption band while "${hit.text}" is spoken — move it above y ${portrait ? 0.7 : 0.8} or to a side`));
       for (const p of placed) if (p.o.t < o.end && o.t < p.o.end && meets(p.box, box)) out.push(issue("warn", "layout", `${name} overlaps overlay ${p.i} (${p.o.type}) — space them out or stagger their times`));
+      if (sc.type === "map") {
+        let pin = null;
+        for (let t = o.t; t < o.end && !pin; t += 0.25) pin = mapPinBoxes(sc, t, width, height, pace).find((m) => meets(m.box, box));
+        if (pin) out.push(issue("warn", "layout", `${name} covers the map ${pin.what} — move it clear of the pins or show it after the camera has moved on`));
+      }
       placed.push({ i, o, box });
     }
     if (!TEXT_TYPES.has(sc.type)) continue;

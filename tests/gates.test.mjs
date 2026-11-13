@@ -209,6 +209,13 @@ test("layoutGate: overlays over spoken captions, off-frame, tiny or stacked stic
   assert.ok(left.some((i) => /left edge/.test(i.msg)));
   assert.deepEqual(run({ type: "kinetic", props: { align: "center" }, shots: [{ t: 0, zoom: 1.15, x: 0.5, y: 0.5 }] }), []);
   assert.ok(run({ type: "kinetic", props: {}, shots: [{ t: 0, zoom: 1.4, x: 0.5, y: 0.5 }] }).some((i) => /maxTextZoom/.test(i.msg)));
+
+  // A keyword parked on a map pin once the camera has flown in to it; a globe is not checked.
+  const map = (y, extra = {}) => ({ type: "map", cues: { sg: 1 }, props: { views: [{ center: [105, 12], zoom: 2.2 }, { center: [103.8, 1.4], zoom: 9, cue: "sg" }], pins: [{ lon: 103.82, lat: 1.35, label: "总部", cue: "sg" }], ...extra }, overlays: [{ ...word(y), t: 2 }] });
+  assert.ok(run(map(0.6)).some((i) => /covers the map pin/.test(i.msg)));
+  assert.ok(run(map(0.45)).some((i) => /covers the map label "总部"/.test(i.msg)));
+  assert.ok(!run(map(0.25)).some((i) => /covers the map/.test(i.msg)));
+  assert.ok(!run(map(0.6, { mode: "globe" })).some((i) => /covers the map/.test(i.msg)));
 });
 
 test("densityGate: assets per minute, AI-generated ones counted, bare text scenes flagged", () => {
