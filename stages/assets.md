@@ -26,7 +26,7 @@
 ] }
 ```
 
-- `query`：按 provider 顺序检索（图片默认 NASA → Wikimedia → Openverse；视频默认 NASA → Wikimedia → Internet Archive（检索词按整词短语匹配，先搜 Prelinger / Universal Newsreels / FedFlix 这类实拍素材馆的标题/主题/简介，再搜全站标题），有 `PEXELS_API_KEY` 时再加 Pexels；视频下载后自动裁成无声 H.264 片段，`clip: [起点秒, 时长秒]`，最长 60 秒；不写时：40 秒以内的源取开头 20 秒，更长的影片在全片均匀抽 8 帧，交给视觉模型挑最贴合检索词、且不是片头字卡/片尾/黑场的实拍画面，围绕它截 20 秒，结果写回 `clip` 与 `clipPick`（模型、时间点、理由），重取时不再重挑；整片没有一帧贴合时（片子讲的是别的、只有访谈头像或字幕）自动换下一部候选（最多看 3 部），都不贴合则保留最后一部并记 `clipPick.fits: false`，应换检索词；自动选段同时写回影片 `url`，重取不会换片；模型不可用时跳过开头五分之一。想重挑就删掉 `clip`），按许可开放度、画幅贴合度、分辨率打分取第一（`pick` 可指定第 N 个）。
+- `query`：按 provider 顺序检索（图片默认 NASA → Wikimedia → Openverse；视频默认 NASA → Wikimedia → Internet Archive（检索词按整词短语匹配，先搜 Prelinger / Universal Newsreels / FedFlix 这类实拍素材馆的标题/主题/简介，再搜全站标题），有 `PEXELS_API_KEY` 时再加 Pexels；视频下载后自动裁成无声 H.264 片段，`clip: [起点秒, 时长秒]`，最长 60 秒；不写时：40 秒以内的源取开头 20 秒，更长的影片在全片均匀抽 8 帧，交给视觉模型先逐帧描述、再挑最贴合检索词、且不是动画/片头字卡/片尾/黑场的实拍画面（所选帧的描述记在 `clipPick.saw`，可据此核对），围绕它截 20 秒，结果写回 `clip` 与 `clipPick`（模型、时间点、理由），重取时不再重挑；整片没有一帧贴合时（片子讲的是别的、只有访谈头像或字幕）自动换下一部候选（最多看 3 部），都不贴合则保留最后一部并记 `clipPick.fits: false`，应换检索词；自动选段同时写回影片 `url`，重取不会换片；模型不可用时跳过开头五分之一。想重挑就删掉 `clip`），按许可开放度、画幅贴合度、分辨率打分取第一（`pick` 可指定第 N 个）。
 - `url`：直链，必须手填 `license`/`author`/`source`。
 - `generate`：AI 生成，许可记为 `generated`，片尾标注“AI 生成”。可以直接写一句 prompt，也可以写成对象：
 
