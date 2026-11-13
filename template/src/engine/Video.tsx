@@ -127,7 +127,7 @@ function throughOrigin(f: Focus | undefined, shots: Shot[] | undefined, t: numbe
   return `${(clamp01(x) * 100).toFixed(1)}% ${(clamp01(y) * 100).toFixed(1)}%`;
 }
 
-const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.ReactNode; content: React.ReactNode; base: React.ReactNode }> = ({ scene, length, children, content, base }) => {
+const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.ReactNode; content: React.ReactNode; header: React.ReactNode; base: React.ReactNode }> = ({ scene, length, children, content, header, base }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const { u } = useLayout();
@@ -186,6 +186,8 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
           <AbsoluteFill style={{ transform: cam || undefined }}>{content}</AbsoluteFill>
           <Overlays />
         </MotionBlur>
+        {/* The header is frame chrome: it rides the transition but not the camera, so a push-in cannot crop it. */}
+        {header}
       </AbsoluteFill>
     </>
   );
@@ -213,7 +215,8 @@ export const Video: React.FC<Timeline> = (timeline) => {
                     scene={scene}
                     length={length}
                     base={<AbsoluteFill style={{ backgroundColor: theme.colors.bg }}><Backdrop variant={theme.background} /></AbsoluteFill>}
-                    content={<>{scene.header && <Header title={scene.header.title} subtitle={scene.header.subtitle} />}<Comp {...scene.props} /></>}
+                    content={<Comp {...scene.props} />}
+                    header={scene.header && <Header title={scene.header.title} subtitle={scene.header.subtitle} />}
                   >
                     {scene.backdrop
                       ? <><MediaFill asset={scene.backdrop.asset} motion={scene.backdrop.motion} dim={scene.backdrop.dim} blur={scene.backdrop.blur} startFrom={scene.backdrop.startFrom} /><Credit asset={scene.backdrop.asset} corner="bottom-right" /></>

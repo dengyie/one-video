@@ -36,7 +36,7 @@
 
 ## 场景通用字段
 
-- `header: {title, subtitle}`：图表场景的标题条。subtitle 写口径和日期（“2026-11-04 收盘 · StockTitan”）。
+- `header: {title, subtitle}`：图表场景的标题条。subtitle 写口径和日期（“2026-11-04 收盘 · StockTitan”）标题条是画框元素：跟随转场，不跟随 `shots` 和 `camera`，推近时不会被裁出画面。
 - `cues: {name: 时间}`：时间可以是秒（负数从结尾倒数；没有按比例的写法，`0.8` 就是 0.8 秒）、旁白里的短语，或 `{phrase, offset}`。props 用 `cue`、`drawCue`、`periodCues`、`pointCues` 引用 cue 名，引用未定义的 cue 会报错。
 - `enter` / `exit`：转场类型 `fade`、`slide`、`push`、`whip`、`zoom`、`punch`、`iris`、`wipe`、`clock`、`dip`、`through`（镜头冲进上一镜的主体，糊开后露出下一场景，下一场景从同一点浮出；主体默认取上一镜素材末帧深度图里最近 8% 像素的重心，没有深度图时取画面中心，也可写 `focus: [x, y]` 指定屏幕点；最适合实拍接画布）、`cut`，或 `{type, duration, direction, sfx}`；相邻两场景重叠播放，边界类型取 `next.enter ?? prev.exit ?? theme.transition`。
 - `camera`：`static`、`drift`（默认）、`push`、`pull`、`pan-left`、`pan-right`、`rise`、`handheld`，或 `{move, amount}`。
