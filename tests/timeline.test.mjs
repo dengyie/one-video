@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { compileTimeline, phraseTime, resolveAt, mergeTheme, researchSources, sourceList, credit, CUE_LEAD, boundaryTransition, transitionSfx } from "../cli/lib/timeline/index.mjs";
 import { example } from "./helpers.mjs";
+import { mutedBackdrop, placeCaptions } from "../cli/lib/captions/layout.mjs";
 
 const lines = [{ text: "1990年，全球第一", start: 0.2, end: 2.2 }, { text: "36年后，苹果排第一", start: 2.5, end: 4.5 }];
 
@@ -165,4 +166,14 @@ test("watermark: a string becomes the default badge; objects take a logo asset, 
   const bad = run({ text: "x", logo: "nope", position: "middle" });
   assert.ok(bad.errors.some((e) => /unknown asset "nope"/.test(e)));
   assert.ok(bad.errors.some((e) => /position "middle"/.test(e)));
+});
+
+test("captions stay at the bottom over a dimmed or blurred backdrop", () => {
+  assert.equal(mutedBackdrop({ dim: 0.82, blur: 6 }), true);
+  assert.equal(mutedBackdrop({ dim: 0.6, blur: 0 }), false);
+  assert.equal(mutedBackdrop(undefined), false);
+  // A muted backdrop is skipped before any depth map is read (root is not even a real dir).
+  const caps = [{ scene: "s", start: 0, end: 1 }];
+  placeCaptions([{ id: "s", type: "compare", start: 0, backdrop: { asset: "a", dim: 0.82, blur: 6 } }], caps, { root: "/nonexistent", usedAssets: {}, fps: 30, width: 1920, height: 1080 });
+  assert.equal(caps[0].top, undefined);
 });
