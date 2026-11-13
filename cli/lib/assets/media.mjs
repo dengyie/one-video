@@ -38,7 +38,7 @@ export async function pickClipWindow(src, { brief, llm, askFn, grab = grabFrame,
     const { data, model } = await askFn({ prompt: pickClipPrompt({ count: times.length, times, brief }), images: frames, json: true, maxTokens: 1500, config: { llm } });
     // -1: nothing in the film shows the brief; cut past the opening and say so (another pick or query is due).
     if (data?.best === -1) {
-      onWarn(`no frame of this film shows "${brief}" (${model}: ${String(data.reason ?? "").slice(0, 120)}); try pick: 1 or another query`);
+      onWarn(`no frame of this film shows "${brief}" (${model}: ${String(data.reason ?? "").slice(0, 120)}); try the next pick or another query`);
       return { clip: [windowAround(duration * 0.2 + CLIP_MAX / 2, duration), CLIP_MAX], pick: { model, at: null, reason: data.reason ?? null, fits: false } };
     }
     if (!Number.isInteger(data?.best) || data.best < 0 || data.best >= times.length) throw new Error(`no frame index in reply`);

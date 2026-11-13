@@ -67,7 +67,7 @@ export async function fetchAsset(item, { publicDir, aspect = 16 / 9, gen = {} })
     try {
       // No window given: one is picked once and kept in the manifest, so a refetch cuts the same.
       if (!item.clip) {
-        const w = await pickClipWindow(raw, { brief: [item.query, chosen.title].filter(Boolean).join(" · "), llm: gen.llm, askFn: gen.ask, onWarn: (m) => (gen.onWarn ?? (() => {}))(`${item.id}: ${m}`) });
+        const w = await pickClipWindow(raw, { brief: item.query, llm: gen.llm, askFn: gen.ask, onWarn: (m) => (gen.onWarn ?? (() => {}))(`${item.id}: ${m}`) });
         if (w) item = { ...item, clip: w.clip, ...(w.pick ? { clipPick: w.pick } : {}) };
       }
       Object.assign(chosen, await cutClip(raw, join(publicDir, file), item.clip));
