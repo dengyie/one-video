@@ -8,7 +8,7 @@
 | `cc-by` | CC BY x.x | 必须有 `author` 和 `source` |
 | `cc-by-sa` | CC BY-SA x.x | 同上；成片按同协议分享 |
 | `pexels` / `pixabay` | Pexels License、Pixabay License | 记录来源链接 |
-| `generated` | AI 生成 | 片尾标“AI 生成 · 模型名” |
+| `generated` | AI 生成 | 视频里不标注（画面角标、片尾都不写）；publish 提示投稿时在平台勾选 AI 标识 |
 | `own` | own、self | 自有素材 |
 
 **拒绝**：任何带 NC（非商用）或 ND（禁止演绎）的协议、“editorial use only”、未知或空授权。

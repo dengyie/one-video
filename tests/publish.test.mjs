@@ -30,6 +30,14 @@ test("creditsText lists sources without URLs and the music credit", () => {
   assert.equal(creditsText({ assets: {}, music: { credit: null } }, null), "");
 });
 
+test("AI-generated assets stay out of the description; the kit notes the platform tag instead", () => {
+  const tl = { assets: { pad: { credit: "Pad · NASA · PD" }, ai: { credit: null, generated: true } }, captions: { items: [] }, chapters: [], duration: 10 };
+  assert.equal(creditsText(tl, null), "素材来源：\n- Pad · NASA · PD");
+  const kit = buildPublishKit({ timeline: tl, research: null, config: {}, script: {} });
+  assert.doesNotMatch(kit.files["description.txt"], /AI/);
+  assert.ok(kit.publish.warnings.some((w) => /1 AI-generated asset\(s\) in the cut \(ai\)/.test(w)));
+});
+
 test("buildPublishKit on the SpaceX example", () => {
   const ex = example();
   const { timeline } = compileTimeline({ ...ex, assets: null });

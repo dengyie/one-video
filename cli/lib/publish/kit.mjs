@@ -24,7 +24,7 @@ export function chapterList(chapters, duration) {
 
 export function creditsText(timeline, research) {
   const lines = [];
-  const assets = Object.values(timeline.assets ?? {});
+  const assets = Object.values(timeline.assets ?? {}).filter((a) => a.credit);
   if (assets.length) {
     lines.push("素材来源：");
     for (const a of assets) lines.push(`- ${a.credit}`);
@@ -40,6 +40,13 @@ export function creditsText(timeline, research) {
   }
   if (timeline.music?.credit) lines.push(`背景音乐：${timeline.music.credit}`);
   return lines.join("\n");
+}
+
+// AI-generated assets carry no label in the video or the description: the uploader ticks the
+// platform's AI-content tag, and this note says when one is due.
+function aiNote(timeline) {
+  const ids = Object.entries(timeline.assets ?? {}).filter(([, a]) => a.generated).map(([id]) => id);
+  return ids.length ? [`${ids.length} AI-generated asset(s) in the cut (${ids.join(", ")}): tick the platform's AI-content tag when uploading`] : [];
 }
 
 export function buildPublishKit({ timeline, research, config, script }) {
@@ -60,7 +67,7 @@ export function buildPublishKit({ timeline, research, config, script }) {
       tags: meta.tags ?? [],
       duration: timeline.duration,
       chapters: ch.chapters,
-      warnings: ch.warnings,
+      warnings: [...ch.warnings, ...aiNote(timeline)],
       cover: meta.cover ?? null,
     },
   };

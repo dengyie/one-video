@@ -13,10 +13,11 @@ export function researchSources(research) {
 
 // On-screen credits for the sources scene: research sources, then the attribution of every asset
 // the video shows (`used`: ids the storyboard references; candidates left unused are not credited).
+// AI-generated assets owe no attribution and are not named in the video; the uploader tags them.
 export function sourceList(research, assets, extra = [], used = null) {
   const out = researchSources(research).map((s) => s.line);
   for (const a of assets?.items ?? []) {
-    if (used && !used.has(a.id)) continue;
+    if ((used && !used.has(a.id)) || !credit(a)) continue;
     const line = `${a.kind === "video" ? "视频" : "图片"}：${credit(a)}`;
     if (!out.includes(line)) out.push(line);
   }
@@ -43,6 +44,6 @@ export function collectAssetRefs(v, out = new Set()) {
 }
 
 export function credit(a) {
-  if (a.license === "generated") return `AI 生成 · ${a.author ?? "image model"}`;
+  if (a.license === "generated") return null;
   return [a.title, a.author, a.license].filter(Boolean).join(" · ");
 }
