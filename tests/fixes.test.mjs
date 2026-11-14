@@ -58,6 +58,18 @@ test("numberReveals: chart values the narration says get a cue on those words; d
   assert.equal(numberReveals({ type: "kinetic", lines, props: { lines: [] } }), null);
 });
 
+test("numberReveals: timeline events and bar-race periods get a cue where their date is said; written cues stay", () => {
+  const race = [{ start: 0, end: 4, text: "1990年，微软还很小。" }, { start: 4, end: 9, text: "2010年苹果登顶，36年后排在第一。" }];
+  const r = numberReveals({ type: "bar-race", lines: race, cues: { y2026: 1 }, props: { periods: ["1990", "2000", "2010", "2026"], periodCues: [null, null, null, "y2026"] } });
+  assert.deepEqual([r.cues, r.refs], [{ n1: "1990年", n2: "2010年" }, [{ path: ["props", "periodCues"], value: ["n1", null, "n2", "y2026"] }]]);
+  assert.equal(numberReveals({ type: "bar-race", lines: race, props: { periods: ["1990", "2010"], periodCues: ["a", "b"] } }), null);
+  const said = [{ start: 0, end: 5, text: "2024年，11月5日财报；11月8日宣布离任。" }, { start: 5, end: 8, text: "当晚股价跳水，12月才回来。" }];
+  const tl = numberReveals({ type: "timeline", lines: said, props: { events: [{ date: "11.05" }, { date: "11.08" }, { date: "11.08 晚" }, { date: "12.01" }, { date: "11.09", cue: "d" }] } });
+  assert.deepEqual(tl.cues, { n1: "11月5日", n2: "11月8日" }, "\"2024年，11月5日\" is two dates, and a month alone is not 12.01");
+  assert.deepEqual(tl.refs.map((x) => x.path[2]), [0, 1]);
+  assert.ok(tl.times[1] > tl.times[0]);
+});
+
 test("applyFix: a fix `with` more changes applies all of them or none", () => {
   const sb = { scenes: [{ id: "v", props: { series: [] } }] };
   const fix = { scene: "v", path: ["cues"], set: { n1: "3500亿" }, add: true, with: [{ path: ["props", "pointCues"], value: ["n1"] }] };

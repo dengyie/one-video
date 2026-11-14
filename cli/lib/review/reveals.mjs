@@ -1,4 +1,4 @@
-// Chart elements the narration says by number: a cue to pin each one's reveal on the words that say it.
+// Chart elements the narration says by number or date: a cue to pin each one's reveal on the words that say it.
 // Reads a compiled timeline scene (props with cue names, caption lines); the cues it proposes go
 // into the storyboard as phrases.
 import { normalizeForMatch, parseNumber } from "../core/text.mjs";
@@ -8,6 +8,8 @@ import { CUE_LEAD, phraseTime } from "../timeline/cues.mjs";
 const NUMBER = /\d+(?:[.,]\d+)*(?:万亿|亿|万|千|百|%|倍|年|月|日|美元|元)?/g;
 const DATE = new Set(["年", "月", "日"]);
 const TOLERANCE = 0.02;
+// A spoken date: a 4-digit year, a month, a day, any run of them ("1990年", "11月5日", "2024年12月").
+const SPOKEN_DATE = /(?<!\d)(?:(\d{4})年)?(?:(\d{1,2})月)?(?:(\d{1,2})[日号])?/g;
 
 // What a chart reveals one by one: each element's value, its cue (if any) and where a cue goes.
 function elements(type, p = {}) {
@@ -18,6 +20,7 @@ function elements(type, p = {}) {
     case "scale-compare": return list(p.items, "items");
     case "unit-grid": return list(p.groups, "groups", "count");
     case "compare": return ["left", "right"].filter((k) => p[k]).map((k) => ({ value: p[k].value, cue: p[k].cue, path: ["props", k, "cue"] }));
+    case "timeline": return (Array.isArray(p.events) ? p.events : []).map((e, i) => ({ date: e?.date, cue: e?.cue, path: ["props", "events", i, "cue"] }));
     case "share": {
       // A spoken total is the ring's sum; with no total row yet, one is added for it.
       const sum = (p.segments ?? []).reduce((s, x) => s + (Number(x?.value) || 0), 0);
@@ -27,30 +30,58 @@ function elements(type, p = {}) {
   }
 }
 
+// An element's date label: "1990", "2024.12", "2024-12-03", "11.05" (trailing words like " 晚" ignored).
+function labelDate(label) {
+  const m = String(label ?? "").trim().match(/^(\d{1,4})(?:[.\-/](\d{1,2}))?(?:[.\-/](\d{1,2}))?/);
+  if (!m) return null;
+  const [a, b, c] = m.slice(1).map((x) => (x === undefined ? undefined : Number(x)));
+  if (m[1].length === 4) return { y: a, m: b, d: c };
+  return b === undefined || c !== undefined ? null : { m: a, d: b };
+}
+// Every part the label has is said, and said the same ("2024.12" in "2024年12月3日", not in "12月").
+const sameDate = (label, said) => {
+  const d = labelDate(label);
+  return !!d && ["y", "m", "d"].every((k) => d[k] === undefined || d[k] === said[k]);
+};
+
 const close = (a, b) => Number.isFinite(a) && Number.isFinite(b) && b !== 0 && Math.abs(Math.abs(a) - Math.abs(b)) <= TOLERANCE * Math.abs(b);
 
 // Numbers spoken in the scene, in order: amount, the shortest phrase that finds this occurrence
 // (a cue phrase resolves to its first match), and the scene time the cue would fire.
+// Dates are found in each line's own text: normalizing drops the commas that keep "1990年，11月" apart.
 function spoken(sc) {
   const lines = sc.lines ?? [];
-  const hay = lines.map((l) => normalizeForMatch(String(l.text ?? ""))).join("");
+  const norm = lines.map((l) => normalizeForMatch(String(l.text ?? "")));
+  const hay = norm.join("");
   const out = [];
-  for (const m of hay.matchAll(NUMBER)) {
-    const n = parseNumber(m[0]);
-    if (!n || DATE.has(n.unit)) continue;
+  const add = (idx, len, what) => {
     let phrase = null;
-    for (let k = 0; k <= 4 && k <= m.index && !phrase; k++) {
-      const p = hay.slice(m.index - k, m.index + m[0].length);
-      if (hay.indexOf(p) === m.index - k) phrase = p;
+    for (let k = 0; k <= 4 && k <= idx && !phrase; k++) {
+      const p = hay.slice(idx - k, idx + len);
+      if (hay.indexOf(p) === idx - k) phrase = p;
     }
     const t = phrase && phraseTime(lines, phrase);
-    if (Number.isFinite(t)) out.push({ amount: n.amount, phrase, t: Math.max(0, t - CUE_LEAD) });
+    if (Number.isFinite(t)) out.push({ ...what, idx, phrase, t: Math.max(0, t - CUE_LEAD) });
+  };
+  for (const m of hay.matchAll(NUMBER)) {
+    const n = parseNumber(m[0]);
+    if (n && !DATE.has(n.unit)) add(m.index, m[0].length, { amount: n.amount });
   }
-  return out;
+  let at = 0;
+  lines.forEach((l, li) => {
+    const text = String(l.text ?? "");
+    for (const m of text.matchAll(SPOKEN_DATE)) {
+      if (!m[0]) continue;
+      const [y, mo, d] = m.slice(1).map((x) => (x === undefined ? undefined : Number(x)));
+      add(at + normalizeForMatch(text.slice(0, m.index)).length, m[0].length, { date: { y, m: mo, d } });
+    }
+    at += norm[li].length;
+  });
+  return out.sort((a, b) => a.idx - b.idx);
 }
 
 // { cues: {name: phrase}, refs: [{path, value}], times: [scene seconds] } for the elements of `sc`
-// with no cue whose value the narration says, or null when there is none.
+// with no cue whose value or date the narration says, or null when there is none.
 export function numberReveals(sc) {
   if (!sc?.props) return null;
   const said = spoken(sc);
@@ -58,7 +89,8 @@ export function numberReveals(sc) {
   const taken = new Set(Object.keys(sc.cues ?? {}));
   const name = () => { let k = 1; while (taken.has(`n${k}`)) k++; taken.add(`n${k}`); return `n${k}`; };
   const used = new Set();
-  const match = (value) => said.find((s) => !used.has(s) && close(s.amount, Number(value)));
+  const match = (value) => said.find((s) => !used.has(s) && s.amount !== undefined && close(s.amount, Number(value)));
+  const matchDate = (label) => said.find((s) => !used.has(s) && s.date && sameDate(label, s.date));
   const cues = {}, refs = [], times = [];
   if (sc.type === "line-chart") {
     // The first line's points, drawn up to each one as its number is said.
@@ -74,10 +106,24 @@ export function numberReveals(sc) {
       return n;
     });
     if (pc.some(Boolean)) refs.push({ path: ["props", "pointCues"], value: pc });
+  } else if (sc.type === "bar-race") {
+    // Periods with no cue get one where their year is said; the cued ones keep theirs.
+    const old = sc.props.periodCues ?? [];
+    const pc = (sc.props.periods ?? []).map((label, k) => {
+      if (old[k]) return old[k];
+      const s = matchDate(label);
+      if (!s) return null;
+      used.add(s);
+      const n = name();
+      cues[n] = s.phrase;
+      times.push(s.t);
+      return n;
+    });
+    if (pc.some((c, k) => c && !old[k])) refs.push({ path: ["props", "periodCues"], value: pc });
   } else {
     for (const el of elements(sc.type, sc.props)) {
       if (el.cue) continue;
-      const s = match(el.value);
+      const s = el.date !== undefined ? matchDate(el.date) : match(el.value);
       if (!s) continue;
       used.add(s);
       const n = name();

@@ -255,10 +255,10 @@ export function rhythmGate(timeline, config) {
     // Charts and cards are not pushed into (laidOut): their stretch wants a cue.
     const auto = !sc?.shots?.length && sc?.type !== "device" && !laidOut(sc?.type);
     const shot = auto ? `add "shots": "auto"` : "add a shot";
-    // Chart elements with no cue whose numbers are said in the stretch: pin them all on those words.
+    // Chart elements with no cue whose numbers or dates are said in the stretch: pin them all on those words.
     const nums = !auto && numberReveals(sc);
     const said = nums && Object.values(nums.cues).filter((p, i) => sc.start + nums.times[i] > x.from.t + 0.5 && sc.start + nums.times[i] < x.to.t - 0.5);
-    const reveal = said?.length ? `cue its numbers on the words that say them (${said.map((p) => `"${p}"`).join(", ")}), or ${shot} or an overlay` : null;
+    const reveal = said?.length ? `cue its numbers and dates on the words that say them (${said.map((p) => `"${p}"`).join(", ")}), or ${shot} or an overlay` : null;
     const where = reveal ?? (line ? `cue a reveal on "${line.phrase}" (${line.t.toFixed(1)}s), or ${shot} or an overlay` : auto ? `${shot}, or a cue or overlay` : "add a cue, shot or overlay");
     const fix = auto ? { scene: x.from.scene, path: ["shots"], value: "auto", add: true } : reveal ? { scene: x.from.scene, path: ["cues"], set: nums.cues, add: true, with: nums.refs } : null;
     out.push(issue("warn", "rhythm", `${x.len.toFixed(1)}s with nothing new on screen from ${x.from.t.toFixed(1)}s (scene "${x.from.scene}") — ${where} (max ${g.maxStill}s)`, { scene: x.from.scene, from: x.from.t, to: x.to.t, field: auto ? "shots" : reveal || line ? "cues" : undefined }, fix));
