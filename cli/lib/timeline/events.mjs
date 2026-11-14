@@ -13,9 +13,9 @@ export function propTimes(v, at) {
   else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) k === "t" && typeof x === "number" ? at(x) : propTimes(x, at);
 }
 
-// When a bar race shows each period in full (scene seconds), as BarRaceScene's periodTimes
+// When a bar race moves to each period (scene seconds), as BarRaceScene's periodTimes
 // (template/src/scenes/Data.tsx): cued periods are anchors, the rest spread evenly between them,
-// the last landing by 72% of the scene unless cued. The swap to period k+1 starts at T[k].
+// the last arriving at 72% of the scene unless cued. The swap into period k starts at T[k].
 export function periodTimes(n, duration, cueAt) {
   const endAt = Math.max(1.6, Math.min(duration * 0.72, duration - 1.5));
   const T = Array.from({ length: n }, (_, k) => cueAt(k));
@@ -71,7 +71,7 @@ export function screenEvents(timeline) {
     // re-ranks at the start of each swap.
     if (sc.type === "bar-race" && sc.props?.periods?.length >= 2) {
       at(0.15 + (Math.min(sc.props.top ?? 10, sc.props.series?.length ?? 0) - 1) * 0.15 + 0.7, "prop");
-      racePeriods(sc).slice(0, -1).forEach((t) => at(t, "prop"));
+      racePeriods(sc).slice(1).forEach((t) => at(t, "prop"));
     }
     if (sc.type === "line-chart" && Array.isArray(sc.props?.pointCues)) {
       const T = sc.props.pointCues.map((c) => sc.cues?.[c]);

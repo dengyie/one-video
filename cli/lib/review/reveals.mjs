@@ -122,12 +122,13 @@ export function numberReveals(sc) {
     });
     if (pc.some((c, k) => c && !old[k])) refs.push({ path: ["props", "periodCues"], value: pc });
     // A bar whose value is said gets called out on those words, while the race shows that value's
-    // period (from the swap into it, half a second early, until the swap out of it starts); a bar
-    // whose name is said, while it is in the top ranks then.
+    // period (each period counted from half a second before the swap into it); a bar
+    // whose name is said, while it is in the top ranks then. A value said just before its period
+    // arrives (by the end of that line) calls the bar out on that period's cue instead.
     const T = racePeriods(sc);
     const series = sc.props.series ?? [];
     const top = sc.props.top ?? 10;
-    const shown = (t) => T.findIndex((_, k) => (k ? T[k - 1] - 0.5 : 0) <= t && (k === T.length - 1 || t < T[k]));
+    const shown = (t) => T.findIndex((_, k) => (k ? T[k] - 0.5 : 0) <= t && (k === T.length - 1 || t < T[k + 1] - 0.5));
     const ranked = (i, k) => Number.isFinite(series[i]?.values?.[k]) && series.filter((o) => (o?.values?.[k] ?? -Infinity) > series[i].values[k]).length < top;
     const call = (i, s) => {
       const n = name();
@@ -135,13 +136,17 @@ export function numberReveals(sc) {
       times.push(s.t);
       refs.push({ path: ["props", "series", i, "cue"], value: n });
     };
+    const lines = sc.lines ?? [];
+    const lineEnd = (t) => lines.findLast((l) => l.start <= t + CUE_LEAD)?.end ?? -Infinity;
     const byValue = series.map((se, i) => {
       if (se?.cue) return true;
-      const s = said.find((x) => !used.has(x) && x.amount !== undefined && (se?.values ?? []).some((v, k) => close(x.amount, Number(v)) && shown(x.t) === k));
-      if (s) { used.add(s); call(i, s); }
-      return !!s;
+      const said$ = said.filter((x) => !used.has(x) && x.amount !== undefined);
+      const s = said$.find((x) => (se?.values ?? []).some((v, k) => close(x.amount, Number(v)) && shown(x.t) === k));
+      if (s) { used.add(s); call(i, s); return true; }
+      const k = (se?.values ?? []).findIndex((v, k) => k > 0 && pc[k] && said$.some((x) => close(x.amount, Number(v)) && shown(x.t) === k - 1 && T[k] <= lineEnd(x.t) + 0.5));
+      if (k > 0) refs.push({ path: ["props", "series", i, "cue"], value: pc[k] });
+      return k > 0;
     });
-    const lines = sc.lines ?? [];
     series.forEach((se, i) => {
       const phrase = normalizeForMatch(String(se?.name ?? ""));
       const at = !byValue[i] && phrase.length >= 2 && phraseTime(lines, phrase);

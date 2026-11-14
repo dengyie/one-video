@@ -119,9 +119,9 @@ export const BarCompareScene: React.FC<{ title?: string; unit?: string; format?:
 type Series = { name: string; color?: string; group?: string; values: (number | null)[]; cue?: string };
 
 // Bars re-rank smoothly while the period advances; each period gets an equal slice of the scene.
-// Time (s) at which each period is fully shown. Cued periods (periodCues[k]) are anchors;
-// the rest are spread evenly between anchors, and the last period lands by 72% of the scene
-// (unless cued) so the final standings get a hold.
+// Time (s) at which the race moves to each period: a cued period (periodCues[k]) arrives on its
+// words and is an anchor; the rest are spread evenly between anchors, and the last period arrives
+// at 72% of the scene (unless cued) so the final standings get a hold.
 export function periodTimes(n: number, duration: number, cueAt: (k: number) => number | undefined): number[] {
   const endAt = Math.max(1.6, Math.min(duration * 0.72, duration - 1.5));
   const T: (number | undefined)[] = Array.from({ length: n }, (_, k) => cueAt(k));
@@ -149,11 +149,13 @@ export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Fo
     const name = periodCues[k];
     return name ? scene.cues[name] : undefined;
   });
+  // The swap into period i+1 starts at T[i+1].
   let seg = 0;
-  while (seg < periods.length - 2 && t >= T[seg + 1]) seg++;
+  while (seg < periods.length - 2 && t >= T[seg + 2]) seg++;
   const i = seg;
+  const next = (i + 2 < periods.length ? T[i + 2] : scene.duration) - T[i + 1];
   // A short swap then a hold: crossing bars overlap, so keep the crossing brief and the ranking readable.
-  const p = easeInOut(clamp01((t - T[i]) / Math.max(0.3, Math.min(1.6, (T[i + 1] - T[i]) * 0.6))));
+  const p = easeInOut(clamp01((t - T[i + 1]) / Math.max(0.3, Math.min(1.6, next * 0.6))));
   const pos = i + p;
   const rankAt = (k: number) => {
     const order = series.map((s, idx) => ({ idx, v: s.values[k] ?? -Infinity })).sort((a, b) => b.v - a.v);
