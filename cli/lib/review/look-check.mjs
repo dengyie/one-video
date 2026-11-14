@@ -57,7 +57,7 @@ export function checkNotes(timeline, notes, { maxGap = 3, lead = 3 } = {}) {
 
 // Which gates speak to which kind of note: a stall or a late reveal is rhythm's (or the opening's),
 // anything about placement is layout's or a device step's.
-const GATES_FOR = { still: ["rhythm", "opening"], late: ["rhythm", "opening"], other: ["layout", "device", "opening"] };
+const GATES_FOR = { still: ["rhythm", "opening"], late: ["rhythm", "opening"], other: ["layout", "device"] };
 
 // Notes a timeline gate also flags, in the same scene and overlapping its stretch: two independent
 // sources on one point, so fix those first; a note the timeline already contradicts is not. Marks each { gate: { gate, msg } } and returns the count.

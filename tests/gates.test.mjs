@@ -332,4 +332,8 @@ test("matchGates: a note a timeline gate also flags, in its scene and stretch, i
   assert.equal(notes[2].gate, undefined);
   assert.equal(notes[3].gate, undefined);
   assert.equal(notes[4].gate, undefined, "the timeline already contradicts it");
+  const opening = { level: "warn", gate: "opening", msg: "o", at: { scene: "a", from: 0, to: 4 } };
+  const early = [{ t: 1, scene: "a", issue: "字幕位置不统一" }, { t: 3, scene: "a", issue: "开场画面无新变化" }];
+  assert.equal(matchGates(early, [opening]), 1);
+  assert.equal(early[1].gate.gate, "opening", "only a stall or late reveal meets the opening gate");
 });
