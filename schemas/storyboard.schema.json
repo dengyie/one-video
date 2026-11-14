@@ -1048,6 +1048,10 @@
                     "null"
                   ]
                 }
+              },
+              "cue": {
+                "type": "string",
+                "description": "cue name: this bar is called out (glow, lit value) from when the cue resolves, e.g. on the words that say its value"
               }
             }
           }

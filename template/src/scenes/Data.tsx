@@ -116,7 +116,7 @@ export const BarCompareScene: React.FC<{ title?: string; unit?: string; format?:
   );
 };
 
-type Series = { name: string; color?: string; group?: string; values: (number | null)[] };
+type Series = { name: string; color?: string; group?: string; values: (number | null)[]; cue?: string };
 
 // Bars re-rank smoothly while the period advances; each period gets an equal slice of the scene.
 // Time (s) at which each period is fully shown. Cued periods (periodCues[k]) are anchors;
@@ -211,11 +211,15 @@ export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Fo
           const color = r.s.color ?? (r.s.group && groupColors[r.s.group]) ?? colorAt(theme, r.idx);
           // A bar still waiting to grow shows no "0" beside it: its value fades in as the bar starts.
           const g = grow(r.rank), visible = clamp01(top - r.rank), value = r.value * g;
+          // A cued bar is called out when the narration says it: it glows, its value lights up with a short pop.
+          const at = r.s.cue ? scene.cues[r.s.cue] : undefined;
+          const on = at === undefined ? 0 : clamp01((t - at) / 0.4);
+          const pop = on > 0 && on < 1 ? Math.sin(on * Math.PI) : 0;
           return (
             <div key={r.s.name} style={{ position: "absolute", top: r.rank * rowH, left: 0, right: 0, height: rowH, display: "flex", alignItems: "center", opacity: visible }}>
-              <div style={{ width: labelW, flex: "none", textAlign: "right", paddingRight: 18 * u, fontSize: Math.min(30, rowH / u * 0.45) * u, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.s.name}</div>
-              <div data-anchor={`bar${r.idx + 1}`} style={{ width: `${Math.max(0.5, (value / max) * barPct)}%`, height: rowH * 0.7, borderRadius: 6 * u, background: `linear-gradient(90deg, ${color}99, ${color})` }} />
-              <div style={{ marginLeft: 14 * u, fontFamily: theme.fonts.number, fontSize: valueFont, color: theme.colors.muted, whiteSpace: "nowrap", opacity: clamp01(g * 5) }}>{fmt(value, format)}</div>
+              <div style={{ width: labelW, flex: "none", textAlign: "right", paddingRight: 18 * u, fontSize: Math.min(30, rowH / u * 0.45) * u, fontWeight: on > 0.5 ? 800 : 600, color: on > 0.5 ? color : undefined, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.s.name}</div>
+              <div data-anchor={`bar${r.idx + 1}`} style={{ width: `${Math.max(0.5, (value / max) * barPct)}%`, height: rowH * 0.7, borderRadius: 6 * u, background: `linear-gradient(90deg, ${color}99, ${color})`, boxShadow: on ? `0 0 ${28 * u * on}px ${color}` : "none" }} />
+              <div style={{ marginLeft: 14 * u, fontFamily: theme.fonts.number, fontSize: valueFont, color: on > 0.5 ? theme.colors.text : theme.colors.muted, fontWeight: on > 0.5 ? 700 : undefined, whiteSpace: "nowrap", opacity: clamp01(g * 5), transform: `scale(${1 + 0.25 * pop})`, transformOrigin: "left center" }}>{fmt(value, format)}</div>
             </div>
           );
         })}

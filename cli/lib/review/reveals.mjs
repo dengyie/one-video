@@ -120,6 +120,17 @@ export function numberReveals(sc) {
       return n;
     });
     if (pc.some((c, k) => c && !old[k])) refs.push({ path: ["props", "periodCues"], value: pc });
+    // A bar whose value is said gets called out on those words.
+    (sc.props.series ?? []).forEach((se, i) => {
+      if (se?.cue) return;
+      const s = said.find((x) => !used.has(x) && x.amount !== undefined && (se?.values ?? []).some((v) => close(x.amount, Number(v))));
+      if (!s) return;
+      used.add(s);
+      const n = name();
+      cues[n] = s.phrase;
+      times.push(s.t);
+      refs.push({ path: ["props", "series", i, "cue"], value: n });
+    });
   } else {
     for (const el of elements(sc.type, sc.props)) {
       if (el.cue) continue;
