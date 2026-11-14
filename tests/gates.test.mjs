@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, timingsGate, normalizeLicense, summarize, questionGate, echoGate, layoutGate, densityGate } from "../cli/lib/review/gates.mjs";
 import { rhythmGate, screenEvents } from "../cli/lib/review/gates.mjs";
-import { checkNotes, checkTone, matchGates, meanLuma, mergePasses, median, noteKind, toneOf } from "../cli/lib/review/look-check.mjs";
+import { checkNotes, checkTone, matchGates, meanLuma, mergePasses, median, noteKind, storyboardSpot, toneOf } from "../cli/lib/review/look-check.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { example } from "./helpers.mjs";
 
@@ -336,4 +336,18 @@ test("matchGates: a note a timeline gate also flags, in its scene and stretch, i
   const early = [{ t: 1, scene: "a", issue: "字幕位置不统一" }, { t: 3, scene: "a", issue: "开场画面无新变化" }];
   assert.equal(matchGates(early, [opening]), 1);
   assert.equal(early[1].gate.gate, "opening", "only a stall or late reveal meets the opening gate");
+});
+
+test("storyboardSpot: the line of the scene's field to change, else of the scene", () => {
+  const text = JSON.stringify({ scenes: [
+    { id: "a", type: "title", overlays: [{ type: "word", text: "x" }] },
+    { id: "b", type: "device", props: { steps: [{ tap: [0.5, 0.5] }] }, cues: { k: "x" }, overlays: [{ type: "image", asset: "y" }] },
+  ] }, null, 2);
+  const line = (re) => text.split("\n").findIndex((l) => re.test(l)) + 1;
+  const bId = line(/"id": "b"/);
+  assert.equal(storyboardSpot(text, "b", "overlays[0]"), text.split("\n").findIndex((l, i) => i >= bId && /"overlays"/.test(l)) + 1, "not scene a's overlays");
+  assert.equal(storyboardSpot(text, "b", "props.steps"), line(/"steps"/));
+  assert.equal(storyboardSpot(text, "a", "shots"), line(/"id": "a"/), "auto shots: the scene itself");
+  assert.equal(storyboardSpot(text, "a", "cues"), line(/"id": "a"/), "b's cues are not a's");
+  assert.equal(storyboardSpot(text, "zz", "cues"), null);
 });

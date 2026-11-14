@@ -16,9 +16,10 @@ export const STATIC_TYPES = new Set(["quote", "bullets", "title", "chapter", "so
 const DEFAULT_HOLD_EST = 0.5;
 export const GATE_DEFAULTS = { staticRatioMax: 0.4, maxSameTypeRun: 2, longSceneNoCue: 25, syllablesPerSec: [3.5, 6.2], maxStill: MAX_STILL, maxSameTransitionRun: 2, echoMinChars: 8, hookReveal: 2.5 };
 
-// `at` places a timeline finding: { scene, from, to } in timeline seconds (look matches its notes to it).
+// `at` places a timeline finding: { scene, from, to } in timeline seconds (look matches its notes to it),
+// and `field`, the storyboard field of that scene to change ("overlays[2]", "shots", "cues"), when one does.
 const r3 = (x) => Math.round(x * 1000) / 1000;
-const issue = (level, gate, msg, at) => ({ level, gate, msg, ...(at && { at: { scene: at.scene, from: r3(at.from), to: r3(at.to) } }) });
+const issue = (level, gate, msg, at) => ({ level, gate, msg, ...(at && { at: { scene: at.scene, from: r3(at.from), to: r3(at.to), ...(at.field && { field: at.field }) } }) });
 
 export function schemaGate(name, value) {
   const schema = loadSchema(name);
@@ -203,7 +204,7 @@ export function openingGate(timeline, config) {
   propTimes(props, (t) => times.push(t));
   const first = Math.min(...times.filter(Number.isFinite));
   if (!(first > g.hookReveal) || first >= sc.duration) return [];
-  return [issue("warn", "opening", `the first ${first.toFixed(1)}s of "${sc.id}" show only ${sc.backdrop ? "its backdrop" : "the background"} — reveal the hook's main line by ${g.hookReveal}s (cue it on an earlier word, or open on footage; gates.hookReveal)`, { scene: sc.id, from: sc.start, to: sc.start + first })];
+  return [issue("warn", "opening", `the first ${first.toFixed(1)}s of "${sc.id}" show only ${sc.backdrop ? "its backdrop" : "the background"} — reveal the hook's main line by ${g.hookReveal}s (cue it on an earlier word, or open on footage; gates.hookReveal)`, { scene: sc.id, from: sc.start, to: sc.start + first, field: "cues" })];
 }
 
 // Screen rhythm on the compiled timeline: the longest stretches where nothing new happens on
@@ -243,7 +244,7 @@ export function deviceGate(timeline, config) {
       if (!(st.expand || st.screen !== undefined || st.camera === "result")) continue;
       const arrive = st.t + (st.tap ? 0.25 : 0) + 0.55;
       const next = steps[i + 1]?.t ?? sc.duration;
-      if (next - arrive < hold) out.push(issue("warn", "device", `scene "${sc.id}" step ${i} (${st.t}s): the result holds ${Math.max(0, next - arrive).toFixed(2)}s before ${steps[i + 1] ? `step ${i + 1}` : "the scene ends"} — give it ${hold}s+ (gates.deviceHold)`, { scene: sc.id, from: sc.start + st.t, to: sc.start + next }));
+      if (next - arrive < hold) out.push(issue("warn", "device", `scene "${sc.id}" step ${i} (${st.t}s): the result holds ${Math.max(0, next - arrive).toFixed(2)}s before ${steps[i + 1] ? `step ${i + 1}` : "the scene ends"} — give it ${hold}s+ (gates.deviceHold)`, { scene: sc.id, from: sc.start + st.t, to: sc.start + next, field: "props.steps" }));
     }
   }
   return out;
@@ -405,7 +406,7 @@ export function layoutGate(timeline, config) {
     for (const [i, o] of (sc.overlays ?? []).entries()) {
       const box = overlayBox(o, width, height);
       if (!box) continue;
-      const at = { scene: sc.id, from: sc.start + o.t, to: sc.start + Math.min(o.end, sc.duration) };
+      const at = { scene: sc.id, from: sc.start + o.t, to: sc.start + Math.min(o.end, sc.duration), field: `overlays[${i}]` };
       const name = `scene "${sc.id}" overlay ${i} (${o.type}${o.asset ? ` ${o.asset}` : ""}${o.text ? ` "${o.text}"` : ""})`;
       if (box[0] < -0.01 || box[1] < -0.01 || box[2] > 1.01 || box[3] > 1.01) out.push(issue("warn", "layout", `${name} runs off the frame at x ${o.x ?? 0.5}, y ${o.y ?? 0.5} — move it inward`, at));
       if (o.type === "image" && (o.size ?? 160) < g.minSticker) out.push(issue("warn", "layout", `${name}: size ${o.size ?? 160} reads as a thumbnail — use ${g.minSticker}+ or make it a backdrop / photo-stack (gates.minSticker)`, at));
@@ -430,8 +431,8 @@ export function layoutGate(timeline, config) {
       const z = sh.zoom ?? 1;
       if (z <= 1.02) continue;
       const left = (sh.x ?? 0.5) - 0.5 / z;
-      if (LEFT_TEXT(sc, portrait) && left > 0.06) { out.push(issue("warn", "layout", `scene "${sc.id}" shot at ${sh.t}s (zoom ${z}) crops the left edge where its left-aligned text starts — centre the text (props.align) or keep the shot wider`, { scene: sc.id, from: sc.start + sh.t, to: sc.start + sc.duration })); break; }
-      if (z > g.maxTextZoom) { out.push(issue("warn", "layout", `scene "${sc.id}" shot at ${sh.t}s pushes text to zoom ${z} (max ${g.maxTextZoom}); wide lines leave the frame — check with onevideo stills (gates.maxTextZoom)`, { scene: sc.id, from: sc.start + sh.t, to: sc.start + sc.duration })); break; }
+      if (LEFT_TEXT(sc, portrait) && left > 0.06) { out.push(issue("warn", "layout", `scene "${sc.id}" shot at ${sh.t}s (zoom ${z}) crops the left edge where its left-aligned text starts — centre the text (props.align) or keep the shot wider`, { scene: sc.id, from: sc.start + sh.t, to: sc.start + sc.duration, field: "shots" })); break; }
+      if (z > g.maxTextZoom) { out.push(issue("warn", "layout", `scene "${sc.id}" shot at ${sh.t}s pushes text to zoom ${z} (max ${g.maxTextZoom}); wide lines leave the frame — check with onevideo stills (gates.maxTextZoom)`, { scene: sc.id, from: sc.start + sh.t, to: sc.start + sc.duration, field: "shots" })); break; }
     }
   }
   return out;

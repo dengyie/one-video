@@ -1,7 +1,7 @@
 // The director's eyes on a render: contact sheets (every Nth second tiled into one image), the
 // same against an earlier version, and a second opinion from a vision model that reads them
 // against the timeline.
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { UserError, loadProject, readJson, writeJson, log, warn } from "../lib/core/project.mjs";
 import { ask, imagePart, llmConfig } from "../lib/llm/client.mjs";
@@ -9,7 +9,7 @@ import { lookPrompt, sceneLine } from "../lib/prompts/index.mjs";
 import { busyWindows, cellTime, sceneAt, sheetPlan, writeSheets } from "../lib/vision/sheet.mjs";
 import { resolveVideo } from "../lib/publish/renders.mjs";
 import { videoPath } from "./render.mjs";
-import { checkNotes, checkTone, matchGates, meanLuma, median, mergePasses, toneOf } from "../lib/review/look-check.mjs";
+import { checkNotes, checkTone, matchGates, meanLuma, median, mergePasses, storyboardSpot, toneOf } from "../lib/review/look-check.mjs";
 import { deviceGate, layoutGate, openingGate, rhythmGate } from "../lib/review/gates.mjs";
 import { frameRgb } from "../lib/vision/screen.mjs";
 import { pool } from "../lib/core/http.mjs";
@@ -133,7 +133,13 @@ export async function look(args) {
   writeJson(join(outDir, "look.json"), result);
   log(`score ${score ?? "?"}/10 over ${reviews.length}/${sheets.length} sheet(s)`);
   const icon = { high: "✗", medium: "⚠", low: "·" };
-  for (const n of notes) log(`${n.check?.doubtful ? "?" : icon[n.severity]} ${n.t.toFixed(1).padStart(5)}s ${String(n.scene ?? "").padEnd(10)} ${n.of ? `[${n.seen}/${n.of}] ` : ""}${n.issue}${n.fix ? `\n         → ${n.fix}` : ""}${n.check?.doubtful ? `\n         ? ${n.check.why}` : ""}${n.gate ? `\n         ✓ ${n.gate.gate}: ${n.gate.msg}` : ""}`);
+  // A confirmed note points at the storyboard line to change.
+  const sb = gated && existsSync(project.paths.storyboard) ? readFileSync(project.paths.storyboard, "utf8") : null;
+  const spot = (n) => {
+    const line = sb && n.scene && storyboardSpot(sb, n.scene, n.gate.field);
+    return line ? `\n           ✎ ${relative(project.root, project.paths.storyboard)}:${line} ${n.scene}${n.gate.field ? ` ${n.gate.field}` : ""}` : "";
+  };
+  for (const n of notes) log(`${n.check?.doubtful ? "?" : icon[n.severity]} ${n.t.toFixed(1).padStart(5)}s ${String(n.scene ?? "").padEnd(10)} ${n.of ? `[${n.seen}/${n.of}] ` : ""}${n.issue}${n.fix ? `\n         → ${n.fix}` : ""}${n.check?.doubtful ? `\n         ? ${n.check.why}` : ""}${n.gate ? `\n         ✓ ${n.gate.gate}: ${n.gate.msg}${spot(n)}` : ""}`);
   const lone = notes.filter((n) => n.of && n.seen < 2).length;
   if (lone) log(`[1/${passes}] ${lone} note(s) only one model raised: weigh them lower than the ones several agree on`);
   if (gated) log(`✓ ${gated} note(s) a timeline gate also flags: fix those first`);

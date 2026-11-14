@@ -69,10 +69,26 @@ export function matchGates(notes, issues) {
     const [a, b] = window(n);
     const hit = placed.find((i) => (!n.scene || i.at.scene === n.scene) && GATES_FOR[noteKind(n)].includes(i.gate) && i.at.from < b + 1 && i.at.to > a - 1);
     if (!hit) continue;
-    n.gate = { gate: hit.gate, msg: hit.msg };
+    n.gate = { gate: hit.gate, msg: hit.msg, ...(hit.at.field && { field: hit.at.field }) };
     hits++;
   }
   return hits;
+}
+
+// Where to make the change: the line in storyboard.json `text` (1-based) of scene `scene`'s `field` key
+// ("overlays[2]" → its "overlays", "props.steps" → "steps"), or of the scene's id when the field is not written there (auto shots).
+export function storyboardSpot(text, scene, field) {
+  const lines = String(text ?? "").split("\n");
+  const id = (s) => new RegExp(`"id"\\s*:\\s*${JSON.stringify(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
+  const from = lines.findIndex((l) => id(scene).test(l));
+  if (from < 0) return null;
+  let ids = [];
+  try { ids = (JSON.parse(text).scenes ?? []).map((s) => s.id); } catch { /* the id line is still a place to start */ }
+  const nextId = ids[ids.indexOf(scene) + 1];
+  const to = nextId === undefined ? lines.length : lines.findIndex((l, i) => i > from && id(nextId).test(l));
+  const key = field?.replace(/\[.*$/, "").split(".").at(-1);
+  const at = key ? lines.findIndex((l, i) => i > from && i < (to < 0 ? lines.length : to) && new RegExp(`"${key}"\\s*:`).test(l)) : -1;
+  return (at >= 0 ? at : from) + 1;
 }
 
 // Several reviews of one sheet, each from a different model: scores vary by a point or more between
