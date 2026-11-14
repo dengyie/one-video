@@ -60,11 +60,12 @@ export function checkNotes(timeline, notes, { maxGap = 3, lead = 3 } = {}) {
 const GATES_FOR = { still: ["rhythm", "opening"], late: ["rhythm", "opening"], other: ["layout", "device", "opening"] };
 
 // Notes a timeline gate also flags, in the same scene and overlapping its stretch: two independent
-// sources on one point, so fix those first. Marks each { gate: { gate, msg } } and returns the count.
+// sources on one point, so fix those first; a note the timeline already contradicts is not. Marks each { gate: { gate, msg } } and returns the count.
 export function matchGates(notes, issues) {
   const placed = (issues ?? []).filter((i) => i.at);
   let hits = 0;
   for (const n of notes) {
+    if (n.check?.doubtful) continue;
     const [a, b] = window(n);
     const hit = placed.find((i) => (!n.scene || i.at.scene === n.scene) && GATES_FOR[noteKind(n)].includes(i.gate) && i.at.from < b + 1 && i.at.to > a - 1);
     if (!hit) continue;

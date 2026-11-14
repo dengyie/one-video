@@ -323,6 +323,7 @@ test("matchGates: a note a timeline gate also flags, in its scene and stretch, i
     { t: 15, scene: "b", issue: "贴纸偏小" },
     { t: 15, scene: "a", issue: "画面静止" },
     { t: 8, scene: "b", issue: "画面静止" },
+    { t: 15, scene: "b", issue: "画面静止", check: { doubtful: true } },
   ];
   const small = { level: "warn", gate: "layout", msg: "small", at: { scene: "b", from: 14, to: 16 } };
   assert.equal(matchGates(notes, [...issues, { level: "warn", gate: "layout", msg: "unplaced" }, small]), 2);
@@ -330,4 +331,5 @@ test("matchGates: a note a timeline gate also flags, in its scene and stretch, i
   assert.deepEqual(notes[1].gate, { gate: "layout", msg: "small" }, "placement notes meet layout, not rhythm");
   assert.equal(notes[2].gate, undefined);
   assert.equal(notes[3].gate, undefined);
+  assert.equal(notes[4].gate, undefined, "the timeline already contradicts it");
 });

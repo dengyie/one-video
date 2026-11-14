@@ -17,7 +17,8 @@ const DEFAULT_HOLD_EST = 0.5;
 export const GATE_DEFAULTS = { staticRatioMax: 0.4, maxSameTypeRun: 2, longSceneNoCue: 25, syllablesPerSec: [3.5, 6.2], maxStill: MAX_STILL, maxSameTransitionRun: 2, echoMinChars: 8, hookReveal: 2.5 };
 
 // `at` places a timeline finding: { scene, from, to } in timeline seconds (look matches its notes to it).
-const issue = (level, gate, msg, at) => ({ level, gate, msg, ...(at && { at }) });
+const r3 = (x) => Math.round(x * 1000) / 1000;
+const issue = (level, gate, msg, at) => ({ level, gate, msg, ...(at && { at: { scene: at.scene, from: r3(at.from), to: r3(at.to) } }) });
 
 export function schemaGate(name, value) {
   const schema = loadSchema(name);
