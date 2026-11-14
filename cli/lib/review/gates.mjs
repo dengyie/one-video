@@ -430,8 +430,6 @@ export function layoutGate(timeline, config) {
       if (!box) continue;
       const at = { scene: sc.id, from: sc.start + o.t, to: sc.start + Math.min(o.end, sc.duration), field: `overlays[${i}]` };
       const name = `scene "${sc.id}" overlay ${i} (${o.type}${o.asset ? ` ${o.asset}` : ""}${o.text ? ` "${o.text}"` : ""})`;
-      if (box[0] < -0.01 || box[1] < -0.01 || box[2] > 1.01 || box[3] > 1.01) out.push(issue("warn", "layout", `${name} runs off the frame at x ${o.x ?? 0.5}, y ${o.y ?? 0.5} — move it inward`, at));
-      if (o.type === "image" && (o.size ?? 160) < g.minSticker) out.push(issue("warn", "layout", `${name}: size ${o.size ?? 160} reads as a thumbnail — use ${g.minSticker}+ or make it a backdrop / photo-stack (gates.minSticker)`, at));
       // The band is checked through the whole overlap: a push-in partway through can carry the overlay into it.
       const inBand = (c, bx = box) => {
         const a = Math.max(o.t, c.start - sc.start), b = Math.min(o.end, c.end - sc.start);
@@ -439,17 +437,27 @@ export function layoutGate(timeline, config) {
         return false;
       };
       const bandHit = (bx) => spoken.find((c) => c.scene === sc.id && !c.top && inBand(c, bx));
-      const hit = bandHit(box);
-      if (hit) {
-        // The nearest height above that clears the band through every shot move and every sticker up at the same time.
-        const others = boxes.filter((b, k) => b && k !== i && sc.overlays[k].t < o.end && o.t < sc.overlays[k].end);
-        let to = null;
-        for (let k = 1; !to && box[1] - 0.02 * k >= 0.02; k++) {
-          const dy = -0.02 * k, bx = [box[0], box[1] + dy, box[2], box[3] + dy];
-          if (!bandHit(bx) && !others.some((b) => meets(b, bx))) to = Math.round(((o.y ?? 0.5) + dy) * 100) / 100;
+      // Where to move it: pulled inside the frame (0.02 margin), then up to the first place that
+      // stays out of the caption band through every shot move and clear of every sticker up at the same time.
+      // Heights are tried in hundredths, so the suggestion is a value to type in.
+      const others = boxes.filter((b, k) => b && k !== i && sc.overlays[k].t < o.end && o.t < sc.overlays[k].end);
+      const dx = box[0] < 0.02 ? 0.02 - box[0] : box[2] > 0.98 ? 0.98 - box[2] : 0;
+      const dy0 = box[1] < 0.02 ? 0.02 - box[1] : box[3] > 0.98 ? 0.98 - box[3] : 0;
+      const r2 = (v) => Math.round(v * 100) / 100;
+      const spot = () => {
+        if (box[2] - box[0] > 0.96) return null;
+        const y0 = o.y ?? 0.5;
+        for (let y = Math.floor((y0 + dy0) * 100 + 1e-6) / 100; box[1] + y - y0 >= 0.02 - 1e-9; y = r2(y - 0.01)) {
+          const dy = y - y0;
+          const bx = [box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy];
+          if (!bandHit(bx) && !others.some((b) => meets(b, bx))) return dx ? `move it to x ${r2((o.x ?? 0.5) + dx)}, y ${r2((o.y ?? 0.5) + dy)}` : `move it ${dy < 0 ? "up " : ""}to y ${r2((o.y ?? 0.5) + dy)}`;
         }
-        out.push(issue("error", "layout", `${name} sits in the caption band while "${hit.text}" is spoken — ${to !== null ? `move it up to y ${to}` : `move it above y ${portrait ? 0.7 : 0.8}`} or to a side`, at));
-      }
+        return null;
+      };
+      if (box[0] < -0.01 || box[1] < -0.01 || box[2] > 1.01 || box[3] > 1.01) out.push(issue("warn", "layout", `${name} runs off the frame at x ${o.x ?? 0.5}, y ${o.y ?? 0.5} — ${spot() ?? "move it inward"}`, at));
+      if (o.type === "image" && (o.size ?? 160) < g.minSticker) out.push(issue("warn", "layout", `${name}: size ${o.size ?? 160} reads as a thumbnail — use ${g.minSticker}+ or make it a backdrop / photo-stack (gates.minSticker)`, at));
+      const hit = bandHit(box);
+      if (hit) out.push(issue("error", "layout", `${name} sits in the caption band while "${hit.text}" is spoken — ${spot() ?? `move it above y ${portrait ? 0.7 : 0.8}`} or to a side`, at));
       for (const p of placed) if (p.o.t < o.end && o.t < p.o.end && meets(p.box, box)) out.push(issue("warn", "layout", `${name} overlaps overlay ${p.i} (${p.o.type}) — space them out or stagger their times`, at));
       if (sc.type === "map") {
         const hits = new Set();

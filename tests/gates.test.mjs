@@ -200,7 +200,11 @@ test("layoutGate: overlays over spoken captions, off-frame, tiny or stacked stic
   assert.match(run({ overlays: [img(0.5, 0.86, 300), img(0.5, 0.5, 300)] })[0].msg, /move it up to y 0\.22 /, "past the sticker in the way");
   // Shown only after the caption ends: no clash.
   assert.ok(!run({ overlays: [img(0.5, 0.86, 300, 3.5, 5)] }).some((i) => /caption band/.test(i.msg)));
-  assert.ok(run({ overlays: [img(0.97, 0.3, 300)] }).some((i) => /off the frame/.test(i.msg)));
+  assert.ok(run({ overlays: [img(0.97, 0.3, 300)] }).some((i) => /off the frame at x 0\.97, y 0\.3 — move it to x 0\.9, y 0\.3$/.test(i.msg)));
+  assert.match(run({ overlays: [img(0.97, 0.95, 300)] })[0].msg, /move it to x 0\.9, y 0\.84$/, "pulled in at the corner, beside the band");
+  const low = run({ overlays: [img(0.5, 0.95, 300)] });
+  assert.match(low.find((i) => /off the frame/.test(i.msg)).msg, /move it up to y 0\.7$/, "inside and above the band");
+  assert.match(low.find((i) => /caption band/.test(i.msg)).msg, /move it up to y 0\.7 or to a side/);
   assert.ok(run({ overlays: [img(0.8, 0.3, 160)] }).some((i) => /thumbnail/.test(i.msg)));
   assert.ok(run({ overlays: [img(0.4, 0.3, 300), img(0.45, 0.32, 300)] }).some((i) => /overlaps overlay 0/.test(i.msg)));
   // A keyword clear of the band at first, carried into it by a push-in partway through the line.
