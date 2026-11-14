@@ -6,7 +6,7 @@ import { timingHashes } from "../voice/tts.mjs";
 import { sceneLines } from "../captions/lines.mjs";
 import { captionBand } from "../captions/layout.mjs";
 import { countryCentroid } from "../library/geo.mjs";
-import { MAX_STILL, propTimes, screenEvents } from "../timeline/index.mjs";
+import { MAX_STILL, OVERLAY_EFFECTS, propTimes, screenEvents } from "../timeline/index.mjs";
 
 export { normalizeLicense };
 export { captionGate } from "../captions/gate.mjs";
@@ -184,8 +184,6 @@ export function budgetGate(script, config) {
 }
 // Scene types whose picture is the content from the first frame.
 const OPENING_VISUAL = new Set(["footage", "media", "photo-stack", "parallax", "focus", "split", "device", "match-cut", "canvas", "map"]);
-// Overlays that accent something already there rather than show something.
-const OVERLAY_EFFECTS = new Set(["burst", "confetti", "spotlight", "flash"]);
 // An element in a list with no cue or time of its own comes in on the default rhythm, right away.
 const uncued = (v) => Array.isArray(v)
   ? v.some((x) => (x && typeof x === "object" && !Array.isArray(x) && !Object.keys(x).some((k) => k === "t" || /cue/i.test(k))) || uncued(x))

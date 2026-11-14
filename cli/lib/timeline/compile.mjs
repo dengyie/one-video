@@ -18,7 +18,7 @@ import { resolveAt } from "./cues.mjs";
 import { CAMERA_DEFAULT, boundaryTransition, normTransition } from "./transitions.mjs";
 import { MOTION_GAIN, MOTION_SFX, motionCues, overlaySound, sfxFile, sfxVariants, slamWord, transitionSfx } from "./sfx.mjs";
 import { bestOffset, compileShots, hardCuts, rampShots, stillShots } from "./shots.mjs";
-import { MAX_STILL, screenEvents } from "./events.mjs";
+import { MAX_STILL, OVERLAY_EFFECTS, screenEvents } from "./events.mjs";
 import { anchorNames } from "./anchors.mjs";
 import { resolveDeviceRects, resolvePropTimes, settled } from "./props.mjs";
 import { collectAssetRefs, credit, libraryCredit, sourceList } from "./credits.mjs";
@@ -309,6 +309,12 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     for (const [i, a] of words.entries()) {
       const b = words.slice(i + 1).find((w) => w.t < a.end && overlaps(wordBox(a, width, height), wordBox(w, width, height)));
       if (b) a.end = r3(Math.max(a.t + 0.4, b.t));
+    }
+    // A slammed word is the one thing to read: stickers still up from earlier lines (no duration of
+    // their own) leave as it lands. Accents and anything arriving with it stay.
+    for (const w of words.filter(slamWord)) for (const o of sc.overlays) {
+      if (o.type === "word" || OVERLAY_EFFECTS.has(o.type) || o.t > w.t - 0.3 || o.end < sc.duration + 0.5 || o.end <= w.t) continue;
+      o.end = r3(Math.max(o.t + 0.4, w.t));
     }
     // A footage title still up when a word lands on it fades out as the word arrives.
     const title = (sc.type === "footage" || sc.type === "parallax") && sc.props.title;

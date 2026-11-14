@@ -99,6 +99,21 @@ test("schema accepts shots, word overlays and the footage / parallax / canvas sc
   assert.ok(schemaGate("project", { ...ex.config, sfx: { motion: "loud" } }).length);
 });
 
+test("compileTimeline: a slammed word clears stickers left up from earlier lines", () => {
+  const ex = example({ media: ["sfx/whoosh.wav", "sfx/pop.wav", "music/inspired.mp3"] });
+  const sb = structuredClone(ex.storyboard);
+  sb.scenes[1] = { ...sb.scenes[1], overlays: [
+    { type: "stamp", text: "old", at: 0.2 }, { type: "stamp", text: "timed", at: 0.2, duration: 9 },
+    { type: "spotlight", at: 0.3 }, { type: "word", text: "NOW", style: "slam", at: 1.5, y: 0.5 }, { type: "stamp", text: "with", at: 1.4 },
+  ] };
+  const { timeline, errors } = compileTimeline({ ...ex, storyboard: sb, assets: ex.fetchedAssets });
+  assert.deepEqual(errors, []);
+  const sc = timeline.scenes[1], by = (x) => sc.overlays.find((o) => (o.text ?? o.type) === x);
+  assert.equal(by("old").end, 1.5);
+  const tail = Math.round((sc.duration + 0.5) * 1000) / 1000;
+  assert.deepEqual([by("timed").end, by("spotlight").end, by("with").end, by("NOW").end], [Math.min(9.2, tail), tail, tail, tail]);
+});
+
 test("compileTimeline: shot track, prop times, beats, canvas inherit", () => {
   const ex = example({ media: ["sfx/whoosh.wav", "sfx/pop.wav", "music/inspired.mp3"] });
   const sb = structuredClone(ex.storyboard);

@@ -4,6 +4,8 @@ import { weakMove } from "./shots.mjs";
 
 // Longest stretch with nothing new on screen before it reads as a stall (gates.maxStill).
 export const MAX_STILL = 4.5;
+// Overlays that accent something already there rather than show something of their own.
+export const OVERLAY_EFFECTS = new Set(["burst", "confetti", "spotlight", "flash", "mark"]);
 
 // Reveal times the compiler resolved into props (`t` of items, morphs, path stops, cards…).
 export function propTimes(v, at) {
