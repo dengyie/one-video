@@ -255,7 +255,12 @@ test("rhythm: long stills and transition runs warn; a covered word leaves when t
   const w = rhythmGate(tl, {}).map((i) => i.msg);
   assert.equal(w.length, 2);
   assert.match(w[0], /^5\.0s .* from 15\.0s \(scene "d"\)/);
-  assert.match(w[1], /3\+ consecutive "fade" transitions ending at "d"/);
+  assert.match(w[1], /3\+ consecutive "fade" transitions ending at "d" — vary them at chapter turns \(e\.g\. "enter": "cut" on "d"\)/);
+  assert.deepEqual(rhythmGate(tl, {})[1].fix, { scene: "d", path: ["enter"], value: "cut", add: true });
+  tl.scenes[3].type = "chapter";
+  assert.equal(rhythmGate(tl, {})[1].fix.value, "wipe", "a chapter opens with a wipe");
+  for (const s of tl.scenes) s.transitionIn = { type: "cut" };
+  assert.equal(rhythmGate(tl, {})[1].fix.value, "fade", "a run of cuts gets a fade");
   assert.deepEqual(rhythmGate(tl, { gates: { maxStill: 6, maxSameTransitionRun: 3 } }), []);
   const quote = (captions) => ({ duration: 8, scenes: [sc("q", 0, 8, { type: "quote", captions, transitionIn: { type: "cut" }, lines: [{ start: 0.1 }, { start: 4 }] })] });
   assert.equal(rhythmGate(quote(true), {}).length, 1); // a still quote under its caption

@@ -254,7 +254,12 @@ export function rhythmGate(timeline, config) {
   let run = 1;
   for (let i = 1; i < types.length; i++) {
     run = types[i] === types[i - 1] && !onDevice(i) ? run + 1 : 1;
-    if (run === g.maxSameTransitionRun + 1) out.push(issue("warn", "rhythm", `${run}+ consecutive "${types[i]}" transitions ending at "${timeline.scenes[i + 1].id}" — vary them at chapter turns`));
+    if (run !== g.maxSameTransitionRun + 1) continue;
+    // The scene ending the run enters differently: a chapter opens with a wipe, anything else cuts
+    // (a small move within the topic); a run of cuts gets a short fade.
+    const sc = timeline.scenes[i + 1];
+    const to = types[i] === "cut" ? "fade" : sc.type === "chapter" ? "wipe" : "cut";
+    out.push(issue("warn", "rhythm", `${run}+ consecutive "${types[i]}" transitions ending at "${sc.id}" — vary them at chapter turns (e.g. "enter": "${to}" on "${sc.id}")`, null, { scene: sc.id, path: ["enter"], value: to, add: true }));
   }
   return out;
 }
