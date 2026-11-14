@@ -1,5 +1,5 @@
 import React from "react";
-import { colorAt, fitFont, useLayout, useRevealAt, useScene, useTheme, useTime } from "../engine/context";
+import { colorAt, cueOr, fitFont, useLayout, useRevealAt, useScene, useTheme, useTime } from "../engine/context";
 import { fmtCount } from "../engine/format";
 import { clamp01, easeOut, lerp } from "../engine/motion";
 import type { Format } from "../engine/types";
@@ -99,13 +99,14 @@ export const MediaScene: React.FC<{ asset: string; caption?: string; title?: str
   );
 };
 
-type Side = { title: string; subtitle?: string; value?: number; format?: Format; items?: string[]; color?: string; asset?: string; cue?: string };
+type Side = { title: string; subtitle?: string; value?: number; format?: Format; items?: string[]; itemCues?: (string | null)[]; color?: string; asset?: string; cue?: string };
 
 const CompareSide: React.FC<{ side: Side; at: number; color: string; valueSize: number; anchor: string }> = ({ side, at, color, valueSize, anchor }) => {
   const theme = useTheme();
   const tl = useTimeline();
   const { u } = useLayout();
   const t = useTime();
+  const scene = useScene();
   const o = easeOut((t - at) / 0.45);
   const a = side.asset ? tl.assets[side.asset] : null;
   return (
@@ -116,12 +117,17 @@ const CompareSide: React.FC<{ side: Side; at: number; color: string; valueSize: 
       {side.value !== undefined && (
         <div data-anchor={`${anchor}-value`} style={{ fontFamily: theme.fonts.number, fontSize: valueSize, fontWeight: 800, lineHeight: 1.05, whiteSpace: "nowrap", alignSelf: "flex-start" }}>{fmtCount(side.value * easeOut((t - at - 0.1) / 0.8), side.value, side.format)}</div>
       )}
-      {(side.items ?? []).map((it, i) => (
-        <div key={i} style={{ fontSize: 32 * u, display: "flex", gap: 14 * u, opacity: easeOut((t - at - 0.5 - i * 0.35) / 0.4) }}>
-          <span style={{ color }}>●</span>
-          <span>{it}</span>
-        </div>
-      ))}
+      {(side.items ?? []).map((it, i) => {
+        // An item with its own cue comes in when the narration says it, else on the side's stagger.
+        const s = at + 0.5 + i * 0.35;
+        const io = easeOut((t - Math.max(s, cueOr(scene, side.itemCues?.[i] ?? undefined, s))) / 0.4);
+        return (
+          <div key={i} style={{ fontSize: 32 * u, display: "flex", gap: 14 * u, opacity: io, transform: side.itemCues?.[i] ? `translateY(${(1 - io) * 12 * u}px)` : undefined }}>
+            <span style={{ color }}>●</span>
+            <span>{it}</span>
+          </div>
+        );
+      })}
     </Card>
   );
 };

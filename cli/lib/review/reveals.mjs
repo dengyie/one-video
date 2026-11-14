@@ -47,6 +47,47 @@ const sameDate = (label, said) => {
 
 const close = (a, b) => Number.isFinite(a) && Number.isFinite(b) && b !== 0 && Math.abs(Math.abs(a) - Math.abs(b)) <= TOLERANCE * Math.abs(b);
 
+// The shortest phrase ending at idx+len that finds this occurrence in hay (a cue phrase resolves
+// to its first match), or null.
+function phraseAt(hay, idx, len) {
+  for (let k = 0; k <= 4 && k <= idx; k++) {
+    const p = hay.slice(idx - k, idx + len);
+    if (hay.indexOf(p) === idx - k) return p;
+  }
+  return null;
+}
+
+// Where the narration says a short on-screen text (a card's note, a compare item): the line that
+// holds most of its characters (3/4 or more, "史上最大 IPO" in "是史上规模最大的IPO"), and in it the
+// first run (2–6 characters) the text also has in a row. { phrase, t } or null.
+function saidText(sc, text) {
+  const lines = sc.lines ?? [];
+  const want = normalizeForMatch(String(text ?? ""));
+  if (want.length < 4) return null;
+  const norm = lines.map((l) => normalizeForMatch(String(l.text ?? "")));
+  let best = null;
+  norm.forEach((n, li) => {
+    const pool = [...n];
+    let hit = 0;
+    for (const c of want) {
+      const j = pool.indexOf(c);
+      if (j >= 0) { hit++; pool.splice(j, 1); }
+    }
+    if (hit >= 0.75 * want.length && (!best || hit > best.hit)) best = { li, hit };
+  });
+  if (!best) return null;
+  const n = norm[best.li];
+  let k = 0;
+  while (k < n.length - 1 && !want.includes(n.slice(k, k + 2))) k++;
+  if (k >= n.length - 1) return null;
+  let len = 2;
+  while (len < 6 && k + len < n.length && want.includes(n.slice(k, k + len + 1))) len++;
+  const hay = norm.join("");
+  const phrase = phraseAt(hay, norm.slice(0, best.li).join("").length + k, len);
+  const t = phrase && phraseTime(lines, phrase);
+  return Number.isFinite(t) ? { phrase, t: Math.max(0, t - CUE_LEAD) } : null;
+}
+
 // Numbers spoken in the scene, in order: amount, the shortest phrase that finds this occurrence
 // (a cue phrase resolves to its first match), and the scene time the cue would fire.
 // Dates are found in each line's own text: normalizing drops the commas that keep "1990年，11月" apart.
@@ -56,11 +97,7 @@ function spoken(sc) {
   const hay = norm.join("");
   const out = [];
   const add = (idx, len, what) => {
-    let phrase = null;
-    for (let k = 0; k <= 4 && k <= idx && !phrase; k++) {
-      const p = hay.slice(idx - k, idx + len);
-      if (hay.indexOf(p) === idx - k) phrase = p;
-    }
+    const phrase = phraseAt(hay, idx, len);
     const t = phrase && phraseTime(lines, phrase);
     if (Number.isFinite(t)) out.push({ ...what, idx, phrase, t: Math.max(0, t - CUE_LEAD) });
   };
@@ -81,18 +118,18 @@ function spoken(sc) {
   return out.sort((a, b) => a.idx - b.idx);
 }
 
-// { cues: {name: phrase}, refs: [{path, value}], times: [scene seconds] } for the elements of `sc`
-// with no cue whose value or date the narration says, or null when there is none.
+// { cues: {name: phrase}, refs: [{path, value}], times: [scene seconds], texts: [cue names said
+// as words, not numbers or dates] } for the elements of `sc` with no cue whose value, date or
+// words the narration says, or null when there is none.
 export function numberReveals(sc) {
   if (!sc?.props) return null;
   const said = spoken(sc);
-  if (!said.length) return null;
   const taken = new Set(Object.keys(sc.cues ?? {}));
   const name = () => { let k = 1; while (taken.has(`n${k}`)) k++; taken.add(`n${k}`); return `n${k}`; };
   const used = new Set();
   const match = (value) => said.find((s) => !used.has(s) && s.amount !== undefined && close(s.amount, Number(value)));
   const matchDate = (label) => said.find((s) => !used.has(s) && s.date && sameDate(label, s.date));
-  const cues = {}, refs = [], times = [];
+  const cues = {}, refs = [], times = [], texts = [];
   if (sc.type === "line-chart") {
     // The first line's points, drawn up to each one as its number is said.
     const pts = sc.props.series?.[0]?.points ?? [];
@@ -134,6 +171,7 @@ export function numberReveals(sc) {
       const n = name();
       cues[n] = s.phrase;
       times.push(s.t);
+      if (s.amount === undefined) texts.push(n);
       refs.push({ path: ["props", "series", i, "cue"], value: n });
     };
     const lines = sc.lines ?? [];
@@ -166,5 +204,26 @@ export function numberReveals(sc) {
       refs.push({ path: el.path, value: el.row ? { label: "合计", cue: n } : n });
     }
   }
-  return refs.length ? { cues, refs, times } : null;
+  // A note or compare item shows with its card; one whose words are said a second or more later
+  // comes in on them.
+  const own = (text, after) => {
+    const s = saidText(sc, text);
+    if (!s || s.t < after + 1) return null;
+    const n = name();
+    cues[n] = s.phrase;
+    times.push(s.t);
+    texts.push(n);
+    return n;
+  };
+  if (sc.type === "stat-cards") (sc.props.cards ?? []).forEach((c, i) => {
+    const n = c?.note && !c.noteCue && own(c.note, sc.cues?.[c.cue] ?? 0);
+    if (n) refs.push({ path: ["props", "cards", i, "noteCue"], value: n });
+  });
+  if (sc.type === "compare") for (const k of ["left", "right"]) {
+    const side = sc.props[k];
+    if (!side?.items?.length || side.itemCues?.some(Boolean)) continue;
+    const ic = side.items.map((it) => own(it, sc.cues?.[side.cue] ?? 0));
+    if (ic.some(Boolean)) refs.push({ path: ["props", k, "itemCues"], value: ic });
+  }
+  return refs.length ? { cues, refs, times, texts } : null;
 }

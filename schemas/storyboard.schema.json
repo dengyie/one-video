@@ -195,6 +195,16 @@
             "type": "string"
           }
         },
+        "itemCues": {
+          "type": "array",
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": "cue name per item (null = the side's stagger); the item appears when its cue resolves, e.g. on the words that say it"
+        },
         "color": {
           "type": "string",
           "pattern": "^(#[0-9A-Fa-f]{3,8}|[a-z]+)$"
@@ -871,6 +881,10 @@
               },
               "note": {
                 "type": "string"
+              },
+              "noteCue": {
+                "type": "string",
+                "description": "name of a cue in scene.cues; the note appears when it resolves, e.g. on the words that say it"
               },
               "color": {
                 "type": "string",

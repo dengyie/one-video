@@ -35,10 +35,13 @@ test("fixPlan: stickers dropped on the captions move clear of them and of each o
   assert.deepEqual(check.issues.filter((i) => i.gate === "rhythm" && i.fix), [], "scenes with no shot track got the auto one");
   assert.equal(storyboard.scenes[0].shots, "auto", "the title opening is pushed into");
   assert.equal(storyboard.scenes[1].shots, undefined, "the stat cards are not: their stretch wants a cue");
-  assert.ok(check.issues.some((i) => i.gate === "rhythm" && /cue a reveal/.test(i.msg)));
+  const [ipo, profit$] = ["ipo", "profit"].map((id) => storyboard.scenes.find((s) => s.id === id));
+  assert.deepEqual([ipo.props.cards[1].noteCue, ipo.cues[ipo.props.cards[1].noteCue]], ["n1", "史上"], "\"史上最大 IPO\" comes in on \"是史上规模最大的IPO\"");
+  assert.deepEqual([profit$.props.right.itemCues, profit$.cues.n1], [["n1"], "AI业务是主"]);
+  assert.deepEqual(check.issues.filter((i) => i.gate === "rhythm").map((i) => i.msg), []);
   const v = storyboard.scenes.find((s) => s.id === "valuation");
   assert.deepEqual([v.props.pointCues, v.cues.n1], [["n1", "n2", "n3", "n4"], "3500亿"], "the line is drawn to each value as it is said");
-  assert.deepEqual([profit.props.left.cue, profit.props.right.cue, Object.keys(profit.cues)], ["left", "right", ["left", "right"]], "the cues already written are used, no new ones made up");
+  assert.deepEqual([profit.props.left.cue, profit.props.right.cue, Object.keys(profit.cues)], ["left", "right", ["left", "right", "n1"]], "the sides use the cues already written; only the item said later gets a new one");
   assert.match(describeFix(applied.find((a) => a.gate === "layout")), new RegExp(`^${storyboard.scenes[1].id} overlays\\[\\d\\]: y 0\\.9\\d? → 0\\.\\d+$`));
   assert.equal(ex.storyboard.scenes[1].overlays, undefined, "the original is untouched");
 });
@@ -75,6 +78,21 @@ test("numberReveals: timeline events and bar-race periods get a cue where their 
   assert.deepEqual(tl.cues, { n1: "11月5日", n2: "11月8日" }, "\"2024年，11月5日\" is two dates, and a month alone is not 12.01");
   assert.deepEqual(tl.refs.map((x) => x.path[2]), [0, 1]);
   assert.ok(tl.times[1] > tl.times[0]);
+});
+
+test("numberReveals: a card note or compare item said after its card comes in on its words; one said with the card, barely said or too short does not", () => {
+  const lines = [{ start: 0, end: 3, text: "募资约857亿美元，" }, { start: 3, end: 6, text: "是史上规模最大的IPO。" }];
+  const card = (note, extra = {}) => ({ type: "stat-cards", lines, cues: { raise: 0.2 }, props: { cards: [{ value: 8.57e10, cue: "raise", note, ...extra }] } });
+  const r = numberReveals(card("史上最大 IPO"));
+  assert.deepEqual([r.cues, r.refs, r.texts], [{ n1: "史上" }, [{ path: ["props", "cards", 0, "noteCue"], value: "n1" }], ["n1"]]);
+  assert.ok(r.times[0] > 3);
+  assert.equal(numberReveals({ ...card("史上最大 IPO"), cues: { raise: 3.5 } }), null, "said with the card: it is already there");
+  assert.equal(numberReveals(card("全球第一大募资纪录")), null, "most of its words are not said");
+  assert.equal(numberReveals(card("IPO")), null, "too short to place");
+  assert.equal(numberReveals(card("史上最大 IPO", { noteCue: "x" })), null, "written cue stays");
+  const cmp = numberReveals({ type: "compare", lines: [{ start: 0, end: 2, text: "集团净亏损。" }, { start: 2, end: 5, text: "主要是AI业务拖累，还有星舰项目。" }], cues: { right: 0.3 },
+    props: { right: { title: "集团", cue: "right", items: ["净亏损", "AI 业务是主要拖累", "星舰项目"] } } });
+  assert.deepEqual(cmp.refs, [{ path: ["props", "right", "itemCues"], value: [null, "n1", "n2"] }], "a 3-letter item is too short; the others are said in the second line");
 });
 
 test("applyFix: a fix `with` more changes applies all of them or none", () => {

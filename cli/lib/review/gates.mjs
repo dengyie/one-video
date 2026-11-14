@@ -118,8 +118,8 @@ function cueRefs(v, out = []) {
   if (Array.isArray(v)) v.forEach((x) => cueRefs(x, out));
   else if (v && typeof v === "object") {
     for (const [k, x] of Object.entries(v)) {
-      if ((k === "cue" || k === "drawCue") && typeof x === "string") out.push(x);
-      else if ((k === "periodCues" || k === "pointCues") && Array.isArray(x)) out.push(...x.filter((c) => typeof c === "string"));
+      if ((k === "cue" || k === "drawCue" || k === "noteCue") && typeof x === "string") out.push(x);
+      else if ((k === "periodCues" || k === "pointCues" || k === "itemCues") && Array.isArray(x)) out.push(...x.filter((c) => typeof c === "string"));
       else cueRefs(x, out);
     }
   }
@@ -312,15 +312,15 @@ export function rhythmGate(timeline, config) {
     const shot = auto ? `add "shots": "auto"` : "add a shot";
     // Chart elements with no cue whose numbers or dates are said in the stretch: pin them all on those words.
     const nums = !auto && numberReveals(sc);
-    const said = nums && Object.values(nums.cues).filter((p, i) => sc.start + nums.times[i] > x.from.t + 0.5 && sc.start + nums.times[i] < x.to.t - 0.5);
+    const said = nums && Object.entries(nums.cues).filter((_, i) => sc.start + nums.times[i] > x.from.t + 0.5 && sc.start + nums.times[i] < x.to.t - 0.5);
     // Otherwise a cue just after the stretch whose line starts in it moves to that line's opening.
     const early = !said?.length && sc && earlierCue(timeline, sc, x, g.maxStill);
     // Or a written shot in it that barely moves gets pushed further.
     const push = !said?.length && !early && sc && biggerShot(timeline, sc, x, g.maxStill);
-    // A number's phrase ends on its digits or unit; a date's on 年/月/日/号.
-    const dates = (said || []).filter((p) => /[年月日号]$/.test(p)).length;
-    const what = !dates ? "numbers" : dates === said.length ? "dates" : "numbers and dates";
-    const reveal = said?.length ? `cue its ${what} on the words that say them (${said.map((p) => `"${p}"`).join(", ")}), or ${shot} or an overlay` : null;
+    // A number's phrase ends on its digits or unit; a date's on 年/月/日/号; words (a note, an item, a bar's name) are listed.
+    const kind = ([n, p]) => (nums.texts.includes(n) ? "text" : /[年月日号]$/.test(p) ? "dates" : "numbers");
+    const what = ["numbers", "dates", "text"].filter((k) => (said || []).some((e) => kind(e) === k)).join(" and ");
+    const reveal = said?.length ? `cue its ${what} on the words that say them (${said.map(([, p]) => `"${p}"`).join(", ")}), or ${shot} or an overlay` : null;
     const where = reveal ?? (early ? `move cue "${early.name}" to "${early.phrase}" (${early.t.toFixed(1)}s), where its line starts, or ${shot} or an overlay` : null)
       ?? (push ? `the shot at ${push.t.toFixed(1)}s barely moves — push it to zoom ${push.zoom} (from ${push.from}), or add a cue or overlay` : null) ?? (line ? `cue a reveal on "${line.phrase}" (${line.t.toFixed(1)}s), or ${shot} or an overlay` : auto ? `${shot}, or a cue or overlay` : "add a cue, shot or overlay");
     const fix = auto ? { scene: x.from.scene, path: ["shots"], value: "auto", add: true } : reveal ? { scene: x.from.scene, path: ["cues"], set: nums.cues, add: true, with: nums.refs } : early ? { scene: x.from.scene, path: ["cues", early.name], value: early.phrase }

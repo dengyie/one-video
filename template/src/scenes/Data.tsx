@@ -27,7 +27,7 @@ export function niceTicks(lo: number, hi: number, target = 4): number[] {
   return out;
 }
 
-type StatCard = { value: number; from?: number; format?: Format; label: string; note?: string; color?: string; cue?: string };
+type StatCard = { value: number; from?: number; format?: Format; label: string; note?: string; color?: string; cue?: string; noteCue?: string };
 
 export const StatCardsScene: React.FC<{ columns?: number; cards: StatCard[] }> = ({ columns, cards }) => {
   const theme = useTheme();
@@ -35,6 +35,7 @@ export const StatCardsScene: React.FC<{ columns?: number; cards: StatCard[] }> =
   const at = useRevealAt();
   const t = useTime();
   const { fps } = useTimeline();
+  const scene = useScene();
   const cols = columns ?? (portrait ? (cards.length > 3 ? 2 : 1) : Math.min(cards.length, cards.length === 4 ? 2 : 3));
   const big = cards.length <= 2 ? 1.4 : cards.length <= 4 ? 1.15 : 0.8;
   // One value size for every card, small enough that the longest stays inside its card.
@@ -48,13 +49,15 @@ export const StatCardsScene: React.FC<{ columns?: number; cards: StatCard[] }> =
           const o = easeOut((t - s) / 0.45);
           const v = lerp(c.from ?? 0, c.value, easeOut((t - s) / COUNT));
           const color = c.color ?? (i === 0 ? theme.colors.accent : colorAt(theme, i));
+          // A note with its own cue comes in when the narration says it.
+          const no = c.noteCue ? easeOut((t - Math.max(s, cueOr(scene, c.noteCue, s))) / 0.4) : 1;
           return (
             <Card key={i} o={o} accent={color} anchor={[`card${i + 1}`, c.cue].filter(Boolean).join(" ")} style={{ textAlign: "left", padding: `${34 * u}px ${40 * u}px` }}>
               <div style={{ fontSize: 28 * u * Math.max(0.85, big * 0.9), color: theme.colors.muted }}>{c.label}</div>
               <div style={{ fontFamily: theme.fonts.number, fontSize: valueSize, fontWeight: 800, color, marginTop: 10 * u, lineHeight: 1.05, whiteSpace: "nowrap" }}>
                 {c.from === undefined && t - s < COUNT ? <Roll text={fmtCount(c.value, c.value, c.format)} p={easeOut((t - s) / COUNT)} was={easeOut((t - 1 / fps - s) / COUNT)} /> : fmtCount(v, c.value, c.format)}
               </div>
-              {c.note && <div style={{ fontSize: 22 * u, color: theme.colors.muted, marginTop: 12 * u, lineHeight: 1.4 }}>{c.note}</div>}
+              {c.note && <div style={{ fontSize: 22 * u, color: theme.colors.muted, marginTop: 12 * u, lineHeight: 1.4, opacity: no, transform: `translateY(${(1 - no) * 10 * u}px)` }}>{c.note}</div>}
             </Card>
           );
         })}
