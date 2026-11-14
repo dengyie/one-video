@@ -58,40 +58,44 @@ export async function look(args) {
   // Timeline time from here on: a part render's cells are shifted by where it starts.
   const sheets = raw.map((s) => ({ ...s, t0: +(s.t0 + offset).toFixed(3), times: s.times?.map((t) => +(t + offset).toFixed(2)) }));
   const config = { llm: { ...project.config.llm, ...(args.models ? { models: String(args.models).split(",") } : {}) } };
-  // Each sheet is read by `--passes` different models (each pass starts one further down the list):
-  // the score is their median and a note one pass alone raised is shown as such.
-  const passes = Math.max(1, Number(args.passes ?? 2));
+  // Each sheet is read by `--passes` different models at once: the model list is dealt out between
+  // the passes (1st, 3rd… model to pass 1; 2nd, 4th… to pass 2), each falling back within its own share.
+  // The score is their median and a note one pass alone raised is shown as such.
   const models = llmConfig(config).models;
-  // Sheets are reviewed side by side (`--jobs`, default 3); a sheet's passes stay in turn, each needing the models the last one used.
+  const passes = Math.max(1, Math.min(models.length, Number(args.passes ?? 2)));
+  const shares = Array.from({ length: passes }, (_, p) => models.filter((_, i) => i % passes === p));
+  // Sheets are reviewed side by side too (`--jobs`, default 3).
   const jobs = Math.max(1, Number(args.jobs ?? 3));
-  log(`look: ${sheets.length} sheet(s) × ${passes} pass(es), ${jobs} at a time → ${models.join(" / ")}`);
+  log(`look: ${sheets.length} sheet(s) × ${passes} pass(es), ${jobs} sheet(s) at a time → ${shares.map((m) => m.join(" / ")).join("  |  ")}`);
   const reviews = [], notes = [];
   const done = await pool(sheets, jobs, async (s, k) => {
     const end = s.t0 + s.cells * s.step;
     const scenes = (tl?.scenes ?? []).filter((sc) => sc.start < end && sc.start + sc.duration > s.t0).map(sceneLine).join("\n") || "(no timeline)";
-    const runs = [];
-    // A pass goes to a model this sheet has not had yet; an empty answer (no score, no notes) does not count.
-    for (let p = 0, from = 0; p < passes && from < models.length; from++) {
-      const order = [...models.slice(from), ...models.slice(0, from)].filter((m) => !runs.some((r) => r.model === m));
-      if (!order.length) break;
-      try {
-        const { data, model } = await ask({ prompt: lookPrompt({ sheet: s, scenes, focus: args.focus }), images: [imagePart(s.file)], json: true, maxTokens: 4000, config: { llm: { ...config.llm, models: order } } });
-        if (!Number(data.score) && !(Array.isArray(data.notes) && data.notes.length)) { warn(`sheet ${k + 1}: empty review from ${model}; asking the next model`); continue; }
-        const run = { model, score: Number(data.score) || null, summary: String(data.summary ?? ""), truncated: !!data.truncated, notes: [] };
-        for (const n of Array.isArray(data.notes) ? data.notes : []) {
-          // The stamped time read off the cell, snapped to it; the cell index only when no usable time came back.
-          const read = Number(n.t), c = Number.isFinite(read) && read >= s.t0 && read <= s.t0 + s.cells * s.step ? Math.floor((read - s.t0) / s.step) : Number(n.cell) || 0;
-          const t = cellTime(s, Math.max(0, Math.min(s.cells - 1, c)));
-          run.notes.push({ t, scene: sceneAt(tl, t), severity: ["high", "medium", "low"].includes(n.severity) ? n.severity : "medium", ...(typeof n.kind === "string" && { kind: n.kind }), ...(Array.isArray(n.span) && { span: n.span }), issue: String(n.issue ?? ""), fix: String(n.fix ?? ""), model });
+    const pass = async (share, p) => {
+      // An empty answer (no score, no notes) does not count: the next model in this share is asked.
+      for (let from = 0; from < share.length; from++) {
+        try {
+          const { data, model } = await ask({ prompt: lookPrompt({ sheet: s, scenes, focus: args.focus }), images: [imagePart(s.file)], json: true, maxTokens: 4000, config: { llm: { ...config.llm, models: share.slice(from) } } });
+          if (!Number(data.score) && !(Array.isArray(data.notes) && data.notes.length)) { warn(`sheet ${k + 1}.${p + 1}: empty review from ${model}; asking the next model`); from = share.indexOf(model); continue; }
+          const run = { model, score: Number(data.score) || null, summary: String(data.summary ?? ""), truncated: !!data.truncated, notes: [] };
+          // A note cut off before its issue says nothing.
+          for (const n of Array.isArray(data.notes) ? data.notes : []) {
+            if (!String(n.issue ?? "").trim()) continue;
+            // The stamped time read off the cell, snapped to it; the cell index only when no usable time came back.
+            const read = Number(n.t), c = Number.isFinite(read) && read >= s.t0 && read <= s.t0 + s.cells * s.step ? Math.floor((read - s.t0) / s.step) : Number(n.cell) || 0;
+            const t = cellTime(s, Math.max(0, Math.min(s.cells - 1, c)));
+            run.notes.push({ t, scene: sceneAt(tl, t), severity: ["high", "medium", "low"].includes(n.severity) ? n.severity : "medium", ...(typeof n.kind === "string" && { kind: n.kind }), ...(Array.isArray(n.span) && { span: n.span }), issue: String(n.issue), fix: String(n.fix ?? ""), model });
+          }
+          log(`  sheet ${k + 1}.${p + 1}: ${data.score ?? "?"}/10 (${model})${data.truncated ? " [reply cut off; kept complete notes]" : ""} ${data.summary ?? ""}`);
+          return run;
+        } catch (e) {
+          warn(`sheet ${k + 1}.${p + 1}: ${e.message}`);
+          return null; // ask() has already walked the rest of this share
         }
-        runs.push(run);
-        p++;
-        log(`  sheet ${k + 1}.${p}: ${data.score ?? "?"}/10 (${model})${data.truncated ? " [reply cut off; kept complete notes]" : ""} ${data.summary ?? ""}`);
-      } catch (e) {
-        warn(`sheet ${k + 1} pass ${p + 1}: ${e.message}`);
-        break; // ask() has already walked the whole model list
       }
-    }
+      return null;
+    };
+    const runs = (await Promise.all(shares.map(pass))).filter(Boolean);
     if (!runs.length) return null;
     const merged = mergePasses(runs, { near: Math.max(2, s.step * 1.5) });
     return { review: { sheet: relative(project.root, s.file), score: merged.score, passes: runs.map(({ notes: _, ...r }) => r) }, notes: merged.notes.map((n) => (runs.length > 1 ? { ...n, of: runs.length } : n)) };
