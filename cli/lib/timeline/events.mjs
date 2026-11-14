@@ -13,6 +13,15 @@ export function propTimes(v, at) {
   else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) k === "t" && typeof x === "number" ? at(x) : propTimes(x, at);
 }
 
+// Every string a scene's props, overlays or shots carry: a cue no element names (a compare side
+// with no `cue`, a name left over from an edit) changes nothing on screen.
+export function named(v, out = new Set()) {
+  if (typeof v === "string") out.add(v);
+  else if (Array.isArray(v)) for (const x of v) named(x, out);
+  else if (v && typeof v === "object") for (const x of Object.values(v)) named(x, out);
+  return out;
+}
+
 // Every moment something new appears on screen, in timeline seconds: scene starts, cue reveals,
 // shots, overlay entrances and timed props. A shot that barely moves the frame (no cut, zoom and
 // position within a few percent of the shot before) is marked `weak`.
@@ -21,7 +30,8 @@ export function screenEvents(timeline) {
   for (const sc of timeline?.scenes ?? []) {
     const at = (t, what, weak = false) => { if (t >= 0 && t <= sc.duration) events.push({ t: sc.start + t, scene: sc.id, what, ...(weak && { weak }) }); };
     at(0, "scene");
-    for (const t of Object.values(sc.cues ?? {})) at(t, "cue");
+    const used = named([sc.props, sc.overlays, sc.shots]);
+    for (const [name, t] of Object.entries(sc.cues ?? {})) if (used.has(name)) at(t, "cue");
     let prev = null;
     for (const sh of sc.shots ?? []) {
       const weak = weakMove(prev, sh);

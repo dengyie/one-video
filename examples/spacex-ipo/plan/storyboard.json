@@ -483,6 +483,7 @@
         "vs": "≠",
         "left": {
           "title": "连接业务",
+          "cue": "left",
           "subtitle": "经营利润",
           "value": 4400000000,
           "format": {
@@ -493,6 +494,7 @@
         },
         "right": {
           "title": "集团整体",
+          "cue": "right",
           "subtitle": "净亏损",
           "value": -4900000000,
           "format": {

@@ -51,6 +51,21 @@ test("storyboardGate: pointCues must reference defined cues", () => {
   assert.ok(msgs(storyboardGate(sb, ex.script, ex.config, null), "cues").some((x) => /"gone"/.test(x)));
 });
 
+test("storyboardGate: a cue nothing names warns; one named after a props side gets it set", () => {
+  const ex = example();
+  const sb = structuredClone(ex.storyboard);
+  const profit = sb.scenes.find((s) => s.id === "profit");
+  delete profit.props.left.cue;
+  profit.cues.spare = 2;
+  const m = storyboardGate(sb, ex.script, ex.config, null).filter((i) => i.gate === "cues");
+  assert.deepEqual(m.map((i) => i.msg), [
+    'scene "profit": cue "left" is not used by props, overlays, shots or sfx — nothing changes on screen there (set "cue": "left" on props.left)',
+    'scene "profit": cue "spare" is not used by props, overlays, shots or sfx — nothing changes on screen there',
+  ]);
+  assert.deepEqual(m[0].fix, { scene: "profit", path: ["props", "left", "cue"], value: "left", add: true });
+  assert.equal(m[1].fix, undefined);
+});
+
 test("rateGate flags speech outside the syllables/s band", () => {
   const timings = { scenes: { s: { lines: [{ text: "一二三四五六七八九十", start: 0, end: 0.5 }] } } };
   assert.ok(msgs(rateGate({ scenes: [{ id: "s" }] }, timings, {})).some((x) => /syllables\/s/.test(x)));
@@ -261,7 +276,7 @@ test("densityGate: assets per minute, AI-generated ones counted, bare text scene
 // A hand-built timeline: scene a 0–10s with a cue at 3s, a weak drift at 5s and a real push at 6s;
 // scene b 10–20s with only an overlay at 12s.
 const lookTl = () => ({ duration: 20, scenes: [
-  { id: "a", type: "media", start: 0, duration: 10, cues: { v: 3 }, shots: [{ t: 0, zoom: 1 }, { t: 5, zoom: 1.02 }, { t: 6, zoom: 1.15 }], overlays: [] },
+  { id: "a", type: "media", start: 0, duration: 10, cues: { v: 3 }, props: { cue: "v" }, shots: [{ t: 0, zoom: 1 }, { t: 5, zoom: 1.02 }, { t: 6, zoom: 1.15 }], overlays: [] },
   { id: "b", type: "media", start: 10, duration: 10, cues: {}, shots: [{ t: 0, zoom: 1 }], overlays: [{ t: 2 }] },
 ] });
 

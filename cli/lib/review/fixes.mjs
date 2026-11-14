@@ -6,21 +6,30 @@ const fmt = (v) => (v === undefined ? "–" : typeof v === "object" ? JSON.strin
 
 // Applies one fix to `storyboard` in place. Returns what it changed ({ from, to } per key) or null when
 // the target is not in the storyboard as written (an anchored overlay, a cue defined elsewhere);
-// a fix with `add` may write a key the scene does not have yet.
+// a fix with `add` may write a key the scene does not have yet. `with` lists more changes to the
+// same scene that only make sense together (a cue and the element naming it): all or none.
 export function applyFix(storyboard, fix) {
   const sb = storyboard?.scenes?.find((s) => s.id === fix.scene);
-  const parent = fix.path.slice(0, -1).reduce((v, k) => v?.[k], sb);
-  const key = fix.path.at(-1);
-  if (!parent || typeof parent !== "object" || !(key in parent || (fix.add && fix.value !== undefined))) return null;
-  if (fix.set) {
-    const obj = parent[key];
-    if (!obj || typeof obj !== "object") return null;
-    const change = Object.fromEntries(Object.entries(fix.set).map(([k, v]) => [k, { from: obj[k], to: v }]));
-    Object.assign(obj, fix.set);
-    return change;
+  const parts = [fix, ...(fix.with ?? []).map((w) => ({ add: fix.add, ...w }))];
+  const spots = parts.map((f) => {
+    const parent = f.path.slice(0, -1).reduce((v, k) => v?.[k], sb);
+    const key = f.path.at(-1);
+    if (!parent || typeof parent !== "object" || !(key in parent || (f.add && (f.value !== undefined || f.set)))) return null;
+    if (f.set && parent[key] !== undefined && (!parent[key] || typeof parent[key] !== "object")) return null;
+    return { f, parent, key };
+  });
+  if (spots.some((x) => !x)) return null;
+  const change = {};
+  for (const [i, { f, parent, key }] of spots.entries()) {
+    if (f.set) {
+      const obj = (parent[key] ??= {});
+      for (const [k, v] of Object.entries(f.set)) change[k] = { from: obj[k], to: v };
+      Object.assign(obj, f.set);
+    } else {
+      change[i ? f.path.join(".") : key] = { from: parent[key], to: f.value };
+      parent[key] = f.value;
+    }
   }
-  const change = { [key]: { from: parent[key], to: fix.value } };
-  parent[key] = fix.value;
   return change;
 }
 

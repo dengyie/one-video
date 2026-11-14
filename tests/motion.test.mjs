@@ -254,7 +254,7 @@ test("text over media: words dodge the depth subject, scrims follow contrast, ca
 
 test("rhythm: long stills and transition runs warn; a covered word leaves when the next lands", () => {
   const sc = (id, start, duration, extra = {}) => ({ id, type: "media", start, duration, cues: {}, shots: [], overlays: [], transitionIn: { type: "fade" }, ...extra });
-  const tl = { duration: 20, scenes: [sc("a", 0, 6, { cues: { x: 2 } }), sc("b", 6, 4), sc("c", 10, 4), sc("d", 14, 6, { shots: [{ t: 1 }] })] };
+  const tl = { duration: 20, scenes: [sc("a", 0, 6, { cues: { x: 2 }, props: { cue: "x" } }), sc("b", 6, 4), sc("c", 10, 4), sc("d", 14, 6, { shots: [{ t: 1 }] })] };
   const w = rhythmGate(tl, {}).map((i) => i.msg);
   assert.equal(w.length, 2);
   assert.match(w[0], /^5\.0s .* from 15\.0s \(scene "d"\)/);
@@ -265,6 +265,9 @@ test("rhythm: long stills and transition runs warn; a covered word leaves when t
   for (const s of tl.scenes) s.transitionIn = { type: "cut" };
   assert.equal(rhythmGate(tl, {})[1].fix.value, "fade", "a run of cuts gets a fade");
   assert.deepEqual(rhythmGate(tl, { gates: { maxStill: 6, maxSameTransitionRun: 3 } }), []);
+  // A cue nothing on screen names (a compare side with no `cue`) is not a reveal.
+  const dead = { duration: 8, scenes: [sc("p", 0, 8, { type: "compare", transitionIn: { type: "cut" }, cues: { left: 0.4, right: 4 }, props: { left: { value: 1 }, right: { value: 2 } } })] };
+  assert.match(rhythmGate(dead, {})[0].msg, /^8\.0s with nothing new/);
   const quote = (captions) => ({ duration: 8, scenes: [sc("q", 0, 8, { type: "quote", captions, transitionIn: { type: "cut" }, lines: [{ start: 0.1 }, { start: 4 }] })] });
   assert.equal(rhythmGate(quote(true), {}).length, 1); // a still quote under its caption
   assert.deepEqual(rhythmGate(quote(false), {}), []); // read along: each spoken line lights up
@@ -321,7 +324,7 @@ test("long still stretches on a shot track get a slow drift that keeps authored 
   const own = [sh(0, 1), sh(1, 1.12)];
   const out = stillShots(own, [6.5], 12, 4.5);
   assert.deepEqual(out.map((s) => [s.t, s.zoom, s.ease]), [[0, 1, 0.6], [1, 1.12, 0.6], [3.75, 1.18, 2.475], [9.25, 1.12, 2.475]]);
-  const sc = { id: "s", start: 0, duration: 12, cues: { a: 6.5 }, shots: out };
+  const sc = { id: "s", start: 0, duration: 12, cues: { a: 6.5 }, props: { cue: "a" }, shots: out };
   const ev = screenEvents({ scenes: [sc] }).filter((e) => !e.weak).map((e) => e.t);
   for (const [i, t] of [...ev, 12].entries()) if (i) assert.ok(t - ev[i - 1] <= 4.5, `gap before ${t}`);
   // A drift that would leave the next authored push too small to see is dropped; no track, nothing added.

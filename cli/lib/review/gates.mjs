@@ -6,8 +6,9 @@ import { timingHashes } from "../voice/tts.mjs";
 import { sceneLines } from "../captions/lines.mjs";
 import { captionBand } from "../captions/layout.mjs";
 import { countryCentroid } from "../library/geo.mjs";
-import { MAX_STILL, OVERLAY_EFFECTS, propTimes, screenEvents } from "../timeline/index.mjs";
+import { MAX_STILL, OVERLAY_EFFECTS, named, propTimes, screenEvents } from "../timeline/index.mjs";
 import { laidOut } from "../timeline/shots.mjs";
+import { numberReveals } from "./reveals.mjs";
 
 export { normalizeLicense };
 export { captionGate } from "../captions/gate.mjs";
@@ -99,6 +100,13 @@ export function storyboardGate(storyboard, script, config, assets) {
     const estimate = chars / (config.tts?.syllablesPerSecond ?? SYLLABLES_PER_SEC);
     if (estimate > g.longSceneNoCue && Object.keys(sb.cues ?? {}).length === 0) out.push(issue("warn", "pacing", `scene "${sb.id}" ≈${estimate.toFixed(0)}s of narration with no cues — add reveals so the screen changes with the voice`));
     for (const ref of cueRefs(sb.props)) if (!(ref in (sb.cues ?? {}))) out.push(issue("error", "cues", `scene "${sb.id}": props reference cue "${ref}" which is not defined in scene.cues`));
+    // A cue nothing names changes nothing on screen; one named after a side or block of the props
+    // (compare "left"/"right") was meant for it.
+    const said = named({ ...sb, cues: undefined, id: undefined });
+    for (const name of Object.keys(sb.cues ?? {}).filter((k) => !said.has(k))) {
+      const own = sb.props?.[name] && typeof sb.props[name] === "object" && !Array.isArray(sb.props[name]) && !sb.props[name].cue;
+      out.push(issue("warn", "cues", `scene "${sb.id}": cue "${name}" is not used by props, overlays, shots or sfx — nothing changes on screen there${own ? ` (set "cue": "${name}" on props.${name})` : ""}`, null, own ? { scene: sb.id, path: ["props", name, "cue"], value: name, add: true } : null));
+    }
     if (sb.type === "media" && sb.props?.asset && !assetIds.has(sb.props.asset)) out.push(issue("error", "assets", `scene "${sb.id}" uses unknown asset "${sb.props.asset}"`));
     if (!chars && !sb.duration) out.push(issue("warn", "pacing", `scene "${sb.id}" has no narration and no duration; defaults to 4s`));
   }
@@ -247,8 +255,13 @@ export function rhythmGate(timeline, config) {
     // Charts and cards are not pushed into (laidOut): their stretch wants a cue.
     const auto = !sc?.shots?.length && sc?.type !== "device" && !laidOut(sc?.type);
     const shot = auto ? `add "shots": "auto"` : "add a shot";
-    const where = line ? `cue a reveal on "${line.phrase}" (${line.t.toFixed(1)}s), or ${shot} or an overlay` : auto ? `${shot}, or a cue or overlay` : "add a cue, shot or overlay";
-    out.push(issue("warn", "rhythm", `${x.len.toFixed(1)}s with nothing new on screen from ${x.from.t.toFixed(1)}s (scene "${x.from.scene}") — ${where} (max ${g.maxStill}s)`, { scene: x.from.scene, from: x.from.t, to: x.to.t, field: auto ? "shots" : line ? "cues" : undefined }, auto ? { scene: x.from.scene, path: ["shots"], value: "auto", add: true } : null));
+    // Chart elements with no cue whose numbers are said in the stretch: pin them all on those words.
+    const nums = !auto && numberReveals(sc);
+    const said = nums && Object.values(nums.cues).filter((p, i) => sc.start + nums.times[i] > x.from.t + 0.5 && sc.start + nums.times[i] < x.to.t - 0.5);
+    const reveal = said?.length ? `cue its numbers on the words that say them (${said.map((p) => `"${p}"`).join(", ")}), or ${shot} or an overlay` : null;
+    const where = reveal ?? (line ? `cue a reveal on "${line.phrase}" (${line.t.toFixed(1)}s), or ${shot} or an overlay` : auto ? `${shot}, or a cue or overlay` : "add a cue, shot or overlay");
+    const fix = auto ? { scene: x.from.scene, path: ["shots"], value: "auto", add: true } : reveal ? { scene: x.from.scene, path: ["cues"], set: nums.cues, add: true, with: nums.refs } : null;
+    out.push(issue("warn", "rhythm", `${x.len.toFixed(1)}s with nothing new on screen from ${x.from.t.toFixed(1)}s (scene "${x.from.scene}") — ${where} (max ${g.maxStill}s)`, { scene: x.from.scene, from: x.from.t, to: x.to.t, field: auto ? "shots" : reveal || line ? "cues" : undefined }, fix));
   }
   const types = timeline.scenes.slice(1).map((s) => s.transitionIn?.type);
   // Cuts between scenes on the same device are the device staying put, not a transition.
