@@ -59,6 +59,7 @@
 - 有音乐时 `onevideo.json` 写 `music.offset: "auto"`。
 - 产品宣传（promo）：看 `examples/promo-demo`。界面全部来自 `onevideo capture`，同一台设备贯穿多个 `device` 场景（相邻同种设备自动硬切，不重复入场）；每个时刻写成 点按 → 展开 → 停在结果上（≥1s，deviceGate）→ 收回或换页；点按位置写 capture 量出的 rect 名，不手填坐标。节奏点用 `match-cut`（`every: "beat"`）或 `kinetic`，实拍里有屏幕时用 `footage.screen` 把界面贴进去，并用 `screen.steps` 换页或滚动，别让贴好的屏幕干放着（节奏门控 4.5s）。
 
+- 开场文字场景的主标题 2.5 秒内出现（opening 门控）：旁白先说日期、人名时，把 cue 钉在人名上，而不是后面的动词。
 - 连续同类型场景不超过 2 个（variety 门）。
 - 静态类（title/quote/bullets/chapter/sources）合计不超过约 40% 的场景（documentary 30%）。
 - 图表里的数字必须来自 research 的 `value`；不要在分镜里手算新数字。
