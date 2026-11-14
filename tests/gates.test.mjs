@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, timingsGate, normalizeLicense, summarize, questionGate, echoGate, layoutGate, densityGate } from "../cli/lib/review/gates.mjs";
 import { screenEvents } from "../cli/lib/review/gates.mjs";
-import { checkNotes, noteKind } from "../cli/lib/review/look-check.mjs";
+import { checkNotes, checkTone, meanLuma, mergePasses, median, noteKind, toneOf } from "../cli/lib/review/look-check.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { example } from "./helpers.mjs";
 
@@ -283,4 +283,34 @@ test("checkNotes: still/late notes the timeline contradicts are marked doubtful,
   assert.equal(noteKind({ issue: "x", kind: "late" }), "late");
   assert.equal(noteKind({ issue: "时间轴约5秒无新元素" }), "still");
   assert.equal(checkNotes(null, notes), 0);
+});
+
+test("mergePasses: median score, a point several models raise counts once with how many saw it", () => {
+  const n = (t, scene, issue, severity = "medium") => ({ t, scene, issue, severity });
+  const { score, notes } = mergePasses([
+    { score: 6, notes: [n(10, "a", "画面静止"), n(30, "b", "文字太小")] },
+    { score: 8, notes: [n(11.5, "a", "无变化", "high"), n(40, "b", "裁切不当")] },
+    { score: 7, notes: [n(11, "b", "画面静止")] }, // other scene: not the same point
+  ], { near: 2 });
+  assert.equal(score, 7);
+  assert.deepEqual(notes.map((x) => [x.t, x.scene, x.seen, x.severity]), [[10, "a", 2, "high"], [11, "b", 1, "medium"], [30, "b", 1, "medium"], [40, "b", 1, "medium"]]);
+  assert.equal(notes[0].issue, "无变化"); // the most severe wording, at the first pass's time
+  assert.equal(median([3, null, 9, 4, 1]), 3.5);
+  assert.equal(mergePasses([{ score: null, notes: [] }]).score, null);
+});
+
+test("checkTone: dark/bright claims held against the video's median, jumps against the frame before the cut", () => {
+  assert.equal(toneOf({ issue: "切入明亮背景，与暗色前段反差突兀" }), "jump");
+  assert.equal(toneOf({ issue: "画面偏暗看不清" }), "dark");
+  assert.equal(toneOf({ issue: "背景过曝" }), "bright");
+  assert.equal(toneOf({ issue: "文字太小" }), null);
+  assert.equal(checkTone("dark", { luma: 0.2, median: 0.18 }).doubtful, true);
+  assert.equal(checkTone("dark", { luma: 0.08, median: 0.18 }).doubtful, false);
+  assert.equal(checkTone("bright", { luma: 0.19, median: 0.18 }).doubtful, true);
+  assert.equal(checkTone("bright", { luma: 0.4, median: 0.18 }).doubtful, false);
+  assert.match(checkTone("jump", { luma: 0.22, median: 0.2, before: 0.18 }).why, /18% → 22% across the cut: no real jump/);
+  assert.equal(checkTone("jump", { luma: 0.4, median: 0.2, before: 0.1 }).doubtful, false);
+  assert.equal(checkTone("jump", { luma: 0.4, median: 0.2 }), null); // nothing before the first scene
+  assert.equal(checkTone("dark", { luma: NaN, median: 0.2 }), null);
+  assert.ok(Math.abs(meanLuma(Buffer.from([255, 255, 255, 0, 0, 0])) - 0.5) < 1e-9);
 });

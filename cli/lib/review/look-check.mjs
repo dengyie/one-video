@@ -54,3 +54,65 @@ export function checkNotes(timeline, notes, { maxGap = 3, lead = 3 } = {}) {
   }
   return doubtful;
 }
+
+// Several reviews of one sheet, each from a different model: scores vary by a point or more between
+// runs and a single run invents notes, so the score is the median and a note counts once per pass
+// that raised it. Two notes are the same point when they sit in the same scene within `near` seconds
+// and make the same kind of claim; the most severe wording is kept. Returns { score, notes } with
+// `seen` (passes that raised it) on each note.
+const RANK = { high: 3, medium: 2, low: 1 };
+export const median = (xs) => {
+  const v = xs.filter(Number.isFinite).sort((a, b) => a - b);
+  return v.length ? (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2) : null;
+};
+export function mergePasses(passes, { near = 2 } = {}) {
+  const notes = [];
+  passes.forEach((p, k) => {
+    for (const n of p.notes) {
+      const same = notes.find((m) => !m.passes.has(k) && m.scene === n.scene && Math.abs(m.t - n.t) <= near && noteKind(m) === noteKind(n));
+      if (!same) { notes.push({ ...n, passes: new Set([k]) }); continue; }
+      same.passes.add(k);
+      if (RANK[n.severity] > RANK[same.severity]) Object.assign(same, { ...n, t: same.t, passes: same.passes });
+    }
+  });
+  return {
+    score: median(passes.map((p) => p.score)),
+    notes: notes.map(({ passes: s, ...n }) => ({ ...n, seen: s.size })).sort((a, b) => a.t - b.t),
+  };
+}
+
+// Brightness claims, checked on the frames themselves. Runs of the same video were seen to call one
+// scene both too dark and too bright, so a claim is held against the video's own level:
+// dark/bright against the median of frames sampled across the video, a jump against the frame just
+// before the scene began. `luma` is 0–1 (Rec. 709 mean).
+const DARK = /太暗|偏暗|过暗|昏暗|发黑|看不清.*暗/;
+const BRIGHT = /太亮|偏亮|过亮|过曝|刺眼|发白/;
+const JUMP = /反差|突兀|跳变|亮度.*(变化|跳)|明暗.*(突变|跳)/;
+export function toneOf(n) {
+  const text = `${n.issue ?? ""}`;
+  if (JUMP.test(text) && /亮|暗|明/.test(text)) return "jump";
+  if (DARK.test(text)) return "dark";
+  if (BRIGHT.test(text)) return "bright";
+  return null;
+}
+export const meanLuma = (rgb) => {
+  let sum = 0;
+  for (let i = 0; i + 2 < rgb.length; i += 3) sum += 0.2126 * rgb[i] + 0.7152 * rgb[i + 1] + 0.0722 * rgb[i + 2];
+  return sum / (rgb.length / 3) / 255;
+};
+// { luma, median, before } → the check for one note of tone `tone`. `jumpMin`: a change in mean
+// level smaller than this between scenes is not a jump; `margin`: how far past the median counts.
+export function checkTone(tone, { luma, median: mid, before }, { jumpMin = 0.08, margin = 0.02 } = {}) {
+  if (!Number.isFinite(luma) || !Number.isFinite(mid)) return null;
+  const pct = (v) => `${Math.round(v * 100)}%`;
+  if (tone === "dark") return luma >= mid - margin
+    ? { doubtful: true, why: `frame level ${pct(luma)} is no darker than the video's median ${pct(mid)}` }
+    : { doubtful: false, why: `frame level ${pct(luma)} vs median ${pct(mid)}` };
+  if (tone === "bright") return luma <= mid + margin
+    ? { doubtful: true, why: `frame level ${pct(luma)} is no brighter than the video's median ${pct(mid)}` }
+    : { doubtful: false, why: `frame level ${pct(luma)} vs median ${pct(mid)}` };
+  if (tone === "jump" && Number.isFinite(before)) return Math.abs(luma - before) < jumpMin
+    ? { doubtful: true, why: `level ${pct(before)} → ${pct(luma)} across the cut: no real jump` }
+    : { doubtful: false, why: `level ${pct(before)} → ${pct(luma)} across the cut` };
+  return null;
+}

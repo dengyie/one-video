@@ -9,7 +9,8 @@ import { lookPrompt, sceneLine } from "../lib/prompts/index.mjs";
 import { busyWindows, cellTime, sceneAt, sheetPlan, writeSheets } from "../lib/vision/sheet.mjs";
 import { resolveVideo } from "../lib/publish/renders.mjs";
 import { videoPath } from "./render.mjs";
-import { checkNotes } from "../lib/review/look-check.mjs";
+import { checkNotes, checkTone, meanLuma, median, mergePasses, toneOf } from "../lib/review/look-check.mjs";
+import { frameRgb } from "../lib/vision/screen.mjs";
 import { buildHandoff, handoffPath, handoffRel } from "../lib/publish/handoff.mjs";
 
 export { sceneAt, sheetPlan, writeSheets };
@@ -56,36 +57,70 @@ export async function look(args) {
   // Timeline time from here on: a part render's cells are shifted by where it starts.
   const sheets = raw.map((s) => ({ ...s, t0: +(s.t0 + offset).toFixed(3), times: s.times?.map((t) => +(t + offset).toFixed(2)) }));
   const config = { llm: { ...project.config.llm, ...(args.models ? { models: String(args.models).split(",") } : {}) } };
-  log(`look: ${sheets.length} sheet(s) → ${llmConfig(config).models.join(" / ")}`);
+    // Each sheet is read by `--passes` models in turn (each pass starts one further down the list):
+  // the score is their median and a note one pass alone raised is shown as such.
+  const passes = Math.max(1, Number(args.passes ?? 2));
+  const models = llmConfig(config).models;
+  log(`look: ${sheets.length} sheet(s) × ${passes} pass(es) → ${models.join(" / ")}`);
   const reviews = [], notes = [];
   for (const [k, s] of sheets.entries()) {
     const end = s.t0 + s.cells * s.step;
     const scenes = (tl?.scenes ?? []).filter((sc) => sc.start < end && sc.start + sc.duration > s.t0).map(sceneLine).join("\n") || "(no timeline)";
-    try {
-      const { data, model } = await ask({ prompt: lookPrompt({ sheet: s, scenes, focus: args.focus }), images: [imagePart(s.file)], json: true, maxTokens: 4000, config });
-      reviews.push({ sheet: relative(project.root, s.file), model, score: Number(data.score) || null, summary: String(data.summary ?? ""), truncated: !!data.truncated });
-      for (const n of Array.isArray(data.notes) ? data.notes : []) {
-        // The stamped time read off the cell, snapped to it; the cell index only when no usable time came back.
-        const read = Number(n.t), k = Number.isFinite(read) && read >= s.t0 && read <= s.t0 + s.cells * s.step ? Math.floor((read - s.t0) / s.step) : Number(n.cell) || 0;
-        const t = cellTime(s, Math.max(0, Math.min(s.cells - 1, k)));
-        notes.push({ t, scene: sceneAt(tl, t), severity: ["high", "medium", "low"].includes(n.severity) ? n.severity : "medium", ...(typeof n.kind === "string" && { kind: n.kind }), ...(Array.isArray(n.span) && { span: n.span }), issue: String(n.issue ?? ""), fix: String(n.fix ?? "") });
+    const runs = [];
+    for (let p = 0; p < passes; p++) {
+      const order = [...models.slice(p % models.length), ...models.slice(0, p % models.length)];
+      try {
+        const { data, model } = await ask({ prompt: lookPrompt({ sheet: s, scenes, focus: args.focus }), images: [imagePart(s.file)], json: true, maxTokens: 4000, config: { llm: { ...config.llm, models: order } } });
+        const run = { model, score: Number(data.score) || null, summary: String(data.summary ?? ""), truncated: !!data.truncated, notes: [] };
+        for (const n of Array.isArray(data.notes) ? data.notes : []) {
+          // The stamped time read off the cell, snapped to it; the cell index only when no usable time came back.
+          const read = Number(n.t), c = Number.isFinite(read) && read >= s.t0 && read <= s.t0 + s.cells * s.step ? Math.floor((read - s.t0) / s.step) : Number(n.cell) || 0;
+          const t = cellTime(s, Math.max(0, Math.min(s.cells - 1, c)));
+          run.notes.push({ t, scene: sceneAt(tl, t), severity: ["high", "medium", "low"].includes(n.severity) ? n.severity : "medium", ...(typeof n.kind === "string" && { kind: n.kind }), ...(Array.isArray(n.span) && { span: n.span }), issue: String(n.issue ?? ""), fix: String(n.fix ?? ""), model });
+        }
+        runs.push(run);
+        log(`  sheet ${k + 1}.${p + 1}: ${data.score ?? "?"}/10 (${model})${data.truncated ? " [reply cut off; kept complete notes]" : ""} ${data.summary ?? ""}`);
+      } catch (e) {
+        warn(`sheet ${k + 1} pass ${p + 1}: ${e.message}`);
       }
-      log(`  sheet ${k + 1}: ${data.score ?? "?"}/10 (${model})${data.truncated ? " [reply cut off; kept complete notes]" : ""} ${data.summary ?? ""}`);
-    } catch (e) {
-      warn(`sheet ${k + 1}: ${e.message}`);
     }
+    if (!runs.length) continue;
+    const merged = mergePasses(runs, { near: Math.max(2, s.step * 1.5) });
+    reviews.push({ sheet: relative(project.root, s.file), score: merged.score, passes: runs.map(({ notes: _, ...r }) => r) });
+    notes.push(...merged.notes.map((n) => (runs.length > 1 ? { ...n, of: runs.length } : n)));
   }
   if (!reviews.length) throw new UserError("no sheet was reviewed; check the model list (onevideo doctor) or pass --models");
   notes.sort((a, b) => a.t - b.t);
   // "Nothing changes here" and "shows up late" are checked against the timeline's own events.
-  const doubtful = checkNotes(tl, notes);
+  let doubtful = checkNotes(tl, notes);
+  // "Too dark", "too bright", "a jarring jump in level": measured on the frames, against the video's own level.
+  const toned = notes.filter((n) => !n.check && toneOf(n));
+  if (toned.length) {
+    const level = async (t) => meanLuma((await frameRgb(video, { t: Math.max(0, t - offset), width: 96 })).rgb);
+    const span = tl?.duration ?? sheets.at(-1).t0 + sheets.at(-1).cells * sheets.at(-1).step;
+    const samples = [];
+    for (let t = offset + 1; t < span; t += Math.max(2, span / 40)) samples.push(await level(t).catch(() => NaN));
+    const mid = median(samples);
+    for (const n of toned) {
+      const sc = tl?.scenes?.find((x) => x.id === n.scene);
+      const tone = toneOf(n);
+      const at = tone === "jump" && sc ? sc.start + Math.min(1, sc.duration / 2) : n.t;
+      const before = tone === "jump" && sc && sc.start - 0.5 > offset ? await level(sc.start - 0.5).catch(() => NaN) : NaN;
+      const check = checkTone(tone, { luma: await level(at).catch(() => NaN), median: mid, before });
+      if (!check) continue;
+      n.check = check;
+      if (check.doubtful) doubtful++;
+    }
+  }
   const scored = reviews.filter((r) => r.score);
   const score = scored.length ? +(scored.reduce((a, r) => a + r.score, 0) / scored.length).toFixed(1) : null;
   const result = { at: new Date().toISOString(), video: relative(project.root, video), score, reviews, notes };
   writeJson(join(outDir, "look.json"), result);
   log(`score ${score ?? "?"}/10 over ${reviews.length}/${sheets.length} sheet(s)`);
   const icon = { high: "✗", medium: "⚠", low: "·" };
-  for (const n of notes) log(`${n.check?.doubtful ? "?" : icon[n.severity]} ${n.t.toFixed(1).padStart(5)}s ${String(n.scene ?? "").padEnd(10)} ${n.issue}${n.fix ? `\n         → ${n.fix}` : ""}${n.check?.doubtful ? `\n         ? ${n.check.why}` : ""}`);
+  for (const n of notes) log(`${n.check?.doubtful ? "?" : icon[n.severity]} ${n.t.toFixed(1).padStart(5)}s ${String(n.scene ?? "").padEnd(10)} ${n.of ? `[${n.seen}/${n.of}] ` : ""}${n.issue}${n.fix ? `\n         → ${n.fix}` : ""}${n.check?.doubtful ? `\n         ? ${n.check.why}` : ""}`);
+  const lone = notes.filter((n) => n.of && n.seen < 2).length;
+  if (lone) log(`[1/${passes}] ${lone} note(s) only one model raised: weigh them lower than the ones several agree on`);
   if (doubtful) log(`? ${doubtful} note(s) the timeline contradicts: check those stills before acting on them`);
   if (!notes.length) warn("no notes returned; check the sheets yourself");
   log(`→ ${relative(project.root, join(outDir, "look.json"))} (a second opinion: confirm on the sheets or with stills before changing the storyboard)`);
