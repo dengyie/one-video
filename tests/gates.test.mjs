@@ -389,6 +389,18 @@ test("rhythmGate: a cue just after a still stretch whose line starts in it moves
   assert.doesNotMatch(rhythmGate(tl, {})[0].msg, /move cue/, "a cue nothing uses is no reveal");
 });
 
+test("rhythmGate: a written shot in a still stretch that barely moves is pushed further, its hold with it", () => {
+  const tl = lookTl();
+  Object.assign(tl.scenes[1], { type: "unit-grid", shots: [{ t: 0, zoom: 1, k: 0 }, { t: 6, zoom: 1.04, k: 1 }, { t: 8, zoom: 1.04, k: 2 }] });
+  const [gap] = rhythmGate(tl, {});
+  assert.match(gap.msg, /— the shot at 16\.0s barely moves — push it to zoom 1\.06 \(from 1\.04\)/);
+  assert.deepEqual([gap.at.field, gap.fix], ["shots", { scene: "b", path: ["shots", 1, "zoom"], value: 1.06, add: true, with: [{ path: ["shots", 2, "zoom"], value: 1.06 }] }]);
+  tl.scenes[1].shots[1].t = 3;
+  assert.doesNotMatch(rhythmGate(tl, {})[0].msg, /barely moves/, "pushed, it would still leave too long a stretch");
+  tl.scenes[1].shots = [{ t: 0, zoom: 1 }, { t: 6, zoom: 1.04 }];
+  assert.doesNotMatch(rhythmGate(tl, {})[0].msg, /barely moves/, "a shot the compiler made is not the storyboard's to change");
+});
+
 test("rhythmGate: a scene with no shot track is offered the auto one", () => {
   const tl = lookTl();
   delete tl.scenes[1].shots;
