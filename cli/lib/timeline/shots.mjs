@@ -69,6 +69,38 @@ export function rampShots(ramp, shots, duration) {
   return added.length ? all() : own;
 }
 
+// A shot that barely moves the frame from the one before: no cut, zoom and position within a few
+// percent, under a degree of roll. A viewer doesn't read it as anything new.
+export const weakMove = (prev, sh) => !!prev && !sh.cut && Math.abs((sh.zoom ?? 1) - (prev.zoom ?? 1)) < 0.05 && Math.abs((sh.x ?? 0.5) - (prev.x ?? 0.5)) < 0.03 && Math.abs((sh.y ?? 0.5) - (prev.y ?? 0.5)) < 0.03 && Math.abs((sh.rotate ?? 0) - (prev.rotate ?? 0)) < 1;
+
+// A stretch longer than `maxStill` with nothing new on screen (no reveal in `times`, no real shot
+// move) gets a slow drift every ≤3 s: 6% in (out once past 1.2×), travelling over most of the gap.
+// Authored shots win: a drift waits for a move in progress, keeps 0.3 s off any shot, and is dropped
+// when it would leave the next move too small to see.
+export function stillShots(shots, times, duration, maxStill) {
+  if (!shots?.length) return shots;
+  let all = [...shots].sort((a, b) => a.t - b.t);
+  const marks = [...new Set([0, ...times, ...all.filter((sh, i) => !weakMove(all[i - 1], sh)).map((sh) => sh.t)])]
+    .filter((t) => t >= 0 && t <= duration).sort((a, b) => a - b);
+  marks.push(duration);
+  for (let i = 0; i + 1 < marks.length; i++) {
+    const from = marks[i], to = marks[i + 1], len = to - from;
+    if (len <= maxStill) continue;
+    const n = Math.ceil(len / 3) - 1, step = len / (n + 1);
+    for (let k = 1; k <= n; k++) {
+      const busy = Math.max(0, ...all.filter((sh) => sh.t <= from + k * step && !sh.cut).map((sh) => sh.t + sh.ease));
+      const t = Math.max(from + k * step, busy);
+      if (t > to - 0.8 || all.some((sh) => Math.abs(sh.t - t) < 0.3)) continue;
+      const v = [...all].reverse().find((sh) => sh.t <= t) ?? all[0];
+      const sh = { t: r3(t), zoom: r3(v.zoom + (v.zoom + 0.06 > 1.2 ? -0.06 : 0.06)), x: v.x, y: v.y, rotate: v.rotate ?? 0, cut: false, ease: r3(step * 0.9) };
+      const next = all.find((s) => s.t > t);
+      if (next && weakMove(sh, next) && !weakMove(v, next)) continue;
+      all = [...all, sh].sort((a, b) => a.t - b.t);
+    }
+  }
+  return all.length > shots.length ? all : shots;
+}
+
 // Moments a viewer feels as hits, in seconds with a weight: scene boundaries, hard shot cuts and
 // slammed words (half weight).
 export function hardCuts(timeline) {

@@ -17,7 +17,8 @@ import { normalizeForMatch } from "../core/text.mjs";
 import { resolveAt } from "./cues.mjs";
 import { CAMERA_DEFAULT, boundaryTransition, normTransition } from "./transitions.mjs";
 import { MOTION_GAIN, MOTION_SFX, motionCues, overlaySound, sfxFile, sfxVariants, slamWord, transitionSfx } from "./sfx.mjs";
-import { bestOffset, compileShots, hardCuts, rampShots } from "./shots.mjs";
+import { bestOffset, compileShots, hardCuts, rampShots, stillShots } from "./shots.mjs";
+import { MAX_STILL, screenEvents } from "./events.mjs";
 import { anchorNames } from "./anchors.mjs";
 import { resolveDeviceRects, resolvePropTimes, settled } from "./props.mjs";
 import { collectAssetRefs, credit, libraryCredit, sourceList } from "./credits.mjs";
@@ -238,6 +239,11 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     }
     const chapter = sb.chapter ?? sc.chapter;
     if (chapter) chapters.push({ title: chapter, start: r3(start) });
+    // A shot track also covers long stretches where nothing else changes (rhythm gate's maxStill).
+    if (shots && sb.type !== "sources" && sb.type !== "canvas") {
+      const seen = { id: sb.id, type: sb.type, start: 0, duration, cues, props, overlays, lines, captions: sb.captions ?? !readAloud(sb, lines) };
+      shots = stillShots(shots, screenEvents({ scenes: [seen] }).map((e) => e.t), duration, config.gates?.maxStill ?? MAX_STILL);
+    }
 
     scenes.push({
       id: sb.id,

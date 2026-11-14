@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
-import { AUTO_SHOTS, MOTION_SFX, bestOffset, compileShots, compileTimeline, hardCuts, motionCues, rampShots, resolveWhen, sfxVariants } from "../cli/lib/timeline/index.mjs";
+import { AUTO_SHOTS, MOTION_SFX, bestOffset, compileShots, compileTimeline, hardCuts, motionCues, rampShots, resolveWhen, screenEvents, sfxVariants, stillShots } from "../cli/lib/timeline/index.mjs";
 import { captionBand } from "../cli/lib/captions/index.mjs";
 import { beatsFile, detectBeats, everyFourth, gridBeats, snapToBar, snapToBeat } from "../cli/lib/audio/beats.mjs";
 import { rhythmGate, schemaGate } from "../cli/lib/review/gates.mjs";
@@ -291,6 +291,22 @@ test("a speed ramp on a still becomes camera moves that leave authored shots alo
   assert.deepEqual(mixed[2], { t: 4.28, zoom: 1.26, x: 0.47, y: 0.44, rotate: 0, cut: false, ease: 1.62 });
   assert.equal(mixed[3], own[2]);
   assert.equal(rampShots([{ t: 0, speed: 1 }], own, 10), own);
+});
+
+test("long still stretches on a shot track get a slow drift that keeps authored moves visible", () => {
+  const sh = (t, zoom, ease = 0.6) => ({ t, zoom, x: 0.5, y: 0.5, rotate: 0, cut: false, ease });
+  const own = [sh(0, 1), sh(1, 1.12)];
+  const out = stillShots(own, [6.5], 12, 4.5);
+  assert.deepEqual(out.map((s) => [s.t, s.zoom, s.ease]), [[0, 1, 0.6], [1, 1.12, 0.6], [3.75, 1.18, 2.475], [9.25, 1.12, 2.475]]);
+  const sc = { id: "s", start: 0, duration: 12, cues: { a: 6.5 }, shots: out };
+  const ev = screenEvents({ scenes: [sc] }).filter((e) => !e.weak).map((e) => e.t);
+  for (const [i, t] of [...ev, 12].entries()) if (i) assert.ok(t - ev[i - 1] <= 4.5, `gap before ${t}`);
+  // A drift that would leave the next authored push too small to see is dropped; no track, nothing added.
+  const push = [sh(0, 1), sh(5, 1.08)];
+  assert.equal(stillShots(push, [], 6, 4.5), push);
+  assert.equal(stillShots(undefined, [], 10, 4.5), undefined);
+  // A move still travelling holds the drift back until it lands.
+  assert.deepEqual(stillShots([sh(0, 1), sh(0.5, 1.1, 4)], [], 6, 4.5).map((s) => s.t), [0, 0.5, 4.5]);
 });
 
 test("resolveWhen refuses a beat past the scene end", () => {
