@@ -329,6 +329,10 @@ test("opening: a text-led hook whose first reveal waits past 2.5 s warns", () =>
     props: { kicker: "2026", lines: [{ text: "辞任", cue: "quit" }] }, overlays: [{ type: "flash", t: 0.5 }], ...over }] });
   const [w] = openingGate(hook(), {});
   assert.match(w.msg, /first 4\.0s of "hook" show only its backdrop — reveal the hook's main line by 2\.5s/);
+  assert.match(w.msg, /\(cue it on an earlier word,/, "no narration lines: no phrase");
+  const spoken = openingGate(hook({ lines: [{ text: "“2026年11月12日”，黄仁勋辞去", start: 0.15 }, { text: "辞去CEO", start: 3 }] }), {})[0];
+  assert.match(spoken.msg, /move cue "quit" to "2026年11月12日" \(0\.1s\)/);
+  assert.deepEqual(spoken.at, { scene: "hook", from: 0, to: 4.04, field: "cues" });
   assert.deepEqual(openingGate(hook({ cues: { quit: 1.8 } }), {}), []);
   assert.deepEqual(openingGate(hook({ overlays: [{ type: "word", t: 1 }] }), {}), []);
   assert.deepEqual(openingGate(hook({ props: { lines: [{ text: "辞任" }, { text: "x", cue: "quit" }] } }), {}), [], "an uncued line shows right away");

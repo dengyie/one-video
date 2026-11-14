@@ -204,8 +204,15 @@ export function openingGate(timeline, config) {
   propTimes(props, (t) => times.push(t));
   const first = Math.min(...times.filter(Number.isFinite));
   if (!(first > g.hookReveal) || first >= sc.duration) return [];
-  return [issue("warn", "opening", `the first ${first.toFixed(1)}s of "${sc.id}" show only ${sc.backdrop ? "its backdrop" : "the background"} — reveal the hook's main line by ${g.hookReveal}s (cue it on an earlier word, or open on footage; gates.hookReveal)`, { scene: sc.id, from: sc.start, to: sc.start + first, field: "cues" })];
+  // The cue holding it back, and the first words spoken in time to move it to.
+  const late = Object.entries(sc.cues ?? {}).find(([, t]) => t === first)?.[0];
+  const line = (sc.lines ?? []).find((l) => l.start <= g.hookReveal && linePhrase(l.text));
+  const how = late && line ? `move cue "${late}" to "${linePhrase(line.text)}" (${line.start.toFixed(1)}s)` : line ? `cue it on "${linePhrase(line.text)}" (${line.start.toFixed(1)}s)` : "cue it on an earlier word";
+  return [issue("warn", "opening", `the first ${first.toFixed(1)}s of "${sc.id}" show only ${sc.backdrop ? "its backdrop" : "the background"} — reveal the hook's main line by ${g.hookReveal}s (${how}, or open on footage; gates.hookReveal)`, { scene: sc.id, from: sc.start, to: sc.start + first, field: "cues" })];
 }
+
+// A line's opening words, up to its first punctuation (12 characters at most): a phrase a cue can name.
+const linePhrase = (text) => String(text ?? "").replace(/^[\s"'“‘（(《【]+/, "").split(/[，。、；：！？,.;:!?\s“”"（）()《》【】]/)[0].slice(0, 12);
 
 // The narration line to hang a reveal on in a still stretch [from, to] (timeline seconds): the one
 // starting nearest its middle, at least a second from either end. `phrase` is its opening words, a cue value.
@@ -213,8 +220,7 @@ export function openingGate(timeline, config) {
 function gapLine(sc, from, to) {
   const mid = (from + to) / 2;
   const lines = (sc?.lines ?? []).map((l) => ({ t: sc.start + l.start, text: String(l.text ?? "") }));
-  const opening = (text) => text.replace(/^[\s"'“‘（(《【]+/, "").split(/[，。、；：！？,.;:!?\s“”"（）()《》【】]/)[0].slice(0, 8);
-  const fits = lines.map((l, i) => ({ ...l, phrase: opening(l.text) }))
+  const fits = lines.map((l, i) => ({ ...l, phrase: linePhrase(l.text) }))
     .filter((l, i) => l.phrase && l.t > from + 1 && l.t < to - 1 && !lines.slice(0, i).some((e) => e.text.includes(l.phrase)));
   const best = fits.sort((a, b) => Math.abs(a.t - mid) - Math.abs(b.t - mid))[0];
   return best ? { t: best.t, phrase: best.phrase } : null;
