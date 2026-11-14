@@ -338,6 +338,18 @@ test("matchGates: a note a timeline gate also flags, in its scene and stretch, i
   assert.equal(early[1].gate.gate, "opening", "only a stall or late reveal meets the opening gate");
 });
 
+test("rhythmGate: a still stretch names the narration line to cue a reveal on", () => {
+  const tl = lookTl();
+  tl.scenes[1].lines = [{ text: "开场", start: 0.5 }, { text: "“英伟达”市值，跌了三成", start: 5.5 }, { text: "最后", start: 9.5 }];
+  const [gap] = rhythmGate(tl, {});
+  assert.match(gap.msg, /cue a reveal on "英伟达" \(15\.5s\)/);
+  assert.deepEqual(gap.at, { scene: "b", from: 12, to: 20, field: "cues" });
+  tl.scenes[1].lines = [{ text: "英伟达市值很高", start: 0.5 }, { text: "英伟达市值", start: 5.5 }, { text: "跌了三成", start: 7 }];
+  assert.match(rhythmGate(tl, {})[0].msg, /"跌了三成" \(17\.0s\)/, "a phrase an earlier line says would cue there");
+  tl.scenes[1].lines = [{ text: "最后", start: 9.5 }];
+  assert.match(rhythmGate(tl, {})[0].msg, /— add a cue, shot or overlay/, "no line inside the stretch: no phrase");
+});
+
 test("storyboardSpot: the line of the scene's field to change, else of the scene", () => {
   const text = JSON.stringify({ scenes: [
     { id: "a", type: "title", overlays: [{ type: "word", text: "x" }] },

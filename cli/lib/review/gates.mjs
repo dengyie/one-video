@@ -207,6 +207,19 @@ export function openingGate(timeline, config) {
   return [issue("warn", "opening", `the first ${first.toFixed(1)}s of "${sc.id}" show only ${sc.backdrop ? "its backdrop" : "the background"} — reveal the hook's main line by ${g.hookReveal}s (cue it on an earlier word, or open on footage; gates.hookReveal)`, { scene: sc.id, from: sc.start, to: sc.start + first, field: "cues" })];
 }
 
+// The narration line to hang a reveal on in a still stretch [from, to] (timeline seconds): the one
+// starting nearest its middle, at least a second from either end. `phrase` is its opening words, a cue value.
+// A phrase an earlier line also says would put the cue there, so that line is passed over.
+function gapLine(sc, from, to) {
+  const mid = (from + to) / 2;
+  const lines = (sc?.lines ?? []).map((l) => ({ t: sc.start + l.start, text: String(l.text ?? "") }));
+  const opening = (text) => text.replace(/^[\s"'“‘（(《【]+/, "").split(/[，。、；：！？,.;:!?\s“”"（）()《》【】]/)[0].slice(0, 8);
+  const fits = lines.map((l, i) => ({ ...l, phrase: opening(l.text) }))
+    .filter((l, i) => l.phrase && l.t > from + 1 && l.t < to - 1 && !lines.slice(0, i).some((e) => e.text.includes(l.phrase)));
+  const best = fits.sort((a, b) => Math.abs(a.t - mid) - Math.abs(b.t - mid))[0];
+  return best ? { t: best.t, phrase: best.phrase } : null;
+}
+
 // Screen rhythm on the compiled timeline: the longest stretches where nothing new happens on
 // screen (no scene, cue, real shot move or overlay), and runs of the same transition. Warnings only.
 export function rhythmGate(timeline, config) {
@@ -218,7 +231,9 @@ export function rhythmGate(timeline, config) {
   const gaps = [...events, end].slice(1).map((e, i) => ({ from: events[i], to: e, len: e.t - events[i].t }))
     .filter((x) => x.len > g.maxStill && x.from.scene !== "credits" && timeline.scenes.find((s) => s.id === x.from.scene)?.type !== "sources");
   for (const x of gaps.sort((a, b) => b.len - a.len).slice(0, 5)) {
-    out.push(issue("warn", "rhythm", `${x.len.toFixed(1)}s with nothing new on screen from ${x.from.t.toFixed(1)}s (scene "${x.from.scene}") — add a cue, shot or overlay (max ${g.maxStill}s)`, { scene: x.from.scene, from: x.from.t, to: x.to.t }));
+    const line = gapLine(timeline.scenes.find((s) => s.id === x.from.scene), x.from.t, x.to.t);
+    const where = line ? `cue a reveal on "${line.phrase}" (${line.t.toFixed(1)}s), or add a shot or overlay` : "add a cue, shot or overlay";
+    out.push(issue("warn", "rhythm", `${x.len.toFixed(1)}s with nothing new on screen from ${x.from.t.toFixed(1)}s (scene "${x.from.scene}") — ${where} (max ${g.maxStill}s)`, { scene: x.from.scene, from: x.from.t, to: x.to.t, ...(line && { field: "cues" }) }));
   }
   const types = timeline.scenes.slice(1).map((s) => s.transitionIn?.type);
   // Cuts between scenes on the same device are the device staying put, not a transition.
