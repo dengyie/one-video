@@ -17,7 +17,7 @@
 | `assets/` | 素材来源（NASA / Wikimedia / Openverse / Pexels 搜索与排序）、按场景推荐候选（`suggest.mjs`：检索词 → 检索 → 排序 → 清单条目）、取素材（`fetchAsset`）、媒体文件（剪片、帧序列、深度 / 亮度图路径） | `index.mjs` |
 | `vision/` | 画面分析：深度主体与对比度、屏幕检测、UI 截图（自起 Chrome）、联系表、成片 QC | `subject` `screen` `capture` `sheet` `qc` |
 | `timeline/` | 时间线编译：`compile.mjs` 编排，各道工序分文件——`cues`（短语 / 节拍定时）、`transitions`、`sfx`、`shots`（镜头轨、硬切、音乐偏移）、`props`（画布 / 设备等的内部时间）、`anchors`（叠层锚点）、`credits`、`events`（画面变化时刻，rhythm 门控与 look 复核共用） | `index.mjs` |
-| `review/` | 门禁（数字核对、分镜、语速、节奏、授权……）与 `checkProject` 汇总，`fixPlan` 套用门控自带修法 | `gates.mjs` `check.mjs` `fixes.mjs` |
+| `review/` | 门禁（数字核对、分镜、语速、节奏、授权……）与 `checkProject` 汇总，`fixPlan` 套用门控自带修法 | `gates.mjs` `check.mjs` `fixes.mjs` `reveals.mjs`（旁白数字 → 图表元素 cue） |
 | `publish/` | 发布包（章节、致谢、简介）、交接页、渲染版本记录 | `kit` `handoff` `renders` |
 | `archive/` | 归档到 MangoDrive（OpenList REST）：上传、回读校验 sha256、`plan/archive.json` 记录、裁剪旧渲染、恢复；地址与账号只从环境变量读 | `index.mjs` `drive.mjs` |
 

@@ -14,7 +14,7 @@
   "props": { "cards": [{ "value": 135, "format": { "prefix": "$" }, "label": "发行价", "cue": "price" }] } }
 ```
 
-- **cues** 把画面变化钉在旁白上：值可以是旁白里的短语（取该短语开始说出的时刻）、`{phrase, offset}` 或秒数（负数从场景结尾倒数，如 `-2.5`；没有按比例的写法，`0.8` 就是 0.8 秒）。props 里的 `cue`/`drawCue`/`periodCues` 引用这些名字；引用未定义的 cue 会报错。
+- **cues** 把画面变化钉在旁白上（定义了却没有任何元素、叠层、镜头或音效引用的 cue 不会让画面变化，validate 会警告）：值可以是旁白里的短语（取该短语开始说出的时刻）、`{phrase, offset}` 或秒数（负数从场景结尾倒数，如 `-2.5`；没有按比例的写法，`0.8` 就是 0.8 秒）。props 里的 `cue`/`drawCue`/`periodCues` 引用这些名字；引用未定义的 cue 会报错。
 - 没写 cue 的元素按默认节奏在场景前 55% 依次出现。
 - `enter`/`exit`：fade · slide · push · whip · zoom · punch · iris · wipe · clock · dip · through · cut；不写用风格默认。按语义选（见 motion-rules 的“转场”）。
 - `shots`：镜头轨。每个场景至少 `"auto"`，关键场景手写推近/硬切。图表和数字卡上 auto 只做 1.03 的居中呼吸，手写推镜不超过 1.1（再大边上的标签会出画），节奏靠 cue。
@@ -67,4 +67,4 @@
 
 ## 检查
 
-`onevideo validate` 之后 `onevideo tts`、`onevideo depth`、`onevideo timeline`，处理 rhythm / layout / density 警告，再 `onevideo preview`。门控自带修法的问题（叠层位置、开场主标题 cue 太晚、没写镜头轨的非图表场景出现节奏空档时补 `"shots": "auto"`、连续相同转场时改最后一个场景的 `enter`（章节用 wipe，其余 cut，连续 cut 改短 fade）；同一场景先补镜头轨，再按新机位放叠层）可以用 `onevideo fix` 先看清单（dry run，逐轮套用、每轮重新检查，报错变多就拒绝），确认后 `onevideo fix --apply` 写回 `plan/storyboard.json`（原文件备份到 `out/qc/storyboard.before-fix.json`），然后重跑 `onevideo timeline`、`onevideo preview`，分镜需要重新审批。之后，自己先看 `out/qc/preview-*.jpg`，再交给用户审批（preview 阶段），通过后才渲染整片。
+`onevideo validate` 之后 `onevideo tts`、`onevideo depth`、`onevideo timeline`，处理 rhythm / layout / density 警告，再 `onevideo preview`。门控自带修法的问题（叠层位置、开场主标题 cue 太晚、没写镜头轨的非图表场景出现节奏空档时补 `"shots": "auto"`、图表空档里旁白念到的数字（折线的点、数字卡、对比两侧、饼图分段，念了总数但没有合计行时加一行“合计”）钉到念到它的词上、定义了却没有元素引用的 cue（如 compare 两侧没写 `cue`）接回同名元素、连续相同转场时改最后一个场景的 `enter`（章节用 wipe，其余 cut，连续 cut 改短 fade）；同一场景先补镜头轨，再按新机位放叠层）可以用 `onevideo fix` 先看清单（dry run，逐轮套用、每轮重新检查，报错变多就拒绝），确认后 `onevideo fix --apply` 写回 `plan/storyboard.json`（原文件备份到 `out/qc/storyboard.before-fix.json`），然后重跑 `onevideo timeline`、`onevideo preview`，分镜需要重新审批。之后，自己先看 `out/qc/preview-*.jpg`，再交给用户审批（preview 阶段），通过后才渲染整片。
