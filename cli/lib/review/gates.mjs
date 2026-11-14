@@ -7,7 +7,7 @@ import { sceneLines } from "../captions/lines.mjs";
 import { captionBand } from "../captions/layout.mjs";
 import { countryCentroid } from "../library/geo.mjs";
 import { MAX_STILL, OVERLAY_EFFECTS, named, propTimes, screenEvents } from "../timeline/index.mjs";
-import { laidOut } from "../timeline/shots.mjs";
+import { laidOut, weakMove } from "../timeline/shots.mjs";
 import { numberReveals } from "./reveals.mjs";
 import { CUE_LEAD, phraseTime } from "../timeline/cues.mjs";
 
@@ -269,6 +269,32 @@ function earlierCue(timeline, sc, x, maxStill) {
   return null;
 }
 
+// A written shot in the stretch that barely moves (see weakMove): pushed further it is a move one
+// sees. Shots right after it holding its frame follow it, so a hold stays a hold. Charts and cards
+// stay within LAID_OUT_ZOOM. Only offered when it leaves fewer stretches too long and none here.
+function biggerShot(timeline, sc, x, maxStill) {
+  const shots = sc.shots ?? [];
+  const cap = laidOut(sc.type) ? LAID_OUT_ZOOM : 3;
+  const long = (tl) => stillGaps(tl, maxStill).filter((y) => y.from.scene === sc.id);
+  for (let i = 1; i < shots.length; i++) {
+    const sh = shots[i], prev = shots[i - 1];
+    if (sh.k === undefined || sc.start + sh.t <= x.from.t + 0.5 || sc.start + sh.t >= x.to.t - 0.5 || !weakMove(prev, sh)) continue;
+    let j = i + 1;
+    while (j < shots.length && shots[j].k !== undefined && !shots[j].cut && ["zoom", "x", "y", "rotate"].every((f) => shots[j][f] === sh[f])) j++;
+    const dir = sh.zoom < prev.zoom ? -1 : 1;
+    for (const step of [0.06, 0.08, 0.1]) {
+      const zoom = Math.round((prev.zoom + dir * step) * 100) / 100;
+      if (zoom > cap + 1e-9 || zoom < 1) continue;
+      const moved = { ...timeline, scenes: timeline.scenes.map((s) => (s === sc ? { ...s, shots: shots.map((h, n) => (n >= i && n < j ? { ...h, zoom } : h)) } : s)) };
+      const after = long(moved);
+      if (after.length < long(timeline).length && !after.some((y) => y.from.t < x.to.t && y.to.t > x.from.t)) {
+        return { t: sc.start + sh.t, from: sh.zoom, zoom, ks: shots.slice(i, j).map((h) => h.k) };
+      }
+    }
+  }
+  return null;
+}
+
 // Screen rhythm on the compiled timeline: the longest stretches where nothing new happens on
 // screen (no scene, cue, real shot move or overlay), and runs of the same transition. Warnings only.
 export function rhythmGate(timeline, config) {
@@ -287,13 +313,17 @@ export function rhythmGate(timeline, config) {
     const said = nums && Object.values(nums.cues).filter((p, i) => sc.start + nums.times[i] > x.from.t + 0.5 && sc.start + nums.times[i] < x.to.t - 0.5);
     // Otherwise a cue just after the stretch whose line starts in it moves to that line's opening.
     const early = !said?.length && sc && earlierCue(timeline, sc, x, g.maxStill);
+    // Or a written shot in it that barely moves gets pushed further.
+    const push = !said?.length && !early && sc && biggerShot(timeline, sc, x, g.maxStill);
     // A number's phrase ends on its digits or unit; a date's on 年/月/日/号.
     const dates = (said || []).filter((p) => /[年月日号]$/.test(p)).length;
     const what = !dates ? "numbers" : dates === said.length ? "dates" : "numbers and dates";
     const reveal = said?.length ? `cue its ${what} on the words that say them (${said.map((p) => `"${p}"`).join(", ")}), or ${shot} or an overlay` : null;
-    const where = reveal ?? (early ? `move cue "${early.name}" to "${early.phrase}" (${early.t.toFixed(1)}s), where its line starts, or ${shot} or an overlay` : null) ?? (line ? `cue a reveal on "${line.phrase}" (${line.t.toFixed(1)}s), or ${shot} or an overlay` : auto ? `${shot}, or a cue or overlay` : "add a cue, shot or overlay");
-    const fix = auto ? { scene: x.from.scene, path: ["shots"], value: "auto", add: true } : reveal ? { scene: x.from.scene, path: ["cues"], set: nums.cues, add: true, with: nums.refs } : early ? { scene: x.from.scene, path: ["cues", early.name], value: early.phrase } : null;
-    out.push(issue("warn", "rhythm", `${x.len.toFixed(1)}s with nothing new on screen from ${x.from.t.toFixed(1)}s (scene "${x.from.scene}") — ${where} (max ${g.maxStill}s)`, { scene: x.from.scene, from: x.from.t, to: x.to.t, field: auto ? "shots" : reveal || early || line ? "cues" : undefined }, fix));
+    const where = reveal ?? (early ? `move cue "${early.name}" to "${early.phrase}" (${early.t.toFixed(1)}s), where its line starts, or ${shot} or an overlay` : null)
+      ?? (push ? `the shot at ${push.t.toFixed(1)}s barely moves — push it to zoom ${push.zoom} (from ${push.from}), or add a cue or overlay` : null) ?? (line ? `cue a reveal on "${line.phrase}" (${line.t.toFixed(1)}s), or ${shot} or an overlay` : auto ? `${shot}, or a cue or overlay` : "add a cue, shot or overlay");
+    const fix = auto ? { scene: x.from.scene, path: ["shots"], value: "auto", add: true } : reveal ? { scene: x.from.scene, path: ["cues"], set: nums.cues, add: true, with: nums.refs } : early ? { scene: x.from.scene, path: ["cues", early.name], value: early.phrase }
+      : push ? { scene: x.from.scene, path: ["shots", push.ks[0], "zoom"], value: push.zoom, add: true, with: push.ks.slice(1).map((k) => ({ path: ["shots", k, "zoom"], value: push.zoom })) } : null;
+    out.push(issue("warn", "rhythm", `${x.len.toFixed(1)}s with nothing new on screen from ${x.from.t.toFixed(1)}s (scene "${x.from.scene}") — ${where} (max ${g.maxStill}s)`, { scene: x.from.scene, from: x.from.t, to: x.to.t, field: auto || push ? "shots" : reveal || early || line ? "cues" : undefined }, fix));
   }
   const types = timeline.scenes.slice(1).map((s) => s.transitionIn?.type);
   // Cuts between scenes on the same device are the device staying put, not a transition.

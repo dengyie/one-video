@@ -46,7 +46,8 @@ export function compileShots(spec, ctx) {
       zoom = sh.zoom ?? Math.min(3, Math.max(1, 0.8 / Math.max(fw, fh)));
       x = fx + fw / 2; y = fy + fh / 2;
     }
-    out.push({ t: r3(clampT(t, duration)), zoom: r3(zoom), x: r3(x), y: r3(y), rotate: r3(sh.rotate ?? 0), cut: Boolean(sh.cut), ease: r3(sh.ease ?? 0.6) });
+    // `k`: the written shot it comes from (its index in the storyboard's list), for fixes to point at.
+    out.push({ t: r3(clampT(t, duration)), zoom: r3(zoom), x: r3(x), y: r3(y), rotate: r3(sh.rotate ?? 0), cut: Boolean(sh.cut), ease: r3(sh.ease ?? 0.6), ...(Array.isArray(spec) && { k }) });
   }
   out.sort((a, b) => a.t - b.t);
   return { shots: out, errors };
