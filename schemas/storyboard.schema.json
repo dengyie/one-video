@@ -1215,6 +1215,14 @@
             ]
           },
           "description": "cue name per point (null = auto); the line reaches point k when its cue resolves"
+        },
+        "xScale": {
+          "enum": [
+            "auto",
+            "time",
+            "category"
+          ],
+          "description": "auto (default) and time: date labels (2024, 2024.12, 2024-12-31, 2025年3月, 2024Q3) sit at their dates so uneven gaps keep the slope true; category spaces the labels evenly"
         }
       }
     },

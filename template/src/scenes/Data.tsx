@@ -260,11 +260,32 @@ export const pointAnchors = (si: number, k: number, n: number) => {
   const pre = si ? `s${si + 1}-` : "";
   return [`${pre}point${k + 1}`, ...(k === n - 1 ? [`${pre}last`] : [])];
 };
+// Axis labels that would touch are thinned left to right; the last label wins over its neighbour.
+const spaced = <T extends readonly [number, string]>(labels: T[], X: (x: number) => number, ch: number) => {
+  const sorted = [...labels].sort((a, b) => a[0] - b[0]);
+  const fits = (a: T, b: T) => Math.abs(X(b[0]) - X(a[0])) >= ((a[1].length + b[1].length) / 2) * ch + ch;
+  const kept: T[] = [];
+  for (const l of sorted) {
+    if (!kept.length || fits(kept[kept.length - 1], l)) kept.push(l);
+    else if (l === sorted[sorted.length - 1]) { while (kept.length > 1 && !fits(kept[kept.length - 1], l)) kept.pop(); if (fits(kept[kept.length - 1], l)) kept.push(l); }
+  }
+  return kept;
+};
 type LineSeries = { name: string; color?: string; points: Point[] };
+// A date-like label ("2024", "2024.12", "2024-12-31", "2025年3月", "2024Q3") as fractional years, else null.
+export const dateValue = (x: string) => {
+  const q = /^(\d{4})\s*Q([1-4])$/i.exec(x.trim());
+  if (q) return Number(q[1]) + (Number(q[2]) - 1) / 4;
+  const m = /^(\d{4})(?:年)?(?:[.\-/](\d{1,2})|(\d{1,2})月)?(?:[.\-/](\d{1,2})|(\d{1,2})日)?$/.exec(x.trim());
+  if (!m) return null;
+  const mo = Number(m[2] ?? m[3] ?? 1), d = Number(m[4] ?? m[5] ?? 1);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31 || (!(m[2] ?? m[3]) && (m[4] ?? m[5]))) return null;
+  return Number(m[1]) + (mo - 1) / 12 + (d - 1) / 365;
+};
 type Annotation = { x: number | string; label: string; series?: number; cue?: string };
 
-export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?: string; format?: Format; yMin?: number; yMax?: number; series: LineSeries[]; annotations?: Annotation[]; drawCue?: string; pointCues?: (string | null)[] }> = ({
-  title, xLabel, yLabel, format, yMin, yMax, series, annotations = [], drawCue, pointCues = [],
+export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?: string; format?: Format; yMin?: number; yMax?: number; series: LineSeries[]; annotations?: Annotation[]; drawCue?: string; pointCues?: (string | null)[]; xScale?: "auto" | "time" | "category" }> = ({
+  title, xLabel, yLabel, format, yMin, yMax, series, annotations = [], drawCue, pointCues = [], xScale = "auto",
 }) => {
   const theme = useTheme();
   const scene = useScene();
@@ -272,7 +293,9 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
   const t = useTime();
   const categorical = series.some((s) => s.points.some((p) => typeof p[0] === "string"));
   const xs = categorical ? [...new Set(series.flatMap((s) => s.points.map((p) => String(p[0]))))] : [];
-  const xVal = (x: number | string) => (categorical ? xs.indexOf(String(x)) : Number(x));
+  // Date labels sit at their dates (12 months wide, 2 months narrow), so the slope reads true; "category" spaces them evenly.
+  const timed = categorical && xScale !== "category" && xs.every((x) => dateValue(x) !== null) && new Set(xs.map(dateValue)).size === xs.length;
+  const xVal = (x: number | string) => (timed ? dateValue(String(x))! : categorical ? xs.indexOf(String(x)) : Number(x));
   const allX = series.flatMap((s) => s.points.map((p) => xVal(p[0])));
   const allY = series.flatMap((s) => s.points.map((p) => Number(p[1])));
   const x0 = Math.min(...allX), x1 = Math.max(...allX);
@@ -317,8 +340,8 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
               </g>
             );
           })}
-          {(categorical ? xs.map((x, k) => [k, x] as const) : [...new Set(allX)].map((x) => [x, String(x)] as const))
-            .filter((_, k, arr) => arr.length <= (portrait ? 6 : 12) || k % Math.ceil(arr.length / (portrait ? 6 : 12)) === 0)
+          {spaced((categorical ? xs.map((x) => [xVal(x), x] as const) : [...new Set(allX)].map((x) => [x, String(x)] as const))
+            .filter((_, k, arr) => arr.length <= (portrait ? 6 : 12) || k % Math.ceil(arr.length / (portrait ? 6 : 12)) === 0), X, 16 * u)
             .map(([x, label]) => (
               <text key={label} x={X(x)} y={H + 38 * u} textAnchor="middle" fontSize={24 * u} fill={theme.colors.muted} fontFamily={theme.fonts.number}>{label}</text>
             ))}

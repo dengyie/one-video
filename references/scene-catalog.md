@@ -11,7 +11,7 @@
 | `stat-cards` | 1–8 个关键数字 | `cards[{value,label}]` | `columns`、卡片 `from`/`format`/`note`/`noteCue`（注释行随旁白出现）/`color`/`cue`；无 `from` 时数字逐位翻牌落定 |
 | `bar-compare` | 同一时点的横向对比 | `items[{label,value}]` | `sort`、`max`、`unit`、`format` |
 | `bar-race` | 排名随时间变化 | `periods`、`series[{name,values}]` | `top`、`group`+`groupColors`、`periodCues`、`series[].cue` |
-| `line-chart` | 趋势、增长曲线 | `series[{name,points}]` | `annotations`、`drawCue`、`pointCues`（每个点的 cue 名，旁白逐个报数时线逐段画到对应点）、`yMin`/`yMax` |
+| `line-chart` | 趋势、增长曲线 | `series[{name,points}]` | `annotations`、`drawCue`、`pointCues`（每个点的 cue 名，旁白逐个报数时线逐段画到对应点）、`yMin`/`yMax`、`xScale`（缺省 `auto`：横轴全是日期如 `2024.12`/`2025年3月`/`2024Q3` 时按时间比例排开，间隔不等也不扭曲斜率，挤在一起的刻度自动隐去；`category` 等距） |
 | `share` | 构成、占比（环形图） | `segments[{label,value}]` | 每段 `cue`、`unit`、`total{label,cue}`（图例上方的合计大字，旁白先报总数时用） |
 | `timeline` | 事件序列 | `events[{date,title}]`（2–10 个） | `note`、`highlight`、`cue` |
 | `compare` | A vs B | `left`、`right` | `vs`、`left.cue`/`right.cue`（该侧随旁白出现）、`left.itemCues`/`right.itemCues`（与 `items` 对位，逐条随旁白出现，`null` 跳过） |

@@ -19,6 +19,7 @@ const scenes = [
   { id: "f", type: "focus", duration: 3, props: { asset: "a", regions: [{ x: 0.1, y: 0.1, w: 0.3, h: 0.3, label: "这里" }] } },
   { id: "sp", type: "split", duration: 3, props: { mode: "pip", left: { title: "L" }, right: { value: 5 } } },
   { id: "ps", type: "photo-stack", duration: 3, props: { items: [{ asset: "a", caption: "c" }] } },
+  { id: "lc", type: "line-chart", duration: 3, props: { xScale: "time", series: [{ name: "v", points: [["2024.12", 1], ["2026.02", 2]] }] } },
 ];
 
 test("storyboard schema accepts every new scene type and rejects bad props", () => {
@@ -27,6 +28,8 @@ test("storyboard schema accepts every new scene type and rejects bad props", () 
   assert.ok(bad.some((i) => /style/.test(i.msg)));
   const badRegion = schemaGate("storyboard", { scenes: [{ id: "x", type: "focus", props: { asset: "a", regions: [{ x: 2, y: 0, w: 0.1, h: 0.1 }] } }] });
   assert.ok(badRegion.some((i) => /x/.test(i.msg)));
+  const badScale = schemaGate("storyboard", { scenes: [{ id: "x", type: "line-chart", props: { xScale: "log", series: [{ name: "v", points: [[1, 1], [2, 2]] }] } }] });
+  assert.ok(badScale.some((i) => /xScale/.test(i.msg)));
 });
 
 test("resolveCountry: numeric, ISO alpha-2, Chinese and Natural Earth names", () => {
