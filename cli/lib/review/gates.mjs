@@ -424,21 +424,32 @@ export function layoutGate(timeline, config) {
   const spoken = timeline.captions?.enabled !== false && timeline.captions?.style !== "none" ? timeline.captions.items ?? [] : [];
   for (const sc of timeline.scenes) {
     const placed = [];
+    const boxes = (sc.overlays ?? []).map((o) => overlayBox(o, width, height));
     for (const [i, o] of (sc.overlays ?? []).entries()) {
-      const box = overlayBox(o, width, height);
+      const box = boxes[i];
       if (!box) continue;
       const at = { scene: sc.id, from: sc.start + o.t, to: sc.start + Math.min(o.end, sc.duration), field: `overlays[${i}]` };
       const name = `scene "${sc.id}" overlay ${i} (${o.type}${o.asset ? ` ${o.asset}` : ""}${o.text ? ` "${o.text}"` : ""})`;
       if (box[0] < -0.01 || box[1] < -0.01 || box[2] > 1.01 || box[3] > 1.01) out.push(issue("warn", "layout", `${name} runs off the frame at x ${o.x ?? 0.5}, y ${o.y ?? 0.5} — move it inward`, at));
       if (o.type === "image" && (o.size ?? 160) < g.minSticker) out.push(issue("warn", "layout", `${name}: size ${o.size ?? 160} reads as a thumbnail — use ${g.minSticker}+ or make it a backdrop / photo-stack (gates.minSticker)`, at));
       // The band is checked through the whole overlap: a push-in partway through can carry the overlay into it.
-      const inBand = (c) => {
+      const inBand = (c, bx = box) => {
         const a = Math.max(o.t, c.start - sc.start), b = Math.min(o.end, c.end - sc.start);
-        for (let t = a; t < b; t += 0.25) if (meets(box, captionBand(sc.shots, t, portrait))) return true;
+        for (let t = a; t < b; t += 0.25) if (meets(bx, captionBand(sc.shots, t, portrait))) return true;
         return false;
       };
-      const hit = spoken.find((c) => c.scene === sc.id && !c.top && inBand(c));
-      if (hit) out.push(issue("error", "layout", `${name} sits in the caption band while "${hit.text}" is spoken — move it above y ${portrait ? 0.7 : 0.8} or to a side`, at));
+      const bandHit = (bx) => spoken.find((c) => c.scene === sc.id && !c.top && inBand(c, bx));
+      const hit = bandHit(box);
+      if (hit) {
+        // The nearest height above that clears the band through every shot move and every sticker up at the same time.
+        const others = boxes.filter((b, k) => b && k !== i && sc.overlays[k].t < o.end && o.t < sc.overlays[k].end);
+        let to = null;
+        for (let k = 1; !to && box[1] - 0.02 * k >= 0.02; k++) {
+          const dy = -0.02 * k, bx = [box[0], box[1] + dy, box[2], box[3] + dy];
+          if (!bandHit(bx) && !others.some((b) => meets(b, bx))) to = Math.round(((o.y ?? 0.5) + dy) * 100) / 100;
+        }
+        out.push(issue("error", "layout", `${name} sits in the caption band while "${hit.text}" is spoken — ${to !== null ? `move it up to y ${to}` : `move it above y ${portrait ? 0.7 : 0.8}`} or to a side`, at));
+      }
       for (const p of placed) if (p.o.t < o.end && o.t < p.o.end && meets(p.box, box)) out.push(issue("warn", "layout", `${name} overlaps overlay ${p.i} (${p.o.type}) — space them out or stagger their times`, at));
       if (sc.type === "map") {
         const hits = new Set();

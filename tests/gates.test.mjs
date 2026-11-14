@@ -195,6 +195,9 @@ test("layoutGate: overlays over spoken captions, off-frame, tiny or stacked stic
   assert.deepEqual(run({ overlays: [img(0.8, 0.34, 320)] }), []);
   const band = run({ overlays: [img(0.5, 0.86, 300)] });
   assert.ok(band.some((i) => i.level === "error" && /caption band/.test(i.msg)));
+  // The suggested height clears the band (300px sticker: half-height 0.14, band from 0.84) and a sticker above it.
+  assert.match(band[0].msg, /move it up to y 0\.7 or to a side/);
+  assert.match(run({ overlays: [img(0.5, 0.86, 300), img(0.5, 0.5, 300)] })[0].msg, /move it up to y 0\.22 /, "past the sticker in the way");
   // Shown only after the caption ends: no clash.
   assert.ok(!run({ overlays: [img(0.5, 0.86, 300, 3.5, 5)] }).some((i) => /caption band/.test(i.msg)));
   assert.ok(run({ overlays: [img(0.97, 0.3, 300)] }).some((i) => /off the frame/.test(i.msg)));
