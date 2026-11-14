@@ -6,7 +6,7 @@ import { weakMove } from "./shots.mjs";
 export const MAX_STILL = 4.5;
 
 // Reveal times the compiler resolved into props (`t` of items, morphs, path stops, cards…).
-function propTimes(v, at) {
+export function propTimes(v, at) {
   if (Array.isArray(v)) for (const x of v) propTimes(x, at);
   else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) k === "t" && typeof x === "number" ? at(x) : propTimes(x, at);
 }

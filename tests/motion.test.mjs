@@ -7,7 +7,7 @@ import { deflateSync } from "node:zlib";
 import { AUTO_SHOTS, MOTION_SFX, bestOffset, compileShots, compileTimeline, hardCuts, motionCues, rampShots, resolveWhen, screenEvents, sfxVariants, stillShots } from "../cli/lib/timeline/index.mjs";
 import { captionBand } from "../cli/lib/captions/index.mjs";
 import { beatsFile, detectBeats, everyFourth, gridBeats, snapToBar, snapToBeat } from "../cli/lib/audio/beats.mjs";
-import { rhythmGate, schemaGate } from "../cli/lib/review/gates.mjs";
+import { openingGate, rhythmGate, schemaGate } from "../cli/lib/review/gates.mjs";
 import { coverPoint, dodgeX, hexLuminance, nearCentroid, rampTime, scrimFor, subjectFocus } from "../cli/lib/vision/subject.mjs";
 import { example } from "./helpers.mjs";
 
@@ -307,6 +307,19 @@ test("long still stretches on a shot track get a slow drift that keeps authored 
   assert.equal(stillShots(undefined, [], 10, 4.5), undefined);
   // A move still travelling holds the drift back until it lands.
   assert.deepEqual(stillShots([sh(0, 1), sh(0.5, 1.1, 4)], [], 6, 4.5).map((s) => s.t), [0, 0.5, 4.5]);
+});
+
+test("opening: a text-led hook whose first reveal waits past 2.5 s warns", () => {
+  const hook = (over = {}) => ({ scenes: [{ id: "hook", type: "kinetic", start: 0, duration: 15, backdrop: { asset: "a" }, cues: { quit: 4.04 },
+    props: { kicker: "2026", lines: [{ text: "辞任", cue: "quit" }] }, overlays: [{ type: "flash", t: 0.5 }], ...over }] });
+  const [w] = openingGate(hook(), {});
+  assert.match(w.msg, /first 4\.0s of "hook" show only its backdrop — reveal the hook's main line by 2\.5s/);
+  assert.deepEqual(openingGate(hook({ cues: { quit: 1.8 } }), {}), []);
+  assert.deepEqual(openingGate(hook({ overlays: [{ type: "word", t: 1 }] }), {}), []);
+  assert.deepEqual(openingGate(hook({ props: { lines: [{ text: "辞任" }, { text: "x", cue: "quit" }] } }), {}), [], "an uncued line shows right away");
+  assert.deepEqual(openingGate(hook({ props: { title: "辞任" } }), {}), [], "nothing timed: all there from the start");
+  assert.deepEqual(openingGate(hook({ type: "footage" }), {}), []);
+  assert.deepEqual(openingGate(hook(), { gates: { hookReveal: 5 } }), []);
 });
 
 test("resolveWhen refuses a beat past the scene end", () => {

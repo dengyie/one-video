@@ -6,7 +6,7 @@ import { timingHashes } from "../voice/tts.mjs";
 import { sceneLines } from "../captions/lines.mjs";
 import { captionBand } from "../captions/layout.mjs";
 import { countryCentroid } from "../library/geo.mjs";
-import { MAX_STILL, screenEvents } from "../timeline/index.mjs";
+import { MAX_STILL, propTimes, screenEvents } from "../timeline/index.mjs";
 
 export { normalizeLicense };
 export { captionGate } from "../captions/gate.mjs";
@@ -14,7 +14,7 @@ export { screenEvents };
 
 export const STATIC_TYPES = new Set(["quote", "bullets", "title", "chapter", "sources"]);
 const DEFAULT_HOLD_EST = 0.5;
-export const GATE_DEFAULTS = { staticRatioMax: 0.4, maxSameTypeRun: 2, longSceneNoCue: 25, syllablesPerSec: [3.5, 6.2], maxStill: MAX_STILL, maxSameTransitionRun: 2, echoMinChars: 8 };
+export const GATE_DEFAULTS = { staticRatioMax: 0.4, maxSameTypeRun: 2, longSceneNoCue: 25, syllablesPerSec: [3.5, 6.2], maxStill: MAX_STILL, maxSameTransitionRun: 2, echoMinChars: 8, hookReveal: 2.5 };
 
 const issue = (level, gate, msg) => ({ level, gate, msg });
 
@@ -182,6 +182,30 @@ export function budgetGate(script, config) {
   if (Math.abs(dev) > 0.12) return [issue("warn", "budget", msg)];
   return [];
 }
+// Scene types whose picture is the content from the first frame.
+const OPENING_VISUAL = new Set(["footage", "media", "photo-stack", "parallax", "focus", "split", "device", "match-cut", "canvas", "map"]);
+// Overlays that accent something already there rather than show something.
+const OVERLAY_EFFECTS = new Set(["burst", "confetti", "spotlight", "flash"]);
+// An element in a list with no cue or time of its own comes in on the default rhythm, right away.
+const uncued = (v) => Array.isArray(v)
+  ? v.some((x) => (x && typeof x === "object" && !Array.isArray(x) && !Object.keys(x).some((k) => k === "t" || /cue/i.test(k))) || uncued(x))
+  : Boolean(v && typeof v === "object" && Object.values(v).some(uncued));
+
+// The hook: the opening scene shows what it is about within the first seconds. A text-led opening
+// whose first line, number or sticker waits on a later word leaves the viewer on a backdrop.
+export function openingGate(timeline, config) {
+  const g = { ...GATE_DEFAULTS, ...(config.gates ?? {}) };
+  const sc = timeline.scenes?.[0];
+  if (!sc || !g.hookReveal || OPENING_VISUAL.has(sc.type) || sc.header) return [];
+  const props = sc.props ?? {};
+  if (!/"(t|\w*[cC]ues?)":/.test(JSON.stringify(props)) || uncued(props)) return [];
+  const times = [...Object.values(sc.cues ?? {}), ...(sc.overlays ?? []).filter((o) => !OVERLAY_EFFECTS.has(o.type)).map((o) => o.t)];
+  propTimes(props, (t) => times.push(t));
+  const first = Math.min(...times.filter(Number.isFinite));
+  if (!(first > g.hookReveal) || first >= sc.duration) return [];
+  return [issue("warn", "opening", `the first ${first.toFixed(1)}s of "${sc.id}" show only ${sc.backdrop ? "its backdrop" : "the background"} — reveal the hook's main line by ${g.hookReveal}s (cue it on an earlier word, or open on footage; gates.hookReveal)`)];
+}
+
 // Screen rhythm on the compiled timeline: the longest stretches where nothing new happens on
 // screen (no scene, cue, real shot move or overlay), and runs of the same transition. Warnings only.
 export function rhythmGate(timeline, config) {
