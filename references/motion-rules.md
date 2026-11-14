@@ -23,7 +23,7 @@
 ## 转场
 
 - **按语义选**：实拍接画布、或者要“钻进”一个细节，用 `through`（自动冲向上一镜的深度主体）；话题急转、节奏加快用 `whip`；章节开始用 `wipe` / `iris` / `zoom`；同一话题内的小切换用 `cut` 或短 `fade`。
-- 连续 3 个相同转场会被 rhythm 门控警告（`gates.maxSameTransitionRun`，默认 2）。
+- 连续 3 个相同转场会被 rhythm 门控警告（`gates.maxSameTransitionRun`，默认 2），`onevideo fix` 会改最后一个场景的 `enter`；语义更合适的转场（through、whip）仍要手写。
 
 ## 文字与画面
 
