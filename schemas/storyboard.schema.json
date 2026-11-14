@@ -1051,7 +1051,7 @@
               },
               "cue": {
                 "type": "string",
-                "description": "cue name: this bar is called out (glow, lit value) from when the cue resolves, e.g. on the words that say its value"
+                "description": "cue name: this bar is called out (glow, lit value, settling to a faint glow after ~2.4s) from when the cue resolves, e.g. on the words that say its name or value"
               }
             }
           }
@@ -1071,7 +1071,7 @@
               "null"
             ]
           },
-          "description": "cue name per period (null = auto); the race reaches period k when its cue resolves"
+          "description": "cue name per period (null = auto); the swap into period k starts when its cue resolves"
         }
       }
     },

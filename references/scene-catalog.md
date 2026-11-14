@@ -10,7 +10,7 @@
 | `chapter` | 章节转场 | `title` | `index`、`subtitle` |
 | `stat-cards` | 1–8 个关键数字 | `cards[{value,label}]` | `columns`、卡片 `from`/`format`/`note`/`color`/`cue`；无 `from` 时数字逐位翻牌落定 |
 | `bar-compare` | 同一时点的横向对比 | `items[{label,value}]` | `sort`、`max`、`unit`、`format` |
-| `bar-race` | 排名随时间变化 | `periods`、`series[{name,values}]` | `top`、`group`+`groupColors`、`periodCues` |
+| `bar-race` | 排名随时间变化 | `periods`、`series[{name,values}]` | `top`、`group`+`groupColors`、`periodCues`、`series[].cue` |
 | `line-chart` | 趋势、增长曲线 | `series[{name,points}]` | `annotations`、`drawCue`、`pointCues`（每个点的 cue 名，旁白逐个报数时线逐段画到对应点）、`yMin`/`yMax` |
 | `share` | 构成、占比（环形图） | `segments[{label,value}]` | 每段 `cue`、`unit`、`total{label,cue}`（图例上方的合计大字，旁白先报总数时用） |
 | `timeline` | 事件序列 | `events[{date,title}]`（2–10 个） | `note`、`highlight`、`cue` |
@@ -112,7 +112,8 @@ onevideo lib recipe photo-focus --id s3 --set asset=landing,region_label=栅格�
 ## bar-race 要点
 
 - `values` 和 `periods` 等长，某期不在榜单用 `null`。
-- `periodCues` 把某一期对齐到旁白里的 cue：有 cue 的期是锚点，没 cue 的期在锚点之间均匀插值。最后一期默认出现在场景 72% 处。
+- `periodCues` 把某一期对齐到旁白里的 cue：cue 触发时开始换到这一期（念到“2010年”时榜单换到 2010），有 cue 的期是锚点，没 cue 的期在锚点之间均匀插值。最后一期默认在场景 72% 处换入。
+- `series[].cue`：念到这根柱子时点名它——柱子发光、名字和数值高亮并轻弹一下，约 2.4s 后退成淡光，后面的点名才显眼。
 - 每次换期只有一段很短的交换动画（≤1.6s），之后停住，让观众读清楚排名。
 - 不同时期的数据来源和计价日写进 header subtitle。
 
