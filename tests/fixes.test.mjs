@@ -19,6 +19,9 @@ test("applyFix: merges into the storyboard object or replaces a value; unknown t
 test("fixPlan: stickers dropped on the captions move clear of them and of each other, a still title gets a shot track, charts keep their cue warnings", () => {
   const ex = example({ media: ["sfx/whoosh.wav", "sfx/pop.wav", "music/inspired.mp3"] });
   const storyboard = structuredClone(ex.storyboard);
+  const profit = storyboard.scenes.find((s) => s.id === "profit");
+  delete profit.props.left.cue;
+  delete profit.props.right.cue;
   storyboard.scenes[1] = { ...storyboard.scenes[1], overlays: [
     { type: "stamp", text: "调查", at: 0.2, x: 0.5, y: 0.9 }, { type: "stamp", text: "进行中", at: 0.2, x: 0.5, y: 0.92 },
   ] };
@@ -35,6 +38,7 @@ test("fixPlan: stickers dropped on the captions move clear of them and of each o
   assert.ok(check.issues.some((i) => i.gate === "rhythm" && /cue a reveal/.test(i.msg)));
   const v = storyboard.scenes.find((s) => s.id === "valuation");
   assert.deepEqual([v.props.pointCues, v.cues.n1], [["n1", "n2", "n3", "n4"], "3500亿"], "the line is drawn to each value as it is said");
+  assert.deepEqual([profit.props.left.cue, profit.props.right.cue, Object.keys(profit.cues)], ["left", "right", ["left", "right"]], "the cues already written are used, no new ones made up");
   assert.match(describeFix(applied.find((a) => a.gate === "layout")), new RegExp(`^${storyboard.scenes[1].id} overlays\\[\\d\\]: y 0\\.9\\d? → 0\\.\\d+$`));
   assert.equal(ex.storyboard.scenes[1].overlays, undefined, "the original is untouched");
 });

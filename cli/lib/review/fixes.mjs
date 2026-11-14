@@ -37,7 +37,8 @@ export function applyFix(storyboard, fix) {
 // A target is changed once, so two gates cannot ping-pong it. Returns { applied, check } with
 // `check` the last result; `plan.storyboard` holds the changed storyboard.
 // The camera goes in before stickers are placed against it: a shot track moves where they land.
-const FIRST = ["cues", "shots"];
+// A cue already written gets its element (props) before new cues are made up for the same reveal.
+const FIRST = ["cues", "props", "shots"];
 
 export function fixPlan(project, plan, { rounds = 8 } = {}) {
   const applied = [];
