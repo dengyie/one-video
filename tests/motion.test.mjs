@@ -247,6 +247,9 @@ test("rhythm: long stills and transition runs warn; a covered word leaves when t
   assert.deepEqual(rhythmGate(quote(false), {}), []); // read along: each spoken line lights up
   const chart = { duration: 9, scenes: [sc("c", 0, 9, { type: "line-chart", transitionIn: { type: "cut" }, cues: { a: 1, b: 8 }, props: { pointCues: ["a", "b"] } })] };
   assert.deepEqual(rhythmGate(chart, {}), []); // the line sets off for b at 5s
+  const drift = (zoom) => ({ duration: 8, scenes: [sc("s", 0, 8, { transitionIn: { type: "cut" }, shots: [{ t: 0, zoom: 1 }, { t: 4, zoom }] })] });
+  assert.equal(rhythmGate(drift(1.02), {}).length, 1); // a 2% drift is not something new
+  assert.deepEqual(rhythmGate(drift(1.15), {}), []); // a real push-in is
 
   const ex = example({ media: ["sfx/whoosh.wav", "sfx/pop.wav", "music/bgm.wav"] });
   const sb = structuredClone(ex.storyboard);

@@ -215,11 +215,12 @@ export function screenEvents(timeline) {
 }
 
 // Screen rhythm on the compiled timeline: the longest stretches where nothing new happens on
-// screen (no scene, cue, shot or overlay), and runs of the same transition. Warnings only.
+// screen (no scene, cue, real shot move or overlay), and runs of the same transition. Warnings only.
 export function rhythmGate(timeline, config) {
   const g = { ...GATE_DEFAULTS, ...(config.gates ?? {}) };
   const out = [];
-  const events = screenEvents(timeline);
+  // A shot that barely moves the frame is not something new to look at.
+  const events = screenEvents(timeline).filter((e) => !e.weak);
   const end = { t: timeline.duration, scene: timeline.scenes.at(-1)?.id };
   const gaps = [...events, end].slice(1).map((e, i) => ({ from: events[i], to: e, len: e.t - events[i].t }))
     .filter((x) => x.len > g.maxStill && x.from.scene !== "credits" && timeline.scenes.find((s) => s.id === x.from.scene)?.type !== "sources");
