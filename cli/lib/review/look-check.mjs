@@ -55,6 +55,25 @@ export function checkNotes(timeline, notes, { maxGap = 3, lead = 3 } = {}) {
   return doubtful;
 }
 
+// Which gates speak to which kind of note: a stall or a late reveal is rhythm's (or the opening's),
+// anything about placement is layout's or a device step's.
+const GATES_FOR = { still: ["rhythm", "opening"], late: ["rhythm", "opening"], other: ["layout", "device", "opening"] };
+
+// Notes a timeline gate also flags, in the same scene and overlapping its stretch: two independent
+// sources on one point, so fix those first. Marks each { gate: { gate, msg } } and returns the count.
+export function matchGates(notes, issues) {
+  const placed = (issues ?? []).filter((i) => i.at);
+  let hits = 0;
+  for (const n of notes) {
+    const [a, b] = window(n);
+    const hit = placed.find((i) => (!n.scene || i.at.scene === n.scene) && GATES_FOR[noteKind(n)].includes(i.gate) && i.at.from < b + 1 && i.at.to > a - 1);
+    if (!hit) continue;
+    n.gate = { gate: hit.gate, msg: hit.msg };
+    hits++;
+  }
+  return hits;
+}
+
 // Several reviews of one sheet, each from a different model: scores vary by a point or more between
 // runs and a single run invents notes, so the score is the median and a note counts once per pass
 // that raised it. Two notes are the same point when they sit in the same scene within `near` seconds

@@ -9,7 +9,8 @@ import { lookPrompt, sceneLine } from "../lib/prompts/index.mjs";
 import { busyWindows, cellTime, sceneAt, sheetPlan, writeSheets } from "../lib/vision/sheet.mjs";
 import { resolveVideo } from "../lib/publish/renders.mjs";
 import { videoPath } from "./render.mjs";
-import { checkNotes, checkTone, meanLuma, median, mergePasses, toneOf } from "../lib/review/look-check.mjs";
+import { checkNotes, checkTone, matchGates, meanLuma, median, mergePasses, toneOf } from "../lib/review/look-check.mjs";
+import { deviceGate, layoutGate, openingGate, rhythmGate } from "../lib/review/gates.mjs";
 import { frameRgb } from "../lib/vision/screen.mjs";
 import { pool } from "../lib/core/http.mjs";
 import { buildHandoff, handoffPath, handoffRel } from "../lib/publish/handoff.mjs";
@@ -105,6 +106,8 @@ export async function look(args) {
   notes.sort((a, b) => a.t - b.t);
   // "Nothing changes here" and "shows up late" are checked against the timeline's own events.
   let doubtful = checkNotes(tl, notes);
+  // The same point a timeline gate raises on the rendered timeline: two independent sources agree.
+  const gated = tl ? matchGates(notes, [rhythmGate, openingGate, layoutGate, deviceGate].flatMap((gate) => gate(tl, project.config))) : 0;
   // "Too dark", "too bright", "a jarring jump in level": measured on the frames, against the video's own level.
   const toned = notes.filter((n) => !n.check && toneOf(n));
   if (toned.length) {
@@ -130,9 +133,10 @@ export async function look(args) {
   writeJson(join(outDir, "look.json"), result);
   log(`score ${score ?? "?"}/10 over ${reviews.length}/${sheets.length} sheet(s)`);
   const icon = { high: "✗", medium: "⚠", low: "·" };
-  for (const n of notes) log(`${n.check?.doubtful ? "?" : icon[n.severity]} ${n.t.toFixed(1).padStart(5)}s ${String(n.scene ?? "").padEnd(10)} ${n.of ? `[${n.seen}/${n.of}] ` : ""}${n.issue}${n.fix ? `\n         → ${n.fix}` : ""}${n.check?.doubtful ? `\n         ? ${n.check.why}` : ""}`);
+  for (const n of notes) log(`${n.check?.doubtful ? "?" : icon[n.severity]} ${n.t.toFixed(1).padStart(5)}s ${String(n.scene ?? "").padEnd(10)} ${n.of ? `[${n.seen}/${n.of}] ` : ""}${n.issue}${n.fix ? `\n         → ${n.fix}` : ""}${n.check?.doubtful ? `\n         ? ${n.check.why}` : ""}${n.gate ? `\n         ✓ ${n.gate.gate}: ${n.gate.msg}` : ""}`);
   const lone = notes.filter((n) => n.of && n.seen < 2).length;
   if (lone) log(`[1/${passes}] ${lone} note(s) only one model raised: weigh them lower than the ones several agree on`);
+  if (gated) log(`✓ ${gated} note(s) a timeline gate also flags: fix those first`);
   if (doubtful) log(`? ${doubtful} note(s) the timeline contradicts: check those stills before acting on them`);
   if (!notes.length) warn("no notes returned; check the sheets yourself");
   log(`→ ${relative(project.root, join(outDir, "look.json"))} (a second opinion: confirm on the sheets or with stills before changing the storyboard)`);

@@ -16,7 +16,8 @@ export const STATIC_TYPES = new Set(["quote", "bullets", "title", "chapter", "so
 const DEFAULT_HOLD_EST = 0.5;
 export const GATE_DEFAULTS = { staticRatioMax: 0.4, maxSameTypeRun: 2, longSceneNoCue: 25, syllablesPerSec: [3.5, 6.2], maxStill: MAX_STILL, maxSameTransitionRun: 2, echoMinChars: 8, hookReveal: 2.5 };
 
-const issue = (level, gate, msg) => ({ level, gate, msg });
+// `at` places a timeline finding: { scene, from, to } in timeline seconds (look matches its notes to it).
+const issue = (level, gate, msg, at) => ({ level, gate, msg, ...(at && { at }) });
 
 export function schemaGate(name, value) {
   const schema = loadSchema(name);
@@ -201,7 +202,7 @@ export function openingGate(timeline, config) {
   propTimes(props, (t) => times.push(t));
   const first = Math.min(...times.filter(Number.isFinite));
   if (!(first > g.hookReveal) || first >= sc.duration) return [];
-  return [issue("warn", "opening", `the first ${first.toFixed(1)}s of "${sc.id}" show only ${sc.backdrop ? "its backdrop" : "the background"} — reveal the hook's main line by ${g.hookReveal}s (cue it on an earlier word, or open on footage; gates.hookReveal)`)];
+  return [issue("warn", "opening", `the first ${first.toFixed(1)}s of "${sc.id}" show only ${sc.backdrop ? "its backdrop" : "the background"} — reveal the hook's main line by ${g.hookReveal}s (cue it on an earlier word, or open on footage; gates.hookReveal)`, { scene: sc.id, from: sc.start, to: sc.start + first })];
 }
 
 // Screen rhythm on the compiled timeline: the longest stretches where nothing new happens on
@@ -215,7 +216,7 @@ export function rhythmGate(timeline, config) {
   const gaps = [...events, end].slice(1).map((e, i) => ({ from: events[i], to: e, len: e.t - events[i].t }))
     .filter((x) => x.len > g.maxStill && x.from.scene !== "credits" && timeline.scenes.find((s) => s.id === x.from.scene)?.type !== "sources");
   for (const x of gaps.sort((a, b) => b.len - a.len).slice(0, 5)) {
-    out.push(issue("warn", "rhythm", `${x.len.toFixed(1)}s with nothing new on screen from ${x.from.t.toFixed(1)}s (scene "${x.from.scene}") — add a cue, shot or overlay (max ${g.maxStill}s)`));
+    out.push(issue("warn", "rhythm", `${x.len.toFixed(1)}s with nothing new on screen from ${x.from.t.toFixed(1)}s (scene "${x.from.scene}") — add a cue, shot or overlay (max ${g.maxStill}s)`, { scene: x.from.scene, from: x.from.t, to: x.to.t }));
   }
   const types = timeline.scenes.slice(1).map((s) => s.transitionIn?.type);
   // Cuts between scenes on the same device are the device staying put, not a transition.
@@ -241,7 +242,7 @@ export function deviceGate(timeline, config) {
       if (!(st.expand || st.screen !== undefined || st.camera === "result")) continue;
       const arrive = st.t + (st.tap ? 0.25 : 0) + 0.55;
       const next = steps[i + 1]?.t ?? sc.duration;
-      if (next - arrive < hold) out.push(issue("warn", "device", `scene "${sc.id}" step ${i} (${st.t}s): the result holds ${Math.max(0, next - arrive).toFixed(2)}s before ${steps[i + 1] ? `step ${i + 1}` : "the scene ends"} — give it ${hold}s+ (gates.deviceHold)`));
+      if (next - arrive < hold) out.push(issue("warn", "device", `scene "${sc.id}" step ${i} (${st.t}s): the result holds ${Math.max(0, next - arrive).toFixed(2)}s before ${steps[i + 1] ? `step ${i + 1}` : "the scene ends"} — give it ${hold}s+ (gates.deviceHold)`, { scene: sc.id, from: sc.start + st.t, to: sc.start + next }));
     }
   }
   return out;
@@ -403,9 +404,10 @@ export function layoutGate(timeline, config) {
     for (const [i, o] of (sc.overlays ?? []).entries()) {
       const box = overlayBox(o, width, height);
       if (!box) continue;
+      const at = { scene: sc.id, from: sc.start + o.t, to: sc.start + Math.min(o.end, sc.duration) };
       const name = `scene "${sc.id}" overlay ${i} (${o.type}${o.asset ? ` ${o.asset}` : ""}${o.text ? ` "${o.text}"` : ""})`;
-      if (box[0] < -0.01 || box[1] < -0.01 || box[2] > 1.01 || box[3] > 1.01) out.push(issue("warn", "layout", `${name} runs off the frame at x ${o.x ?? 0.5}, y ${o.y ?? 0.5} — move it inward`));
-      if (o.type === "image" && (o.size ?? 160) < g.minSticker) out.push(issue("warn", "layout", `${name}: size ${o.size ?? 160} reads as a thumbnail — use ${g.minSticker}+ or make it a backdrop / photo-stack (gates.minSticker)`));
+      if (box[0] < -0.01 || box[1] < -0.01 || box[2] > 1.01 || box[3] > 1.01) out.push(issue("warn", "layout", `${name} runs off the frame at x ${o.x ?? 0.5}, y ${o.y ?? 0.5} — move it inward`, at));
+      if (o.type === "image" && (o.size ?? 160) < g.minSticker) out.push(issue("warn", "layout", `${name}: size ${o.size ?? 160} reads as a thumbnail — use ${g.minSticker}+ or make it a backdrop / photo-stack (gates.minSticker)`, at));
       // The band is checked through the whole overlap: a push-in partway through can carry the overlay into it.
       const inBand = (c) => {
         const a = Math.max(o.t, c.start - sc.start), b = Math.min(o.end, c.end - sc.start);
@@ -413,12 +415,12 @@ export function layoutGate(timeline, config) {
         return false;
       };
       const hit = spoken.find((c) => c.scene === sc.id && !c.top && inBand(c));
-      if (hit) out.push(issue("error", "layout", `${name} sits in the caption band while "${hit.text}" is spoken — move it above y ${portrait ? 0.7 : 0.8} or to a side`));
-      for (const p of placed) if (p.o.t < o.end && o.t < p.o.end && meets(p.box, box)) out.push(issue("warn", "layout", `${name} overlaps overlay ${p.i} (${p.o.type}) — space them out or stagger their times`));
+      if (hit) out.push(issue("error", "layout", `${name} sits in the caption band while "${hit.text}" is spoken — move it above y ${portrait ? 0.7 : 0.8} or to a side`, at));
+      for (const p of placed) if (p.o.t < o.end && o.t < p.o.end && meets(p.box, box)) out.push(issue("warn", "layout", `${name} overlaps overlay ${p.i} (${p.o.type}) — space them out or stagger their times`, at));
       if (sc.type === "map") {
         const hits = new Set();
         for (let t = o.t; t < o.end; t += 0.25) for (const m of mapBoxes(sc, t, width, height, pace)) if (meets(m.box, box)) hits.add(m.what);
-        if (hits.size) out.push(issue("warn", "layout", `${name} covers the map ${[...hits].join(", ")} — move it clear of the pins and labels or show it after the camera has moved on`));
+        if (hits.size) out.push(issue("warn", "layout", `${name} covers the map ${[...hits].join(", ")} — move it clear of the pins and labels or show it after the camera has moved on`, at));
       }
       placed.push({ i, o, box });
     }
@@ -427,8 +429,8 @@ export function layoutGate(timeline, config) {
       const z = sh.zoom ?? 1;
       if (z <= 1.02) continue;
       const left = (sh.x ?? 0.5) - 0.5 / z;
-      if (LEFT_TEXT(sc, portrait) && left > 0.06) { out.push(issue("warn", "layout", `scene "${sc.id}" shot at ${sh.t}s (zoom ${z}) crops the left edge where its left-aligned text starts — centre the text (props.align) or keep the shot wider`)); break; }
-      if (z > g.maxTextZoom) { out.push(issue("warn", "layout", `scene "${sc.id}" shot at ${sh.t}s pushes text to zoom ${z} (max ${g.maxTextZoom}); wide lines leave the frame — check with onevideo stills (gates.maxTextZoom)`)); break; }
+      if (LEFT_TEXT(sc, portrait) && left > 0.06) { out.push(issue("warn", "layout", `scene "${sc.id}" shot at ${sh.t}s (zoom ${z}) crops the left edge where its left-aligned text starts — centre the text (props.align) or keep the shot wider`, { scene: sc.id, from: sc.start + sh.t, to: sc.start + sc.duration })); break; }
+      if (z > g.maxTextZoom) { out.push(issue("warn", "layout", `scene "${sc.id}" shot at ${sh.t}s pushes text to zoom ${z} (max ${g.maxTextZoom}); wide lines leave the frame — check with onevideo stills (gates.maxTextZoom)`, { scene: sc.id, from: sc.start + sh.t, to: sc.start + sc.duration })); break; }
     }
   }
   return out;

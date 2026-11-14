@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, timingsGate, normalizeLicense, summarize, questionGate, echoGate, layoutGate, densityGate } from "../cli/lib/review/gates.mjs";
-import { screenEvents } from "../cli/lib/review/gates.mjs";
-import { checkNotes, checkTone, meanLuma, mergePasses, median, noteKind, toneOf } from "../cli/lib/review/look-check.mjs";
+import { rhythmGate, screenEvents } from "../cli/lib/review/gates.mjs";
+import { checkNotes, checkTone, matchGates, meanLuma, mergePasses, median, noteKind, toneOf } from "../cli/lib/review/look-check.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { example } from "./helpers.mjs";
 
@@ -313,4 +313,21 @@ test("checkTone: dark/bright claims held against the video's median, jumps again
   assert.equal(checkTone("jump", { luma: 0.4, median: 0.2 }), null); // nothing before the first scene
   assert.equal(checkTone("dark", { luma: NaN, median: 0.2 }), null);
   assert.ok(Math.abs(meanLuma(Buffer.from([255, 255, 255, 0, 0, 0])) - 0.5) < 1e-9);
+});
+
+test("matchGates: a note a timeline gate also flags, in its scene and stretch, is confirmed", () => {
+  const issues = rhythmGate(lookTl(), {});
+  assert.deepEqual(issues[0].at, { scene: "b", from: 12, to: 20 });
+  const notes = [
+    { t: 15, scene: "b", issue: "画面长时间静止" },
+    { t: 15, scene: "b", issue: "贴纸偏小" },
+    { t: 15, scene: "a", issue: "画面静止" },
+    { t: 8, scene: "b", issue: "画面静止" },
+  ];
+  const small = { level: "warn", gate: "layout", msg: "small", at: { scene: "b", from: 14, to: 16 } };
+  assert.equal(matchGates(notes, [...issues, { level: "warn", gate: "layout", msg: "unplaced" }, small]), 2);
+  assert.match(notes[0].gate.msg, /^8\.0s with nothing new on screen from 12\.0s/);
+  assert.deepEqual(notes[1].gate, { gate: "layout", msg: "small" }, "placement notes meet layout, not rhythm");
+  assert.equal(notes[2].gate, undefined);
+  assert.equal(notes[3].gate, undefined);
 });
