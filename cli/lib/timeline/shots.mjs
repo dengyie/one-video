@@ -14,6 +14,13 @@ export const AUTO_SHOTS = [
   { zoom: 1.16, x: 0.5, y: 0.45 },
 ];
 
+// Scene types whose picture is a photo, clip or world to travel through. Every other type (charts,
+// cards, text) is laid out to the frame's edges: its auto track and drift stay centred and within
+// GENTLE_ZOOM, which keeps content from x 0.05 to 0.95 in frame (a push further crops edge labels).
+export const FRAMED = new Set(["footage", "media", "photo-stack", "parallax", "focus", "split", "device", "match-cut", "canvas", "map"]);
+export const GENTLE_ZOOM = 1.06;
+const GENTLE_SHOTS = [{ zoom: 1, x: 0.5, y: 0.5 }, { zoom: GENTLE_ZOOM, x: 0.5, y: 0.5 }];
+
 // Storyboard shots → compiled Shot[]: `focus: [x, y, w, h]` frames a region (zoom to fit it with
 // a margin), otherwise x/y/zoom directly. Times snap to a beat within 0.12 s when beats exist;
 // a hard cut prefers the bar's downbeat within 0.25 s.
@@ -22,7 +29,7 @@ export function compileShots(spec, ctx) {
   const out = [];
   const errors = [];
   const list = spec === "auto" || spec?.auto
-    ? lines.map((l, i) => ({ ...AUTO_SHOTS[i % AUTO_SHOTS.length], at: i ? Math.max(0, l.start - CUE_LEAD) : 0, cut: i % 2 === 0 && i > 0, ...(typeof spec === "object" ? spec.each ?? {} : {}) }))
+    ? lines.map((l, i) => ({ ...(ctx.gentle ? GENTLE_SHOTS[i % 2] : AUTO_SHOTS[i % AUTO_SHOTS.length]), at: i ? Math.max(0, l.start - CUE_LEAD) : 0, cut: i % 2 === 0 && i > 0, ...(typeof spec === "object" ? spec.each ?? {} : {}) }))
     : Array.isArray(spec) ? spec : [];
   for (const [k, sh] of list.entries()) {
     const res = resolveWhen(sh, ctx);
@@ -74,10 +81,11 @@ export function rampShots(ramp, shots, duration) {
 export const weakMove = (prev, sh) => !!prev && !sh.cut && Math.abs((sh.zoom ?? 1) - (prev.zoom ?? 1)) < 0.05 && Math.abs((sh.x ?? 0.5) - (prev.x ?? 0.5)) < 0.03 && Math.abs((sh.y ?? 0.5) - (prev.y ?? 0.5)) < 0.03 && Math.abs((sh.rotate ?? 0) - (prev.rotate ?? 0)) < 1;
 
 // A stretch longer than `maxStill` with nothing new on screen (no reveal in `times`, no real shot
-// move) gets a slow drift every ≤3 s: 6% in (out once past 1.2×), travelling over most of the gap.
+// move) gets a slow drift every ≤3 s: 6% in (out once past `maxZoom`, 1.2×), travelling over most of
+// the gap; with a lower `maxZoom` the step shrinks to fit (in and back out).
 // Authored shots win: a drift waits for a move in progress, keeps 0.3 s off any shot, and is dropped
 // when it would leave the next move too small to see.
-export function stillShots(shots, times, duration, maxStill) {
+export function stillShots(shots, times, duration, maxStill, maxZoom = 1.2) {
   if (!shots?.length) return shots;
   let all = [...shots].sort((a, b) => a.t - b.t);
   const marks = [...new Set([0, ...times, ...all.filter((sh, i) => !weakMove(all[i - 1], sh)).map((sh) => sh.t)])]
@@ -92,7 +100,8 @@ export function stillShots(shots, times, duration, maxStill) {
       const t = Math.max(from + k * step, busy);
       if (t > to - 0.8 || all.some((sh) => Math.abs(sh.t - t) < 0.3)) continue;
       const v = [...all].reverse().find((sh) => sh.t <= t) ?? all[0];
-      const sh = { t: r3(t), zoom: r3(v.zoom + (v.zoom + 0.06 > 1.2 ? -0.06 : 0.06)), x: v.x, y: v.y, rotate: v.rotate ?? 0, cut: false, ease: r3(step * 0.9) };
+      const dz = Math.max(0.05, Math.min(0.06, maxZoom - 1));
+      const sh = { t: r3(t), zoom: r3(v.zoom + (v.zoom + dz > maxZoom + 1e-9 ? -dz : dz)), x: v.x, y: v.y, rotate: v.rotate ?? 0, cut: false, ease: r3(step * 0.9) };
       const next = all.find((s) => s.t > t);
       if (next && weakMove(sh, next) && !weakMove(v, next)) continue;
       all = [...all, sh].sort((a, b) => a.t - b.t);

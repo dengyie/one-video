@@ -7,6 +7,7 @@ import { sceneLines } from "../captions/lines.mjs";
 import { captionBand } from "../captions/layout.mjs";
 import { countryCentroid } from "../library/geo.mjs";
 import { MAX_STILL, OVERLAY_EFFECTS, propTimes, screenEvents } from "../timeline/index.mjs";
+import { FRAMED, GENTLE_ZOOM } from "../timeline/shots.mjs";
 
 export { normalizeLicense };
 export { captionGate } from "../captions/gate.mjs";
@@ -480,6 +481,12 @@ export function layoutGate(timeline, config) {
         if (hits.size) out.push(issue("warn", "layout", `${name} covers the map ${[...hits].join(", ")} — move it clear of the pins and labels or show it after the camera has moved on`, at));
       }
       placed.push({ i, o, box });
+    }
+    // Charts and cards are laid out to the frame's edges: a push past GENTLE_ZOOM crops their outer labels.
+    if (!TEXT_TYPES.has(sc.type) && !FRAMED.has(sc.type) && sc.type !== "sources") {
+      const sh = (sc.shots ?? []).find((s) => (s.zoom ?? 1) > GENTLE_ZOOM + 0.02);
+      if (sh) out.push(issue("warn", "layout", `scene "${sc.id}" (${sc.type}) shot at ${sh.t}s pushes to zoom ${sh.zoom}; cards and labels near the edges leave the frame — keep it within ${GENTLE_ZOOM} or frame a region with focus`, { scene: sc.id, from: sc.start + sh.t, to: sc.start + sc.duration, field: "shots" }));
+      continue;
     }
     if (!TEXT_TYPES.has(sc.type)) continue;
     for (const sh of sc.shots ?? []) {

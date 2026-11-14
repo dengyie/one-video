@@ -218,6 +218,9 @@ test("layoutGate: overlays over spoken captions, off-frame, tiny or stacked stic
   assert.ok(left.some((i) => /left edge/.test(i.msg)));
   assert.deepEqual(run({ type: "kinetic", props: { align: "center" }, shots: [{ t: 0, zoom: 1.15, x: 0.5, y: 0.5 }] }), []);
   assert.ok(run({ type: "kinetic", props: {}, shots: [{ t: 0, zoom: 1.4, x: 0.5, y: 0.5 }] }).some((i) => /maxTextZoom/.test(i.msg)));
+  // Cards and charts run to the frame's edges: a push past the gentle zoom crops them.
+  assert.match(run({ type: "line-chart", shots: [{ t: 0, zoom: 1 }, { t: 2, zoom: 1.12, x: 0.44, y: 0.47 }] })[0].msg, /scene "a" \(line-chart\) shot at 2s pushes to zoom 1\.12; .* keep it within 1\.06/);
+  assert.deepEqual(run({ type: "stat-cards", shots: [{ t: 0, zoom: 1 }, { t: 2, zoom: 1.06 }] }), []);
 
   // A keyword parked on a map pin once the camera has flown in to it.
   const map = (y, extra = {}) => ({ type: "map", cues: { sg: 1 }, props: { views: [{ center: [105, 12], zoom: 2.2 }, { center: [103.8, 1.4], zoom: 9, cue: "sg" }], pins: [{ lon: 103.82, lat: 1.35, label: "总部", cue: "sg" }], ...extra }, overlays: [{ ...word(y), t: 2 }] });

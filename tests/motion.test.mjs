@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
-import { AUTO_SHOTS, MOTION_SFX, bestOffset, compileShots, compileTimeline, hardCuts, motionCues, rampShots, resolveWhen, screenEvents, sfxVariants, stillShots } from "../cli/lib/timeline/index.mjs";
+import { AUTO_SHOTS, GENTLE_ZOOM, MOTION_SFX, bestOffset, compileShots, compileTimeline, hardCuts, motionCues, rampShots, resolveWhen, screenEvents, sfxVariants, stillShots } from "../cli/lib/timeline/index.mjs";
 import { captionBand } from "../cli/lib/captions/index.mjs";
 import { beatsFile, detectBeats, everyFourth, gridBeats, snapToBar, snapToBeat } from "../cli/lib/audio/beats.mjs";
 import { openingGate, rhythmGate, schemaGate } from "../cli/lib/review/gates.mjs";
@@ -31,6 +31,9 @@ test("compileShots auto: one framing per caption line, alternating moves and cut
   assert.equal(shots[1].zoom, AUTO_SHOTS[1].zoom);
   assert.deepEqual(shots.map((s) => s.cut), [false, false, true]);
   assert.ok(shots[1].t < lines[1].start);
+  // A chart or card layout reaches the frame's edges: its auto track stays centred and gentle.
+  const gentle = compileShots("auto", { ...ctx(), gentle: true }).shots;
+  assert.deepEqual(gentle.map((s) => [s.zoom, s.x, s.y, s.cut]), [[1, 0.5, 0.5, false], [GENTLE_ZOOM, 0.5, 0.5, false], [1, 0.5, 0.5, true]]);
 });
 
 test("compileShots: focus fits a region, times snap to a near beat only", () => {
@@ -327,6 +330,8 @@ test("long still stretches on a shot track get a slow drift that keeps authored 
   assert.equal(stillShots(undefined, [], 10, 4.5), undefined);
   // A move still travelling holds the drift back until it lands.
   assert.deepEqual(stillShots([sh(0, 1), sh(0.5, 1.1, 4)], [], 6, 4.5).map((s) => s.t), [0, 0.5, 4.5]);
+  // Capped at GENTLE_ZOOM (a laid-out scene): in and back out, never past it.
+  assert.deepEqual(stillShots([sh(0, 1)], [], 12, 4.5, GENTLE_ZOOM).map((s) => s.zoom), [1, 1.06, 1, 1.06]);
 });
 
 test("opening: a text-led hook whose first reveal waits past 2.5 s warns", () => {
