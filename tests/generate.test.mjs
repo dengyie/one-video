@@ -12,6 +12,8 @@ import { validateNamed } from "../cli/lib/core/schema.mjs";
 import { sheetPlan, sceneAt, writeSheets } from "../cli/commands/director.mjs";
 import { busyWindows, cellTime, settle, stampTime } from "../cli/lib/vision/sheet.mjs";
 import { REMOTION_BIN, ffmpeg, ffprobe } from "../cli/lib/core/ffmpeg.mjs";
+import { frameRgb } from "../cli/lib/vision/screen.mjs";
+import { meanLuma } from "../cli/lib/review/look-check.mjs";
 
 // A stand-in relay: `routes[path]` answers (req, body) → [status, json | Buffer]; calls are logged.
 async function relay(routes) {
@@ -303,4 +305,19 @@ test("bodies past curl's config line limit go through a temp file", async () => 
       assert.equal(JSON.parse(res.body.toString()).n, n);
     }
   } finally { r.close(); }
+});
+
+test("frameRgb and ffprobe take a path relative to the caller's cwd (ffmpeg itself runs in template/)", { skip: !existsSync(REMOTION_BIN) && "needs template deps (ffmpeg)" }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ov-rel-"));
+  await ffmpeg(["-y", "-f", "lavfi", "-i", "nullsrc=size=64x36:rate=5:duration=1", "-c:v", "libx264", "-preset", "ultrafast", join(dir, "w.mp4")]);
+  const cwd = process.cwd();
+  process.chdir(dir);
+  try {
+    assert.equal((await ffprobe("w.mp4")).streams[0].width, 64);
+    const { rgb, w, h } = await frameRgb("w.mp4", { width: 32 });
+    assert.equal(rgb.length, w * h * 3);
+    assert.ok(meanLuma(rgb) >= 0 && meanLuma(rgb) <= 1);
+  } finally {
+    process.chdir(cwd);
+  }
 });

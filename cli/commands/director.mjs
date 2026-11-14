@@ -11,6 +11,7 @@ import { resolveVideo } from "../lib/publish/renders.mjs";
 import { videoPath } from "./render.mjs";
 import { checkNotes, checkTone, meanLuma, median, mergePasses, toneOf } from "../lib/review/look-check.mjs";
 import { frameRgb } from "../lib/vision/screen.mjs";
+import { pool } from "../lib/core/http.mjs";
 import { buildHandoff, handoffPath, handoffRel } from "../lib/publish/handoff.mjs";
 
 export { sceneAt, sheetPlan, writeSheets };
@@ -61,9 +62,11 @@ export async function look(args) {
   // the score is their median and a note one pass alone raised is shown as such.
   const passes = Math.max(1, Number(args.passes ?? 2));
   const models = llmConfig(config).models;
-  log(`look: ${sheets.length} sheet(s) × ${passes} pass(es) → ${models.join(" / ")}`);
+  // Sheets are reviewed side by side (`--jobs`, default 3); a sheet's passes stay in turn, each needing the models the last one used.
+  const jobs = Math.max(1, Number(args.jobs ?? 3));
+  log(`look: ${sheets.length} sheet(s) × ${passes} pass(es), ${jobs} at a time → ${models.join(" / ")}`);
   const reviews = [], notes = [];
-  for (const [k, s] of sheets.entries()) {
+  const done = await pool(sheets, jobs, async (s, k) => {
     const end = s.t0 + s.cells * s.step;
     const scenes = (tl?.scenes ?? []).filter((sc) => sc.start < end && sc.start + sc.duration > s.t0).map(sceneLine).join("\n") || "(no timeline)";
     const runs = [];
@@ -89,11 +92,11 @@ export async function look(args) {
         break; // ask() has already walked the whole model list
       }
     }
-    if (!runs.length) continue;
+    if (!runs.length) return null;
     const merged = mergePasses(runs, { near: Math.max(2, s.step * 1.5) });
-    reviews.push({ sheet: relative(project.root, s.file), score: merged.score, passes: runs.map(({ notes: _, ...r }) => r) });
-    notes.push(...merged.notes.map((n) => (runs.length > 1 ? { ...n, of: runs.length } : n)));
-  }
+    return { review: { sheet: relative(project.root, s.file), score: merged.score, passes: runs.map(({ notes: _, ...r }) => r) }, notes: merged.notes.map((n) => (runs.length > 1 ? { ...n, of: runs.length } : n)) };
+  });
+  for (const d of done.filter(Boolean)) { reviews.push(d.review); notes.push(...d.notes); }
   if (!reviews.length) throw new UserError("no sheet was reviewed; check the model list (onevideo doctor) or pass --models");
   notes.sort((a, b) => a.t - b.t);
   // "Nothing changes here" and "shows up late" are checked against the timeline's own events.
@@ -103,9 +106,9 @@ export async function look(args) {
   if (toned.length) {
     const level = async (t) => meanLuma((await frameRgb(video, { t: Math.max(0, t - offset), width: 96 })).rgb);
     const span = tl?.duration ?? sheets.at(-1).t0 + sheets.at(-1).cells * sheets.at(-1).step;
-    const samples = [];
-    for (let t = offset + 1; t < span; t += Math.max(2, span / 40)) samples.push(await level(t).catch(() => NaN));
-    const mid = median(samples);
+    const at = [];
+    for (let t = offset + 1; t < span; t += Math.max(2, span / 40)) at.push(t);
+    const mid = median(await pool(at, 4, (t) => level(t).catch(() => NaN)));
     for (const n of toned) {
       const sc = tl?.scenes?.find((x) => x.id === n.scene);
       const tone = toneOf(n);

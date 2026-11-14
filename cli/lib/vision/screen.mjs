@@ -2,7 +2,7 @@
 // dark region that does not run off the frame, and its four corners, for footage.props.screen.
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { ffmpeg, ffprobe } from "../core/ffmpeg.mjs";
 
 // rgb: packed RGB24, w×h. → { corners: [TL, TR, BR, BL] in 0–1, share (of the frame), border } or null.
@@ -47,7 +47,7 @@ export async function frameRgb(file, { t = 0, width = 480 } = {}) {
   const tmp = mkdtempSync(join(tmpdir(), "ov-screen-"));
   const out = join(tmp, "f.rgb");
   try {
-    await ffmpeg(["-y", "-v", "error", ...(t ? ["-ss", String(t)] : []), "-i", file, "-frames:v", "1", "-vf", `scale=${width}:${h}`, "-pix_fmt", "rgb24", "-c:v", "rawvideo", "-f", "image2", "-update", "1", out]);
+    await ffmpeg(["-y", "-v", "error", ...(t ? ["-ss", String(t)] : []), "-i", resolve(file), "-frames:v", "1", "-vf", `scale=${width}:${h}`, "-pix_fmt", "rgb24", "-c:v", "rawvideo", "-f", "image2", "-update", "1", out]);
     return { rgb: readFileSync(out), w: width, h };
   } finally {
     rmSync(tmp, { recursive: true, force: true });

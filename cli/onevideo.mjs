@@ -28,7 +28,7 @@ const COMMANDS = {
   stills: [render.stills, "stills [--scene id,id] [--at 0.7|0.3,0.9] [--aspect 9:16]   JPEG per scene (and fraction) → out/stills/"],
   preview: [render.preview, "preview [--at 0.3,0.8] [--force]   stills of every scene → out/qc/preview-NN.jpg + plan/preview.json; the user approves it before the full render"],
   sheet: [director.sheet, "sheet [--fps 1] [--from s] [--to s] [--cols 6] [--video v3|prev|file] [--vs v2|prev]   contact sheets → out/qc/sheet-NN.jpg (compare-NN.jpg with --vs)"],
-  look: [director.look, "look [--focus …] [--models a,b] [--passes 2] [--fps N] [--from s] [--to s] [--video v3|prev|file]   vision-model review of the render → out/qc/look.json"],
+  look: [director.look, "look [--focus …] [--models a,b] [--passes 2] [--jobs 3] [--fps N] [--from s] [--to s] [--video v3|prev|file]   vision-model review of the render → out/qc/look.json"],
   studio: [render.studio, "studio [--port 3000]         Remotion Studio on this project"],
   qc: [render.qc, "qc [--video v3|prev|file]    post-render review → plan/review.json"],
   publish: [render.publish, "publish [--force] [--stems] [--formats 9:16,1:1] [--no-archive]  SRT/VTT, chapters, description (+ stems, + other sizes with their captions) → out/publish/ (needs approved review); then archive when ONEVIDEO_DRIVE_URL is set"],

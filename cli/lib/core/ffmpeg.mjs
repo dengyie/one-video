@@ -1,7 +1,7 @@
 // Remotion ships ffmpeg/ffprobe builds; run them through its CLI so no system install is needed.
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { ONEVIDEO_ROOT, UserError } from "./project.mjs";
 
 export const TEMPLATE_DIR = join(ONEVIDEO_ROOT, "template");
@@ -32,8 +32,9 @@ export function ffmpeg(args, opts) {
   return run(REMOTION_BIN, ["ffmpeg", "-hide_banner", "-nostdin", ...args], opts);
 }
 
+// Both run in the template directory: a relative path is resolved against the caller's cwd first.
 export async function ffprobe(file) {
   requireRemotion();
-  const { stdout } = await run(REMOTION_BIN, ["ffprobe", "-v", "error", "-show_streams", "-show_format", "-of", "json", file]);
+  const { stdout } = await run(REMOTION_BIN, ["ffprobe", "-v", "error", "-show_streams", "-show_format", "-of", "json", resolve(file)]);
   return JSON.parse(stdout);
 }
