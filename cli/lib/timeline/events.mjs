@@ -13,6 +13,30 @@ export function propTimes(v, at) {
   else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) k === "t" && typeof x === "number" ? at(x) : propTimes(x, at);
 }
 
+// When a bar race shows each period in full (scene seconds), as BarRaceScene's periodTimes
+// (template/src/scenes/Data.tsx): cued periods are anchors, the rest spread evenly between them,
+// the last landing by 72% of the scene unless cued. The swap to period k+1 starts at T[k].
+export function periodTimes(n, duration, cueAt) {
+  const endAt = Math.max(1.6, Math.min(duration * 0.72, duration - 1.5));
+  const T = Array.from({ length: n }, (_, k) => cueAt(k));
+  T[0] = T[0] ?? 0.6;
+  T[n - 1] = T[n - 1] ?? Math.max(endAt, T[0] + 1);
+  let a = 0;
+  for (let k = 1; k < n; k++) {
+    if (T[k] === undefined) continue;
+    for (let j = a + 1; j < k; j++) T[j] = T[a] + ((T[k] - T[a]) * (j - a)) / (k - a);
+    a = k;
+  }
+  for (let k = 1; k < n; k++) T[k] = Math.max(T[k], T[k - 1] + 0.5);
+  return T;
+}
+
+// A bar race scene's period times from its compiled cues.
+export const racePeriods = (sc) => periodTimes(sc.props?.periods?.length ?? 0, sc.duration, (k) => {
+  const t = sc.cues?.[sc.props?.periodCues?.[k]];
+  return Number.isFinite(t) ? t : undefined;
+});
+
 // Every string a scene's props, overlays or shots carry: a cue no element names (a compare side
 // with no `cue`, a name left over from an edit) changes nothing on screen.
 export function named(v, out = new Set()) {
@@ -43,6 +67,12 @@ export function screenEvents(timeline) {
     // A quote read aloud lights up line by line as it is spoken (its caption is dropped for that).
     if (sc.type === "quote" && sc.captions === false) for (const l of sc.lines ?? []) at(l.start, "prop");
     // A cued line chart sets off toward each point well before it lands (same travel as LineChartScene).
+    // A bar race opens with its bars rising (the leader lands last, as BarRaceScene's grow) and
+    // re-ranks at the start of each swap.
+    if (sc.type === "bar-race" && sc.props?.periods?.length >= 2) {
+      at(0.15 + (Math.min(sc.props.top ?? 10, sc.props.series?.length ?? 0) - 1) * 0.15 + 0.7, "prop");
+      racePeriods(sc).slice(0, -1).forEach((t) => at(t, "prop"));
+    }
     if (sc.type === "line-chart" && Array.isArray(sc.props?.pointCues)) {
       const T = sc.props.pointCues.map((c) => sc.cues?.[c]);
       for (let k = 1; k < T.length; k++) if (Number.isFinite(T[k]) && Number.isFinite(T[k - 1])) at(T[k] - Math.min(3, Math.max(0.3, (T[k] - T[k - 1]) * 0.8)), "prop");

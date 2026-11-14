@@ -256,8 +256,10 @@ function earlierCue(timeline, sc, x, maxStill) {
   const lines = sc.lines ?? [];
   const later = Object.entries(sc.cues ?? {}).filter(([n, t]) => used.has(n) && sc.start + t >= x.to.t - 1e-3).sort((a, b) => a[1] - b[1]);
   for (const [name, t] of later) {
+    // The line the cue is said in (an offset can put it before its line starts: then it is not moved).
     const l = lines.findLast((l) => l.start <= t + CUE_LEAD + 1e-3);
-    const phrase = l && linePhrase(l.text);
+    if (!l || t + CUE_LEAD > (l.end ?? Infinity) + 0.1) continue;
+    const phrase = linePhrase(l.text);
     const at = phrase && phraseTime(lines, phrase);
     if (!Number.isFinite(at) || Math.abs(at - l.start) > 0.05) continue;
     const nt = Math.max(0, at - CUE_LEAD);

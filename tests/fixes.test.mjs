@@ -64,8 +64,10 @@ test("numberReveals: timeline events and bar-race periods get a cue where their 
   assert.deepEqual([r.cues, r.refs], [{ n1: "1990年", n2: "2010年" }, [{ path: ["props", "periodCues"], value: ["n1", null, "n2", "y2026"] }]]);
   assert.equal(numberReveals({ type: "bar-race", lines: race, props: { periods: ["1990", "2010"], periodCues: ["a", "b"] } }), null);
   const said$ = [{ start: 0, end: 4, text: "第一是NTT，约1187亿美元；" }, { start: 4, end: 8, text: "如今苹果约5.1万亿美元。" }];
-  const bars = numberReveals({ type: "bar-race", lines: said$, props: { periods: ["1990", "2026"], periodCues: ["a", "b"], series: [{ name: "NTT", values: [1.187e11, null] }, { name: "IBM", values: [6.88e10, null], cue: "x" }, { name: "苹果", values: [null, 5.1e12] }] } });
+  const bars = numberReveals({ type: "bar-race", lines: said$, duration: 9, cues: { a: 4.5, b: 7 }, props: { periods: ["1990", "2026"], periodCues: ["a", "b"], series: [{ name: "NTT", values: [1.187e11, null] }, { name: "IBM", values: [6.88e10, null], cue: "x" }, { name: "苹果", values: [null, 5.1e12] }] } });
   assert.deepEqual([bars.cues, bars.refs.map((x) => x.path.join("."))], [{ n1: "1187亿", n2: "5.1万亿" }, ["props.series.0.cue", "props.series.2.cue"]], "a bar whose value is said is called out on it");
+  const early = numberReveals({ type: "bar-race", lines: said$, duration: 9, cues: { a: 6, b: 8 }, props: { periods: ["1990", "2026"], periodCues: ["a", "b"], series: [{ name: "苹果", values: [2e11, 5.1e12] }] } });
+  assert.equal(early, null, "said while the race still shows 1990: the bar shows another value then");
   const said = [{ start: 0, end: 5, text: "2024年，11月5日财报；11月8日宣布离任。" }, { start: 5, end: 8, text: "当晚股价跳水，12月才回来。" }];
   const tl = numberReveals({ type: "timeline", lines: said, props: { events: [{ date: "11.05" }, { date: "11.08" }, { date: "11.08 晚" }, { date: "12.01" }, { date: "11.09", cue: "d" }] } });
   assert.deepEqual(tl.cues, { n1: "11月5日", n2: "11月8日" }, "\"2024年，11月5日\" is two dates, and a month alone is not 12.01");

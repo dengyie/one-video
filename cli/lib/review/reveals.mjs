@@ -3,6 +3,7 @@
 // into the storyboard as phrases.
 import { normalizeForMatch, parseNumber } from "../core/text.mjs";
 import { CUE_LEAD, phraseTime } from "../timeline/cues.mjs";
+import { racePeriods } from "../timeline/events.mjs";
 
 // Same tokens as extractNumbers; dates and counts of years are not values a chart shows.
 const NUMBER = /\d+(?:[.,]\d+)*(?:万亿|亿|万|千|百|%|倍|年|月|日|美元|元)?/g;
@@ -120,10 +121,13 @@ export function numberReveals(sc) {
       return n;
     });
     if (pc.some((c, k) => c && !old[k])) refs.push({ path: ["props", "periodCues"], value: pc });
-    // A bar whose value is said gets called out on those words.
+    // A bar whose value is said gets called out on those words, while the race shows that value's
+    // period (from the swap into it, half a second early, until the swap out of it starts).
+    const T = racePeriods(sc);
+    const shows = (k, t) => (k ? T[k - 1] - 0.5 : 0) <= t && (k === T.length - 1 || t < T[k]);
     (sc.props.series ?? []).forEach((se, i) => {
       if (se?.cue) return;
-      const s = said.find((x) => !used.has(x) && x.amount !== undefined && (se?.values ?? []).some((v) => close(x.amount, Number(v))));
+      const s = said.find((x) => !used.has(x) && x.amount !== undefined && (se?.values ?? []).some((v, k) => close(x.amount, Number(v)) && shows(k, x.t)));
       if (!s) return;
       used.add(s);
       const n = name();
