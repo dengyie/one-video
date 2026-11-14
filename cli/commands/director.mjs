@@ -57,7 +57,7 @@ export async function look(args) {
   // Timeline time from here on: a part render's cells are shifted by where it starts.
   const sheets = raw.map((s) => ({ ...s, t0: +(s.t0 + offset).toFixed(3), times: s.times?.map((t) => +(t + offset).toFixed(2)) }));
   const config = { llm: { ...project.config.llm, ...(args.models ? { models: String(args.models).split(",") } : {}) } };
-    // Each sheet is read by `--passes` models in turn (each pass starts one further down the list):
+  // Each sheet is read by `--passes` different models (each pass starts one further down the list):
   // the score is their median and a note one pass alone raised is shown as such.
   const passes = Math.max(1, Number(args.passes ?? 2));
   const models = llmConfig(config).models;
@@ -67,10 +67,13 @@ export async function look(args) {
     const end = s.t0 + s.cells * s.step;
     const scenes = (tl?.scenes ?? []).filter((sc) => sc.start < end && sc.start + sc.duration > s.t0).map(sceneLine).join("\n") || "(no timeline)";
     const runs = [];
-    for (let p = 0; p < passes; p++) {
-      const order = [...models.slice(p % models.length), ...models.slice(0, p % models.length)];
+    // A pass goes to a model this sheet has not had yet; an empty answer (no score, no notes) does not count.
+    for (let p = 0, from = 0; p < passes && from < models.length; from++) {
+      const order = [...models.slice(from), ...models.slice(0, from)].filter((m) => !runs.some((r) => r.model === m));
+      if (!order.length) break;
       try {
         const { data, model } = await ask({ prompt: lookPrompt({ sheet: s, scenes, focus: args.focus }), images: [imagePart(s.file)], json: true, maxTokens: 4000, config: { llm: { ...config.llm, models: order } } });
+        if (!Number(data.score) && !(Array.isArray(data.notes) && data.notes.length)) { warn(`sheet ${k + 1}: empty review from ${model}; asking the next model`); continue; }
         const run = { model, score: Number(data.score) || null, summary: String(data.summary ?? ""), truncated: !!data.truncated, notes: [] };
         for (const n of Array.isArray(data.notes) ? data.notes : []) {
           // The stamped time read off the cell, snapped to it; the cell index only when no usable time came back.
@@ -79,9 +82,11 @@ export async function look(args) {
           run.notes.push({ t, scene: sceneAt(tl, t), severity: ["high", "medium", "low"].includes(n.severity) ? n.severity : "medium", ...(typeof n.kind === "string" && { kind: n.kind }), ...(Array.isArray(n.span) && { span: n.span }), issue: String(n.issue ?? ""), fix: String(n.fix ?? ""), model });
         }
         runs.push(run);
-        log(`  sheet ${k + 1}.${p + 1}: ${data.score ?? "?"}/10 (${model})${data.truncated ? " [reply cut off; kept complete notes]" : ""} ${data.summary ?? ""}`);
+        p++;
+        log(`  sheet ${k + 1}.${p}: ${data.score ?? "?"}/10 (${model})${data.truncated ? " [reply cut off; kept complete notes]" : ""} ${data.summary ?? ""}`);
       } catch (e) {
         warn(`sheet ${k + 1} pass ${p + 1}: ${e.message}`);
+        break; // ask() has already walked the whole model list
       }
     }
     if (!runs.length) continue;
