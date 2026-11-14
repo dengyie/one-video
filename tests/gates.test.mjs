@@ -377,6 +377,18 @@ test("rhythmGate: a still stretch names the narration line to cue a reveal on", 
   assert.match(rhythmGate(tl, {})[0].msg, /— add a cue, shot or overlay/, "no line inside the stretch: no phrase");
 });
 
+test("rhythmGate: a cue just after a still stretch whose line starts in it moves to the line's opening", () => {
+  const tl = lookTl();
+  Object.assign(tl.scenes[1], { cues: { l: 8.3 }, props: { cue: "l" }, lines: [{ text: "开场", start: 0.5, end: 2 }, { text: "11月8日，他发公开信", start: 6.2, end: 9.6 }] });
+  const [gap] = rhythmGate(tl, {});
+  assert.match(gap.msg, /— move cue "l" to "11月8日" \(16\.0s\), where its line starts/);
+  assert.deepEqual([gap.at.field, gap.fix], ["cues", { scene: "b", path: ["cues", "l"], value: "11月8日" }]);
+  tl.scenes[1].lines[1].start = 7.6;
+  assert.doesNotMatch(rhythmGate(tl, {})[0].msg, /move cue/, "moved, it would still leave too long a stretch");
+  tl.scenes[1].props = {};
+  assert.doesNotMatch(rhythmGate(tl, {})[0].msg, /move cue/, "a cue nothing uses is no reveal");
+});
+
 test("rhythmGate: a scene with no shot track is offered the auto one", () => {
   const tl = lookTl();
   delete tl.scenes[1].shots;

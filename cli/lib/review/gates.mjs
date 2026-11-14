@@ -287,7 +287,10 @@ export function rhythmGate(timeline, config) {
     const said = nums && Object.values(nums.cues).filter((p, i) => sc.start + nums.times[i] > x.from.t + 0.5 && sc.start + nums.times[i] < x.to.t - 0.5);
     // Otherwise a cue just after the stretch whose line starts in it moves to that line's opening.
     const early = !said?.length && sc && earlierCue(timeline, sc, x, g.maxStill);
-    const reveal = said?.length ? `cue its numbers and dates on the words that say them (${said.map((p) => `"${p}"`).join(", ")}), or ${shot} or an overlay` : null;
+    // A number's phrase ends on its digits or unit; a date's on 年/月/日/号.
+    const dates = (said || []).filter((p) => /[年月日号]$/.test(p)).length;
+    const what = !dates ? "numbers" : dates === said.length ? "dates" : "numbers and dates";
+    const reveal = said?.length ? `cue its ${what} on the words that say them (${said.map((p) => `"${p}"`).join(", ")}), or ${shot} or an overlay` : null;
     const where = reveal ?? (early ? `move cue "${early.name}" to "${early.phrase}" (${early.t.toFixed(1)}s), where its line starts, or ${shot} or an overlay` : null) ?? (line ? `cue a reveal on "${line.phrase}" (${line.t.toFixed(1)}s), or ${shot} or an overlay` : auto ? `${shot}, or a cue or overlay` : "add a cue, shot or overlay");
     const fix = auto ? { scene: x.from.scene, path: ["shots"], value: "auto", add: true } : reveal ? { scene: x.from.scene, path: ["cues"], set: nums.cues, add: true, with: nums.refs } : early ? { scene: x.from.scene, path: ["cues", early.name], value: early.phrase } : null;
     out.push(issue("warn", "rhythm", `${x.len.toFixed(1)}s with nothing new on screen from ${x.from.t.toFixed(1)}s (scene "${x.from.scene}") — ${where} (max ${g.maxStill}s)`, { scene: x.from.scene, from: x.from.t, to: x.to.t, field: auto ? "shots" : reveal || early || line ? "cues" : undefined }, fix));
