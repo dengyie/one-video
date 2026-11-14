@@ -11,9 +11,11 @@ test("applyFix: merges into the storyboard object or replaces a value; unknown t
   assert.equal(applyFix(sb, { scene: "a", path: ["overlays", 3], set: { y: 0.7 } }), null);
   assert.equal(applyFix(sb, { scene: "a", path: ["cues", "nope"], value: "x" }), null);
   assert.equal(applyFix(sb, { scene: "zz", path: ["cues", "quit"], value: "x" }), null);
+  assert.deepEqual(applyFix(sb, { scene: "a", path: ["shots"], value: "auto", add: true }), { shots: { from: undefined, to: "auto" } });
+  assert.equal(sb.scenes[0].shots, "auto");
 });
 
-test("fixPlan: stickers dropped on the captions move clear of them and of each other, and the gates pass", () => {
+test("fixPlan: stickers dropped on the captions move clear of them and of each other, still stretches get a shot track, and the gates pass", () => {
   const ex = example({ media: ["sfx/whoosh.wav", "sfx/pop.wav", "music/inspired.mp3"] });
   const storyboard = structuredClone(ex.storyboard);
   storyboard.scenes[1] = { ...storyboard.scenes[1], overlays: [
@@ -26,6 +28,8 @@ test("fixPlan: stickers dropped on the captions move clear of them and of each o
   assert.deepEqual(check.issues.filter((i) => i.gate === "layout").map((i) => i.msg), []);
   const [a, b] = storyboard.scenes[1].overlays;
   assert.ok(a.y < 0.8 && b.y < 0.8 && a.y !== b.y);
-  assert.match(describeFix(applied[0]), new RegExp(`^${storyboard.scenes[1].id} overlays\\[\\d\\]: y 0\\.9\\d? → 0\\.\\d+$`));
+  assert.deepEqual(check.issues.filter((i) => i.gate === "rhythm" && i.fix), [], "scenes with no shot track got the auto one");
+  assert.equal(storyboard.scenes[1].shots, "auto");
+  assert.match(describeFix(applied.find((a) => a.gate === "layout")), new RegExp(`^${storyboard.scenes[1].id} overlays\\[\\d\\]: y 0\\.9\\d? → 0\\.\\d+$`));
   assert.equal(ex.storyboard.scenes[1].overlays, undefined, "the original is untouched");
 });

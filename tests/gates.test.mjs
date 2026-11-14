@@ -357,6 +357,17 @@ test("rhythmGate: a still stretch names the narration line to cue a reveal on", 
   assert.match(rhythmGate(tl, {})[0].msg, /— add a cue, shot or overlay/, "no line inside the stretch: no phrase");
 });
 
+test("rhythmGate: a scene with no shot track is offered the auto one", () => {
+  const tl = lookTl();
+  delete tl.scenes[1].shots;
+  const [gap] = rhythmGate(tl, {});
+  assert.match(gap.msg, /— add "shots": "auto", or a cue or overlay/);
+  assert.deepEqual(gap.at, { scene: "b", from: 12, to: 20, field: "shots" });
+  assert.deepEqual(gap.fix, { scene: "b", path: ["shots"], value: "auto", add: true });
+  tl.scenes[1].type = "device";
+  assert.equal(rhythmGate(tl, {})[0].fix, undefined, "a device keeps its own camera");
+});
+
 test("storyboardSpot: the line of the scene's field to change, else of the scene", () => {
   const text = JSON.stringify({ scenes: [
     { id: "a", type: "title", overlays: [{ type: "word", text: "x" }] },

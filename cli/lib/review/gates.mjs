@@ -240,9 +240,13 @@ export function rhythmGate(timeline, config) {
   const gaps = [...events, end].slice(1).map((e, i) => ({ from: events[i], to: e, len: e.t - events[i].t }))
     .filter((x) => x.len > g.maxStill && x.from.scene !== "credits" && timeline.scenes.find((s) => s.id === x.from.scene)?.type !== "sources");
   for (const x of gaps.sort((a, b) => b.len - a.len).slice(0, 5)) {
-    const line = gapLine(timeline.scenes.find((s) => s.id === x.from.scene), x.from.t, x.to.t);
-    const where = line ? `cue a reveal on "${line.phrase}" (${line.t.toFixed(1)}s), or add a shot or overlay` : "add a cue, shot or overlay";
-    out.push(issue("warn", "rhythm", `${x.len.toFixed(1)}s with nothing new on screen from ${x.from.t.toFixed(1)}s (scene "${x.from.scene}") — ${where} (max ${g.maxStill}s)`, { scene: x.from.scene, from: x.from.t, to: x.to.t, ...(line && { field: "cues" }) }));
+    const sc = timeline.scenes.find((s) => s.id === x.from.scene);
+    const line = gapLine(sc, x.from.t, x.to.t);
+    // A scene with no shot track gets the auto one: the compiler then drifts through any still stretch.
+    const auto = !sc?.shots?.length && sc?.type !== "device";
+    const shot = auto ? `add "shots": "auto"` : "add a shot";
+    const where = line ? `cue a reveal on "${line.phrase}" (${line.t.toFixed(1)}s), or ${shot} or an overlay` : auto ? `${shot}, or a cue or overlay` : "add a cue, shot or overlay";
+    out.push(issue("warn", "rhythm", `${x.len.toFixed(1)}s with nothing new on screen from ${x.from.t.toFixed(1)}s (scene "${x.from.scene}") — ${where} (max ${g.maxStill}s)`, { scene: x.from.scene, from: x.from.t, to: x.to.t, field: auto ? "shots" : line ? "cues" : undefined }, auto ? { scene: x.from.scene, path: ["shots"], value: "auto", add: true } : null));
   }
   const types = timeline.scenes.slice(1).map((s) => s.transitionIn?.type);
   // Cuts between scenes on the same device are the device staying put, not a transition.
