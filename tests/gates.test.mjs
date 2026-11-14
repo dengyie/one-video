@@ -57,6 +57,8 @@ test("storyboardGate: a cue nothing names warns; one named after a props side ge
   const profit = sb.scenes.find((s) => s.id === "profit");
   delete profit.props.left.cue;
   profit.cues.spare = 2;
+  profit.cues.said = "整个集团";
+  profit.overlays = [{ type: "word", text: "≠", at: "整个集团" }];
   const m = storyboardGate(sb, ex.script, ex.config, null).filter((i) => i.gate === "cues");
   assert.deepEqual(m.map((i) => i.msg), [
     'scene "profit": cue "left" is not used by props, overlays, shots or sfx — nothing changes on screen there (set "cue": "left" on props.left)',

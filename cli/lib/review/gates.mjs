@@ -100,10 +100,10 @@ export function storyboardGate(storyboard, script, config, assets) {
     const estimate = chars / (config.tts?.syllablesPerSecond ?? SYLLABLES_PER_SEC);
     if (estimate > g.longSceneNoCue && Object.keys(sb.cues ?? {}).length === 0) out.push(issue("warn", "pacing", `scene "${sb.id}" ≈${estimate.toFixed(0)}s of narration with no cues — add reveals so the screen changes with the voice`));
     for (const ref of cueRefs(sb.props)) if (!(ref in (sb.cues ?? {}))) out.push(issue("error", "cues", `scene "${sb.id}": props reference cue "${ref}" which is not defined in scene.cues`));
-    // A cue nothing names changes nothing on screen; one named after a side or block of the props
-    // (compare "left"/"right") was meant for it.
+    // A cue nothing names changes nothing on screen (unless something is pinned on its phrase
+    // directly); one named after a side or block of the props (compare "left"/"right") was meant for it.
     const said = named({ ...sb, cues: undefined, id: undefined });
-    for (const name of Object.keys(sb.cues ?? {}).filter((k) => !said.has(k))) {
+    for (const [name] of Object.entries(sb.cues ?? {}).filter(([k, v]) => !said.has(k) && !said.has(v?.phrase ?? v))) {
       const own = sb.props?.[name] && typeof sb.props[name] === "object" && !Array.isArray(sb.props[name]) && !sb.props[name].cue;
       out.push(issue("warn", "cues", `scene "${sb.id}": cue "${name}" is not used by props, overlays, shots or sfx — nothing changes on screen there${own ? ` (set "cue": "${name}" on props.${name})` : ""}`, null, own ? { scene: sb.id, path: ["props", name, "cue"], value: name, add: true } : null));
     }
