@@ -63,7 +63,7 @@
 - 连续同类型场景不超过 2 个（variety 门）。
 - 静态类（title/quote/bullets/chapter/sources）合计不超过约 40% 的场景（documentary 30%）。
 - 图表里的数字必须来自 research 的 `value`；不要在分镜里手算新数字。
-- 一屏一个焦点：数字卡 ≤4 张一排，排名竞赛 top ≤10，饼图 ≤6 段。
+- 一屏一个焦点：数字卡 ≤4 张一排，排名竞赛 top ≤10，饼图 ≤6 段。`slam` 关键词落下时，之前出现、没写 `duration` 且还在屏上的贴纸（stamp、image、callout 等）会自动随之退场；聚光、圈注、闪光等强调效果，以及和它同时（0.3 秒内）进来的叠层保留。想让贴纸留下就给它写 `duration`。
 
 ## 检查
 
