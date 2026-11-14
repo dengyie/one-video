@@ -15,7 +15,7 @@ test("applyFix: merges into the storyboard object or replaces a value; unknown t
   assert.equal(sb.scenes[0].shots, "auto");
 });
 
-test("fixPlan: stickers dropped on the captions move clear of them and of each other, still stretches get a shot track, and the gates pass", () => {
+test("fixPlan: stickers dropped on the captions move clear of them and of each other, a still title gets a shot track, charts keep their cue warnings", () => {
   const ex = example({ media: ["sfx/whoosh.wav", "sfx/pop.wav", "music/inspired.mp3"] });
   const storyboard = structuredClone(ex.storyboard);
   storyboard.scenes[1] = { ...storyboard.scenes[1], overlays: [
@@ -29,7 +29,9 @@ test("fixPlan: stickers dropped on the captions move clear of them and of each o
   const [a, b] = storyboard.scenes[1].overlays;
   assert.ok(a.y < 0.8 && b.y < 0.8 && a.y !== b.y);
   assert.deepEqual(check.issues.filter((i) => i.gate === "rhythm" && i.fix), [], "scenes with no shot track got the auto one");
-  assert.equal(storyboard.scenes[1].shots, "auto");
+  assert.equal(storyboard.scenes[0].shots, "auto", "the title opening is pushed into");
+  assert.equal(storyboard.scenes[1].shots, undefined, "the stat cards are not: their stretch wants a cue");
+  assert.ok(check.issues.some((i) => i.gate === "rhythm" && /cue a reveal/.test(i.msg)));
   assert.match(describeFix(applied.find((a) => a.gate === "layout")), new RegExp(`^${storyboard.scenes[1].id} overlays\\[\\d\\]: y 0\\.9\\d? → 0\\.\\d+$`));
   assert.equal(ex.storyboard.scenes[1].overlays, undefined, "the original is untouched");
 });

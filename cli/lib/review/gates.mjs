@@ -7,7 +7,7 @@ import { sceneLines } from "../captions/lines.mjs";
 import { captionBand } from "../captions/layout.mjs";
 import { countryCentroid } from "../library/geo.mjs";
 import { MAX_STILL, OVERLAY_EFFECTS, propTimes, screenEvents } from "../timeline/index.mjs";
-import { FRAMED, GENTLE_ZOOM } from "../timeline/shots.mjs";
+import { laidOut } from "../timeline/shots.mjs";
 
 export { normalizeLicense };
 export { captionGate } from "../captions/gate.mjs";
@@ -244,7 +244,8 @@ export function rhythmGate(timeline, config) {
     const sc = timeline.scenes.find((s) => s.id === x.from.scene);
     const line = gapLine(sc, x.from.t, x.to.t);
     // A scene with no shot track gets the auto one: the compiler then drifts through any still stretch.
-    const auto = !sc?.shots?.length && sc?.type !== "device";
+    // Charts and cards are not pushed into (laidOut): their stretch wants a cue.
+    const auto = !sc?.shots?.length && sc?.type !== "device" && !laidOut(sc?.type);
     const shot = auto ? `add "shots": "auto"` : "add a shot";
     const where = line ? `cue a reveal on "${line.phrase}" (${line.t.toFixed(1)}s), or ${shot} or an overlay` : auto ? `${shot}, or a cue or overlay` : "add a cue, shot or overlay";
     out.push(issue("warn", "rhythm", `${x.len.toFixed(1)}s with nothing new on screen from ${x.from.t.toFixed(1)}s (scene "${x.from.scene}") — ${where} (max ${g.maxStill}s)`, { scene: x.from.scene, from: x.from.t, to: x.to.t, field: auto ? "shots" : line ? "cues" : undefined }, auto ? { scene: x.from.scene, path: ["shots"], value: "auto", add: true } : null));
@@ -324,6 +325,7 @@ const BOXED = new Set(["image", "icon", "lottie", "stamp"]);
 const LEFT_TEXT = (sc, portrait) => (sc.type === "kinetic" && sc.props?.align === "left") || sc.type === "bullets" || (sc.type === "chapter" && !portrait);
 const TEXT_TYPES = new Set([...STATIC_TYPES, "kinetic"]);
 export const LAYOUT_DEFAULTS = { minSticker: 240, maxTextZoom: 1.25 };
+const LAID_OUT_ZOOM = 1.05;
 
 function overlayBox(o, width, height) {
   if (o.on || (!BOXED.has(o.type) && o.type !== "word") || (o.x === undefined && o.y === undefined)) return null;
@@ -482,10 +484,11 @@ export function layoutGate(timeline, config) {
       }
       placed.push({ i, o, box });
     }
-    // Charts and cards are laid out to the frame's edges: a push past GENTLE_ZOOM crops their outer labels.
-    if (!TEXT_TYPES.has(sc.type) && !FRAMED.has(sc.type) && sc.type !== "sources") {
-      const sh = (sc.shots ?? []).find((s) => (s.zoom ?? 1) > GENTLE_ZOOM + 0.02);
-      if (sh) out.push(issue("warn", "layout", `scene "${sc.id}" (${sc.type}) shot at ${sh.t}s pushes to zoom ${sh.zoom}; cards and labels near the edges leave the frame — keep it within ${GENTLE_ZOOM} or frame a region with focus`, { scene: sc.id, from: sc.start + sh.t, to: sc.start + sc.duration, field: "shots" }));
+    // Charts and cards are laid out to the frame's edges under a header that stays put: a push crops
+    // their outer labels and slides their top under the header.
+    if (laidOut(sc.type)) {
+      const sh = (sc.shots ?? []).find((s) => (s.zoom ?? 1) > LAID_OUT_ZOOM);
+      if (sh) out.push(issue("warn", "layout", `scene "${sc.id}" (${sc.type}) shot at ${sh.t}s pushes to zoom ${sh.zoom}; labels and cards near the edges leave the frame or slide under the header — check with onevideo stills, or reveal with cues instead (keep shots within ${LAID_OUT_ZOOM})`, { scene: sc.id, from: sc.start + sh.t, to: sc.start + sc.duration, field: "shots" }));
       continue;
     }
     if (!TEXT_TYPES.has(sc.type)) continue;

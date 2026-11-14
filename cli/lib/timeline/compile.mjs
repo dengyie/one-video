@@ -17,7 +17,7 @@ import { normalizeForMatch } from "../core/text.mjs";
 import { resolveAt } from "./cues.mjs";
 import { CAMERA_DEFAULT, boundaryTransition, normTransition } from "./transitions.mjs";
 import { MOTION_GAIN, MOTION_SFX, motionCues, overlaySound, sfxFile, sfxVariants, slamWord, transitionSfx } from "./sfx.mjs";
-import { bestOffset, compileShots, FRAMED, GENTLE_ZOOM, hardCuts, rampShots, stillShots } from "./shots.mjs";
+import { bestOffset, compileShots, hardCuts, laidOut, rampShots, stillShots } from "./shots.mjs";
 import { MAX_STILL, OVERLAY_EFFECTS, screenEvents } from "./events.mjs";
 import { anchorNames } from "./anchors.mjs";
 import { resolveDeviceRects, resolvePropTimes, settled } from "./props.mjs";
@@ -190,7 +190,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     if (sb.type === "canvas") lastCanvas = { items: props.items ?? [], path: props.path ?? [] };
     let shots;
     if (sb.shots) {
-      const res = compileShots(sb.shots, { ...ctx, gentle: !FRAMED.has(sb.type) });
+      const res = compileShots(sb.shots, { ...ctx, gentle: laidOut(sb.type) });
       res.errors.forEach((e) => errors.push(`scene "${sb.id}" ${e}`));
       if (res.shots.length) shots = res.shots;
     }
@@ -240,10 +240,9 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     const chapter = sb.chapter ?? sc.chapter;
     if (chapter) chapters.push({ title: chapter, start: r3(start) });
     // A shot track also covers long stretches where nothing else changes (rhythm gate's maxStill).
-    if (shots && sb.type !== "sources" && sb.type !== "canvas") {
+    if (shots && sb.type !== "sources" && sb.type !== "canvas" && !laidOut(sb.type)) {
       const seen = { id: sb.id, type: sb.type, start: 0, duration, cues, props, overlays, lines, captions: sb.captions ?? !readAloud(sb, lines) };
-      const maxZoom = FRAMED.has(sb.type) ? undefined : Math.max(GENTLE_ZOOM, ...shots.map((sh) => sh.zoom));
-      shots = stillShots(shots, screenEvents({ scenes: [seen] }).map((e) => e.t), duration, config.gates?.maxStill ?? MAX_STILL, maxZoom);
+      shots = stillShots(shots, screenEvents({ scenes: [seen] }).map((e) => e.t), duration, config.gates?.maxStill ?? MAX_STILL);
     }
 
     scenes.push({
