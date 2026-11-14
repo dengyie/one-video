@@ -9,6 +9,7 @@ import { countryCentroid } from "../library/geo.mjs";
 import { MAX_STILL, OVERLAY_EFFECTS, named, propTimes, screenEvents } from "../timeline/index.mjs";
 import { laidOut } from "../timeline/shots.mjs";
 import { numberReveals } from "./reveals.mjs";
+import { CUE_LEAD, phraseTime } from "../timeline/cues.mjs";
 
 export { normalizeLicense };
 export { captionGate } from "../captions/gate.mjs";
@@ -238,16 +239,42 @@ function gapLine(sc, from, to) {
   return best ? { t: best.t, phrase: best.phrase } : null;
 }
 
+// Stretches longer than maxStill with nothing new on screen (no scene, cue, real shot move or overlay).
+function stillGaps(timeline, maxStill) {
+  // A shot that barely moves the frame is not something new to look at.
+  const events = screenEvents(timeline).filter((e) => !e.weak);
+  const end = { t: timeline.duration, scene: timeline.scenes.at(-1)?.id };
+  return [...events, end].slice(1).map((e, i) => ({ from: events[i], to: e, len: e.t - events[i].t }))
+    .filter((x) => x.len > maxStill && x.from.scene !== "credits" && timeline.scenes.find((s) => s.id === x.from.scene)?.type !== "sources");
+}
+
+// A cue that fires after the stretch [x.from, x.to] although its line starts inside it: moved to the
+// line's opening words it fires as the line begins. Only offered when that leaves no stretch too long
+// between the stretch's start and the cue's old time.
+function earlierCue(timeline, sc, x, maxStill) {
+  const used = named([sc.props, sc.overlays, sc.shots]);
+  const lines = sc.lines ?? [];
+  const later = Object.entries(sc.cues ?? {}).filter(([n, t]) => used.has(n) && sc.start + t >= x.to.t - 1e-3).sort((a, b) => a[1] - b[1]);
+  for (const [name, t] of later) {
+    const l = lines.findLast((l) => l.start <= t + CUE_LEAD + 1e-3);
+    const phrase = l && linePhrase(l.text);
+    const at = phrase && phraseTime(lines, phrase);
+    if (!Number.isFinite(at) || Math.abs(at - l.start) > 0.05) continue;
+    const nt = Math.max(0, at - CUE_LEAD);
+    if (sc.start + nt < x.from.t + 1 || nt > t - 0.3) continue;
+    const moved = { ...timeline, scenes: timeline.scenes.map((s) => (s === sc ? { ...s, cues: { ...s.cues, [name]: nt } } : s)) };
+    if (stillGaps(moved, maxStill).some((y) => y.from.t < sc.start + t && y.to.t > x.from.t)) continue;
+    return { name, phrase, t: sc.start + nt };
+  }
+  return null;
+}
+
 // Screen rhythm on the compiled timeline: the longest stretches where nothing new happens on
 // screen (no scene, cue, real shot move or overlay), and runs of the same transition. Warnings only.
 export function rhythmGate(timeline, config) {
   const g = { ...GATE_DEFAULTS, ...(config.gates ?? {}) };
   const out = [];
-  // A shot that barely moves the frame is not something new to look at.
-  const events = screenEvents(timeline).filter((e) => !e.weak);
-  const end = { t: timeline.duration, scene: timeline.scenes.at(-1)?.id };
-  const gaps = [...events, end].slice(1).map((e, i) => ({ from: events[i], to: e, len: e.t - events[i].t }))
-    .filter((x) => x.len > g.maxStill && x.from.scene !== "credits" && timeline.scenes.find((s) => s.id === x.from.scene)?.type !== "sources");
+  const gaps = stillGaps(timeline, g.maxStill);
   for (const x of gaps.sort((a, b) => b.len - a.len).slice(0, 5)) {
     const sc = timeline.scenes.find((s) => s.id === x.from.scene);
     const line = gapLine(sc, x.from.t, x.to.t);
@@ -258,10 +285,12 @@ export function rhythmGate(timeline, config) {
     // Chart elements with no cue whose numbers or dates are said in the stretch: pin them all on those words.
     const nums = !auto && numberReveals(sc);
     const said = nums && Object.values(nums.cues).filter((p, i) => sc.start + nums.times[i] > x.from.t + 0.5 && sc.start + nums.times[i] < x.to.t - 0.5);
+    // Otherwise a cue just after the stretch whose line starts in it moves to that line's opening.
+    const early = !said?.length && sc && earlierCue(timeline, sc, x, g.maxStill);
     const reveal = said?.length ? `cue its numbers and dates on the words that say them (${said.map((p) => `"${p}"`).join(", ")}), or ${shot} or an overlay` : null;
-    const where = reveal ?? (line ? `cue a reveal on "${line.phrase}" (${line.t.toFixed(1)}s), or ${shot} or an overlay` : auto ? `${shot}, or a cue or overlay` : "add a cue, shot or overlay");
-    const fix = auto ? { scene: x.from.scene, path: ["shots"], value: "auto", add: true } : reveal ? { scene: x.from.scene, path: ["cues"], set: nums.cues, add: true, with: nums.refs } : null;
-    out.push(issue("warn", "rhythm", `${x.len.toFixed(1)}s with nothing new on screen from ${x.from.t.toFixed(1)}s (scene "${x.from.scene}") — ${where} (max ${g.maxStill}s)`, { scene: x.from.scene, from: x.from.t, to: x.to.t, field: auto ? "shots" : reveal || line ? "cues" : undefined }, fix));
+    const where = reveal ?? (early ? `move cue "${early.name}" to "${early.phrase}" (${early.t.toFixed(1)}s), where its line starts, or ${shot} or an overlay` : null) ?? (line ? `cue a reveal on "${line.phrase}" (${line.t.toFixed(1)}s), or ${shot} or an overlay` : auto ? `${shot}, or a cue or overlay` : "add a cue, shot or overlay");
+    const fix = auto ? { scene: x.from.scene, path: ["shots"], value: "auto", add: true } : reveal ? { scene: x.from.scene, path: ["cues"], set: nums.cues, add: true, with: nums.refs } : early ? { scene: x.from.scene, path: ["cues", early.name], value: early.phrase } : null;
+    out.push(issue("warn", "rhythm", `${x.len.toFixed(1)}s with nothing new on screen from ${x.from.t.toFixed(1)}s (scene "${x.from.scene}") — ${where} (max ${g.maxStill}s)`, { scene: x.from.scene, from: x.from.t, to: x.to.t, field: auto ? "shots" : reveal || early || line ? "cues" : undefined }, fix));
   }
   const types = timeline.scenes.slice(1).map((s) => s.transitionIn?.type);
   // Cuts between scenes on the same device are the device staying put, not a transition.
