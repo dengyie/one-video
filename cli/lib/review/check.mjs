@@ -16,9 +16,9 @@ export function loadPlan(project) {
   };
 }
 
-export function checkProject(project, { needTimings = false } = {}) {
+// `plan` checks plan files held in memory instead of the ones on disk (onevideo fix tries its changes first).
+export function checkProject(project, { needTimings = false, plan = loadPlan(project) } = {}) {
   const { config } = project;
-  const plan = loadPlan(project);
   const issues = [...schemaGate("project", config)];
   if (plan.research) issues.push(...schemaGate("research", plan.research));
   if (!plan.script) issues.push({ level: "error", gate: "files", msg: "missing plan/script.json (stage: script)" });

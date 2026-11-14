@@ -3,7 +3,8 @@ import { cpSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } f
 import { join, resolve, basename } from "node:path";
 import { ONEVIDEO_ROOT, CONFIG_FILE, UserError, loadProject, pipelineDef, styleDef, writeJson, readJson, log } from "../lib/core/project.mjs";
 import { stageStatus, approveStage } from "../lib/core/state.mjs";
-import { checkProject, printIssues } from "../lib/review/check.mjs";
+import { checkProject, loadPlan, printIssues } from "../lib/review/check.mjs";
+import { describeFix, fixPlan } from "../lib/review/fixes.mjs";
 import { DIMENSIONS } from "../lib/timeline/index.mjs";
 
 export async function init(args) {
@@ -72,6 +73,28 @@ export async function validate(args) {
   printIssues(issues);
   log(`${errors.length} error(s), ${warnings.length} warning(s)`);
   if (errors.length || (args.strict && warnings.length)) process.exitCode = 1;
+}
+
+// The fixes the gates suggest (sticker positions, a late opening cue), tried on the storyboard in memory and
+// re-checked; --apply writes them (the previous storyboard is kept in out/qc/storyboard.before-fix.json).
+export async function fix(args) {
+  const project = loadProject();
+  const plan = loadPlan(project);
+  if (!plan.storyboard || !plan.timings) throw new UserError("fix needs plan/storyboard.json and plan/timings.json (run onevideo tts first)");
+  const before = checkProject(project, { plan: { ...plan, storyboard: structuredClone(plan.storyboard) } });
+  const original = structuredClone(plan.storyboard);
+  const { applied, check } = fixPlan(project, plan);
+  if (!applied.length) { log(`nothing to fix automatically; ${before.errors.length} error(s), ${before.warnings.length} warning(s) remain (onevideo validate)`); return; }
+  for (const a of applied) log(`✎ [${a.gate}] ${describeFix(a)}`);
+  log(`${before.errors.length} → ${check.errors.length} error(s), ${before.warnings.length} → ${check.warnings.length} warning(s)`);
+  if (check.errors.length > before.errors.length) {
+    printIssues(check.errors);
+    throw new UserError("these fixes add errors; storyboard left as it is");
+  }
+  if (!args.apply) { log("dry run: onevideo fix --apply writes these to plan/storyboard.json"); return; }
+  writeJson(join(project.paths.out, "qc", "storyboard.before-fix.json"), original);
+  writeJson(project.paths.storyboard, plan.storyboard);
+  log(`wrote plan/storyboard.json (before: out/qc/storyboard.before-fix.json); run onevideo timeline, then preview, and approve storyboard again if it was approved`);
 }
 
 export async function approve(args) {

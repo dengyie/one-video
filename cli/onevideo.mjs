@@ -14,6 +14,7 @@ const COMMANDS = {
   init: [plan.init, "init <dir> [--pipeline data-explainer] [--style midnight-data] [--aspect 16:9] [--title …] [--example spacex-motion|spacex-ipo|promo-demo]"],
   status: [plan.status, "status                       stage table + next director doc"],
   validate: [plan.validate, "validate [--strict]          schemas + pre-compose gates"],
+  fix: [plan.fix, "fix [--apply]                the gates' own fixes (sticker positions, a late opening cue), re-checked; --apply writes plan/storyboard.json"],
   approve: [plan.approve, "approve <stage> [--note …]   human sign-off (hash-locked)"],
   tts: [media.tts, "tts [--sample] [--dry] [--force] [--only s1,s2]   sentence-level narration → plan/timings.json"],
   music: [media.music, "music [--preset ambient|pulse|documentary|bright] [--force]   procedural BGM + SFX"],

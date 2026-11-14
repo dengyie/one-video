@@ -18,8 +18,10 @@ export const GATE_DEFAULTS = { staticRatioMax: 0.4, maxSameTypeRun: 2, longScene
 
 // `at` places a timeline finding: { scene, from, to } in timeline seconds (look matches its notes to it),
 // and `field`, the storyboard field of that scene to change ("overlays[2]", "shots", "cues"), when one does.
+// `fix` is a change `onevideo fix` can make for you: { scene, path: ["overlays", 2], set: { y } } merges into
+// that storyboard object, { scene, path: ["cues", "quit"], value } replaces it.
 const r3 = (x) => Math.round(x * 1000) / 1000;
-const issue = (level, gate, msg, at) => ({ level, gate, msg, ...(at && { at: { scene: at.scene, from: r3(at.from), to: r3(at.to), ...(at.field && { field: at.field }) } }) });
+const issue = (level, gate, msg, at, fix) => ({ level, gate, msg, ...(at && { at: { scene: at.scene, from: r3(at.from), to: r3(at.to), ...(at.field && { field: at.field }) } }), ...(fix && { fix }) });
 
 export function schemaGate(name, value) {
   const schema = loadSchema(name);
@@ -208,7 +210,8 @@ export function openingGate(timeline, config) {
   const late = Object.entries(sc.cues ?? {}).find(([, t]) => t === first)?.[0];
   const line = (sc.lines ?? []).find((l) => l.start <= g.hookReveal && linePhrase(l.text));
   const how = late && line ? `move cue "${late}" to "${linePhrase(line.text)}" (${line.start.toFixed(1)}s)` : line ? `cue it on "${linePhrase(line.text)}" (${line.start.toFixed(1)}s)` : "cue it on an earlier word";
-  return [issue("warn", "opening", `the first ${first.toFixed(1)}s of "${sc.id}" show only ${sc.backdrop ? "its backdrop" : "the background"} — reveal the hook's main line by ${g.hookReveal}s (${how}, or open on footage; gates.hookReveal)`, { scene: sc.id, from: sc.start, to: sc.start + first, field: "cues" })];
+  const fix = late && line ? { scene: sc.id, path: ["cues", late], value: linePhrase(line.text) } : null;
+  return [issue("warn", "opening", `the first ${first.toFixed(1)}s of "${sc.id}" show only ${sc.backdrop ? "its backdrop" : "the background"} — reveal the hook's main line by ${g.hookReveal}s (${how}, or open on footage; gates.hookReveal)`, { scene: sc.id, from: sc.start, to: sc.start + first, field: "cues" }, fix)];
 }
 
 // A line's opening words, up to its first punctuation (12 characters at most): a phrase a cue can name.
@@ -450,14 +453,17 @@ export function layoutGate(timeline, config) {
         for (let y = Math.floor((y0 + dy0) * 100 + 1e-6) / 100; box[1] + y - y0 >= 0.02 - 1e-9; y = r2(y - 0.01)) {
           const dy = y - y0;
           const bx = [box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy];
-          if (!bandHit(bx) && !others.some((b) => meets(b, bx))) return dx ? `move it to x ${r2((o.x ?? 0.5) + dx)}, y ${r2((o.y ?? 0.5) + dy)}` : `move it ${dy < 0 ? "up " : ""}to y ${r2((o.y ?? 0.5) + dy)}`;
+          if (bandHit(bx) || others.some((b) => meets(b, bx))) continue;
+          const set = { ...(dx && { x: r2((o.x ?? 0.5) + dx) }), y: r2(y) };
+          return { text: dx ? `move it to x ${set.x}, y ${set.y}` : `move it ${dy < 0 ? "up " : ""}to y ${set.y}`, fix: { scene: sc.id, path: ["overlays", i], set } };
         }
         return null;
       };
-      if (box[0] < -0.01 || box[1] < -0.01 || box[2] > 1.01 || box[3] > 1.01) out.push(issue("warn", "layout", `${name} runs off the frame at x ${o.x ?? 0.5}, y ${o.y ?? 0.5} — ${spot() ?? "move it inward"}`, at));
+      const moved = spot();
+      if (box[0] < -0.01 || box[1] < -0.01 || box[2] > 1.01 || box[3] > 1.01) out.push(issue("warn", "layout", `${name} runs off the frame at x ${o.x ?? 0.5}, y ${o.y ?? 0.5} — ${moved?.text ?? "move it inward"}`, at, moved?.fix));
       if (o.type === "image" && (o.size ?? 160) < g.minSticker) out.push(issue("warn", "layout", `${name}: size ${o.size ?? 160} reads as a thumbnail — use ${g.minSticker}+ or make it a backdrop / photo-stack (gates.minSticker)`, at));
       const hit = bandHit(box);
-      if (hit) out.push(issue("error", "layout", `${name} sits in the caption band while "${hit.text}" is spoken — ${spot() ?? `move it above y ${portrait ? 0.7 : 0.8}`} or to a side`, at));
+      if (hit) out.push(issue("error", "layout", `${name} sits in the caption band while "${hit.text}" is spoken — ${moved?.text ?? `move it above y ${portrait ? 0.7 : 0.8}`} or to a side`, at, moved?.fix));
       for (const p of placed) if (p.o.t < o.end && o.t < p.o.end && meets(p.box, box)) out.push(issue("warn", "layout", `${name} overlaps overlay ${p.i} (${p.o.type}) — space them out or stagger their times`, at));
       if (sc.type === "map") {
         const hits = new Set();
