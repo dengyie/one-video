@@ -211,9 +211,10 @@ export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Fo
           const color = r.s.color ?? (r.s.group && groupColors[r.s.group]) ?? colorAt(theme, r.idx);
           // A bar still waiting to grow shows no "0" beside it: its value fades in as the bar starts.
           const g = grow(r.rank), visible = clamp01(top - r.rank), value = r.value * g;
-          // A cued bar is called out when the narration says it: it glows, its value lights up with a short pop.
+          // A cued bar is called out when the narration says it: it glows, its value lights up with a
+          // short pop, and after ~2.4 s it settles back to a faint glow so later callouts stand out.
           const at = r.s.cue ? scene.cues[r.s.cue] : undefined;
-          const on = at === undefined ? 0 : clamp01((t - at) / 0.4);
+          const on = at === undefined ? 0 : clamp01((t - at) / 0.4) * (1 - 0.7 * clamp01((t - at - 2.4) / 0.6));
           const pop = on > 0 && on < 1 ? Math.sin(on * Math.PI) : 0;
           return (
             <div key={r.s.name} style={{ position: "absolute", top: r.rank * rowH, left: 0, right: 0, height: rowH, display: "flex", alignItems: "center", opacity: visible }}>

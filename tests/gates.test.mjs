@@ -289,6 +289,9 @@ test("screenEvents: every on-screen change in timeline time, barely-moving shots
   assert.deepEqual(ev.filter((e) => e.what === "overlay").map((e) => e.t), [12]);
   const rot = screenEvents({ scenes: [{ id: "r", start: 0, duration: 5, shots: [{ t: 0 }, { t: 2, rotate: 4 }] }] });
   assert.equal(rot.find((e) => e.t === 2).weak, undefined); // a turn of the frame is a change
+  const race = { id: "r", type: "bar-race", start: 10, duration: 9, cues: { b: 6 }, props: { periods: ["1990", "2000", "2026"], periodCues: [null, null, "b"], series: [{ values: [1, 2, 3] }, { values: [2, 1, 3] }, { values: [3, 3, 1] }] } };
+  assert.deepEqual(screenEvents({ scenes: [race] }).filter((e) => e.what === "prop").map((e) => +e.t.toFixed(2)), [10.6, 11.15, 13.3],
+    "the bars' grow-in and each swap into the next period count");
 });
 
 test("checkNotes: still/late notes the timeline contradicts are marked doubtful, others kept as they are", () => {
@@ -385,6 +388,8 @@ test("rhythmGate: a cue just after a still stretch whose line starts in it moves
   assert.deepEqual([gap.at.field, gap.fix], ["cues", { scene: "b", path: ["cues", "l"], value: "11月8日" }]);
   tl.scenes[1].lines[1].start = 7.6;
   assert.doesNotMatch(rhythmGate(tl, {})[0].msg, /move cue/, "moved, it would still leave too long a stretch");
+  tl.scenes[1].lines[1] = { text: "11月8日，他发公开信", start: 6.2, end: 7.5 };
+  assert.doesNotMatch(rhythmGate(tl, {})[0].msg, /move cue/, "a cue that fires after its line ended is on later words: left alone");
   tl.scenes[1].props = {};
   assert.doesNotMatch(rhythmGate(tl, {})[0].msg, /move cue/, "a cue nothing uses is no reveal");
 });

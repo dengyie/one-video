@@ -122,18 +122,32 @@ export function numberReveals(sc) {
     });
     if (pc.some((c, k) => c && !old[k])) refs.push({ path: ["props", "periodCues"], value: pc });
     // A bar whose value is said gets called out on those words, while the race shows that value's
-    // period (from the swap into it, half a second early, until the swap out of it starts).
+    // period (from the swap into it, half a second early, until the swap out of it starts); a bar
+    // whose name is said, while it is in the top ranks then.
     const T = racePeriods(sc);
-    const shows = (k, t) => (k ? T[k - 1] - 0.5 : 0) <= t && (k === T.length - 1 || t < T[k]);
-    (sc.props.series ?? []).forEach((se, i) => {
-      if (se?.cue) return;
-      const s = said.find((x) => !used.has(x) && x.amount !== undefined && (se?.values ?? []).some((v, k) => close(x.amount, Number(v)) && shows(k, x.t)));
-      if (!s) return;
-      used.add(s);
+    const series = sc.props.series ?? [];
+    const top = sc.props.top ?? 10;
+    const shown = (t) => T.findIndex((_, k) => (k ? T[k - 1] - 0.5 : 0) <= t && (k === T.length - 1 || t < T[k]));
+    const ranked = (i, k) => Number.isFinite(series[i]?.values?.[k]) && series.filter((o) => (o?.values?.[k] ?? -Infinity) > series[i].values[k]).length < top;
+    const call = (i, s) => {
       const n = name();
       cues[n] = s.phrase;
       times.push(s.t);
       refs.push({ path: ["props", "series", i, "cue"], value: n });
+    };
+    const byValue = series.map((se, i) => {
+      if (se?.cue) return true;
+      const s = said.find((x) => !used.has(x) && x.amount !== undefined && (se?.values ?? []).some((v, k) => close(x.amount, Number(v)) && shown(x.t) === k));
+      if (s) { used.add(s); call(i, s); }
+      return !!s;
+    });
+    const lines = sc.lines ?? [];
+    series.forEach((se, i) => {
+      const phrase = normalizeForMatch(String(se?.name ?? ""));
+      const at = !byValue[i] && phrase.length >= 2 && phraseTime(lines, phrase);
+      if (!Number.isFinite(at)) return;
+      const t = Math.max(0, at - CUE_LEAD);
+      if (ranked(i, shown(t))) call(i, { phrase, t });
     });
   } else {
     for (const el of elements(sc.type, sc.props)) {
