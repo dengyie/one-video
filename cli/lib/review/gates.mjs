@@ -325,7 +325,8 @@ const BOXED = new Set(["image", "icon", "lottie", "stamp"]);
 const LEFT_TEXT = (sc, portrait) => (sc.type === "kinetic" && sc.props?.align === "left") || sc.type === "bullets" || (sc.type === "chapter" && !portrait);
 const TEXT_TYPES = new Set([...STATIC_TYPES, "kinetic"]);
 export const LAYOUT_DEFAULTS = { minSticker: 240, maxTextZoom: 1.25 };
-const LAID_OUT_ZOOM = 1.05;
+// Measured: centred grids, timelines and compares hold 1.1 (nvidia v12); stat cards and chart axis labels left the frame at 1.12.
+const LAID_OUT_ZOOM = 1.1;
 
 function overlayBox(o, width, height) {
   if (o.on || (!BOXED.has(o.type) && o.type !== "word") || (o.x === undefined && o.y === undefined)) return null;

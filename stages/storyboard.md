@@ -17,7 +17,7 @@
 - **cues** 把画面变化钉在旁白上：值可以是旁白里的短语（取该短语开始说出的时刻）、`{phrase, offset}` 或秒数（负数从场景结尾倒数，如 `-2.5`；没有按比例的写法，`0.8` 就是 0.8 秒）。props 里的 `cue`/`drawCue`/`periodCues` 引用这些名字；引用未定义的 cue 会报错。
 - 没写 cue 的元素按默认节奏在场景前 55% 依次出现。
 - `enter`/`exit`：fade · slide · push · whip · zoom · punch · iris · wipe · clock · dip · through · cut；不写用风格默认。按语义选（见 motion-rules 的“转场”）。
-- `shots`：镜头轨。每个场景至少 `"auto"`，关键场景手写推近/硬切。
+- `shots`：镜头轨。每个场景至少 `"auto"`，关键场景手写推近/硬切。图表和数字卡上 auto 只做 1.03 的居中呼吸，手写推镜不超过 1.1（再大边上的标签会出画），节奏靠 cue。
 - `overlays`：叠层，钩子和结论每句配一个 `word` 关键词；不写 `x` 时编译器按深度图自动避开主体并按背景亮度加底。
 - `duration`（无旁白场景）、`minDuration`（数据动画需要的最短时间）、`hold`（旁白结束后额外停留秒数）。
 - `captions: false` 关闭本场景字幕（片尾来源页）。
@@ -50,12 +50,12 @@
 
 - 叠层不能压在正在念的字幕上（报错）：横屏放到 y 0.8 以上、竖屏 0.7 以上，或放到两侧。报错里会给出最近的可用高度（`move it up to y 0.68`）：整段推镜里都不进字幕带、也不撞同时在屏的叠层，照填即可。
 - 叠层出画、两个叠层同时出现且重叠、贴纸过小：警告。出画警告同样给出建议位置（先拉回画内留 0.02 边距，再按上面的规则避开字幕带和同屏叠层）。
-- 文字场景的推镜：左对齐文字被推近裁掉左边，或 zoom 超过 1.25（`gates.maxTextZoom`）：警告。
+- 文字场景的推镜：左对齐文字被推近裁掉左边，或 zoom 超过 1.25（`gates.maxTextZoom`）：警告。图表和数字卡的推镜超过 1.1：警告。
 
 ## 原则（详见 `references/motion-rules.md`）
 
 - 先看 `examples/spacex-motion/plan/storyboard.json`：实拍做主角、数字进画布、关键词跟着旁白。目标是剪辑感，不是一页一张卡。
-- 画面每 2–4 秒要有新东西（cue / 机位 / 叠层）。rhythm 门控会在 `onevideo timeline` 后报出超过 4.5s 的空档和连续 3 个相同转场。有镜头轨的场景，编译器会自动用慢推补上这类空档，所以关键场景写 `shots` 也是在给节奏兜底。
+- 画面每 2–4 秒要有新东西（cue / 机位 / 叠层）。rhythm 门控会在 `onevideo timeline` 后报出超过 4.5s 的空档和连续 3 个相同转场。有镜头轨的场景，编译器会自动用慢推补上这类空档（图表和数字卡除外，它们的空档要用 cue 揭示），所以关键场景写 `shots` 也是在给节奏兜底。
 - 有音乐时 `onevideo.json` 写 `music.offset: "auto"`。
 - 产品宣传（promo）：看 `examples/promo-demo`。界面全部来自 `onevideo capture`，同一台设备贯穿多个 `device` 场景（相邻同种设备自动硬切，不重复入场）；每个时刻写成 点按 → 展开 → 停在结果上（≥1s，deviceGate）→ 收回或换页；点按位置写 capture 量出的 rect 名，不手填坐标。节奏点用 `match-cut`（`every: "beat"`）或 `kinetic`，实拍里有屏幕时用 `footage.screen` 把界面贴进去，并用 `screen.steps` 换页或滚动，别让贴好的屏幕干放着（节奏门控 4.5s）。
 
@@ -67,4 +67,4 @@
 
 ## 检查
 
-`onevideo validate` 之后 `onevideo tts`、`onevideo depth`、`onevideo timeline`，处理 rhythm / layout / density 警告，再 `onevideo preview`。门控自带修法的问题（叠层位置、开场主标题 cue 太晚、没写镜头轨的场景出现节奏空档时补 `"shots": "auto"`、连续相同转场时改最后一个场景的 `enter`（章节用 wipe，其余 cut，连续 cut 改短 fade）；同一场景先补镜头轨，再按新机位放叠层）可以用 `onevideo fix` 先看清单（dry run，逐轮套用、每轮重新检查，报错变多就拒绝），确认后 `onevideo fix --apply` 写回 `plan/storyboard.json`（原文件备份到 `out/qc/storyboard.before-fix.json`），然后重跑 `onevideo timeline`、`onevideo preview`，分镜需要重新审批。之后，自己先看 `out/qc/preview-*.jpg`，再交给用户审批（preview 阶段），通过后才渲染整片。
+`onevideo validate` 之后 `onevideo tts`、`onevideo depth`、`onevideo timeline`，处理 rhythm / layout / density 警告，再 `onevideo preview`。门控自带修法的问题（叠层位置、开场主标题 cue 太晚、没写镜头轨的非图表场景出现节奏空档时补 `"shots": "auto"`、连续相同转场时改最后一个场景的 `enter`（章节用 wipe，其余 cut，连续 cut 改短 fade）；同一场景先补镜头轨，再按新机位放叠层）可以用 `onevideo fix` 先看清单（dry run，逐轮套用、每轮重新检查，报错变多就拒绝），确认后 `onevideo fix --apply` 写回 `plan/storyboard.json`（原文件备份到 `out/qc/storyboard.before-fix.json`），然后重跑 `onevideo timeline`、`onevideo preview`，分镜需要重新审批。之后，自己先看 `out/qc/preview-*.jpg`，再交给用户审批（preview 阶段），通过后才渲染整片。
