@@ -30,7 +30,7 @@ export const TitleScene: React.FC<{ kicker?: string; title: string; subtitle?: s
         {title}
       </div>
       <div style={{ width: 140 * u * s, height: 5 * u, background: `linear-gradient(90deg, ${theme.colors.accent}, ${theme.colors.accent2})`, borderRadius: 3 * u, margin: `${36 * u}px 0` }} />
-      {subtitle && <div style={{ opacity: s, fontSize: (portrait ? 42 : 38) * u, color: theme.colors.muted, maxWidth: "85%", lineHeight: 1.4 }}>{subtitle}</div>}
+      {subtitle && <div style={{ opacity: s, fontSize: (portrait ? 42 : 38) * u, color: theme.colors.muted, maxWidth: "85%", lineHeight: 1.4, textWrap: "balance" }}>{subtitle}</div>}
       {date && <div style={{ opacity: s, fontSize: 24 * u, color: theme.colors.muted, marginTop: 24 * u, fontFamily: theme.fonts.number }}>{date}</div>}
     </Stage>
   );
@@ -48,7 +48,7 @@ export const ChapterScene: React.FC<{ index?: number | string; title: string; su
         <div style={{ fontFamily: theme.fonts.number, fontSize: 200 * u, fontWeight: 800, lineHeight: 1, color: theme.colors.accent, opacity: 0.85 * a, transform: `translateX(${(1 - a) * -40 * u}px)` }}>{label}</div>
       )}
       <div style={{ fontSize: (portrait ? 84 : 88) * u, fontWeight: 800, marginTop: 16 * u, opacity: b, transform: `translateY(${(1 - b) * 24 * u}px)` }}>{title}</div>
-      {subtitle && <div style={{ fontSize: 34 * u, color: theme.colors.muted, marginTop: 20 * u, opacity: b }}>{subtitle}</div>}
+      {subtitle && <div style={{ fontSize: 34 * u, color: theme.colors.muted, marginTop: 20 * u, opacity: b, textWrap: "balance" }}>{subtitle}</div>}
     </Stage>
   );
 };
