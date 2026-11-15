@@ -15,6 +15,7 @@ import { toSrt, toVtt } from "../lib/captions/index.mjs";
 import { resolveApiKey, trustedKeyHost } from "../lib/core/http.mjs";
 import { runTts, ttsConfig } from "../lib/voice/tts.mjs";
 import { timingsGate } from "../lib/review/gates.mjs";
+import { probeIssues } from "../lib/review/probe.mjs";
 import * as media from "./media.mjs";
 import { assetFileExists, clipFrames, countFrames, framesDir } from "../lib/assets/index.mjs";
 import { IMAGE_DEFAULTS, VIDEO_DEFAULTS } from "../lib/generate/index.mjs";
@@ -177,12 +178,20 @@ async function renderStills(project, tl, { dir, only = null, ats = [0.7] }) {
     for (const at of ats) {
       const frame = s.from + Math.min(s.durationInFrames - 1, Math.floor(s.durationInFrames * at));
       const file = join(dir, `${String(i + 1).padStart(2, "0")}-${s.id}${ats.length > 1 ? `@${at}` : ""}.jpg`);
-      await run(REMOTION_BIN, ["still", ENTRY, COMPOSITION, file, ...commonFlags(project), `--frame=${frame}`, "--image-format=jpeg", "--scale=0.5"], { cwd: TEMPLATE_DIR });
-      log(`✓ ${file}`);
-      shots.push({ scene: s.id, at, t: +(frame / tl.fps).toFixed(2), file });
+      shots.push({ scene: s.id, at, t: +(frame / tl.fps).toFixed(2), file, frame });
     }
   }
-  return shots;
+  if (!shots.length) return { shots, probe: [] };
+  // One bundle for the batch; each frame also reports where its stickers and text landed.
+  const tmp = mkdtempSync(join(tmpdir(), "onevideo-stills-"));
+  try {
+    const job = join(tmp, "job.json"), out = join(tmp, "probe.json");
+    writeFileSync(job, JSON.stringify({ entry: ENTRY, composition: COMPOSITION, props: project.paths.timeline, publicDir: project.p("public"), scale: 0.5, probe: true, frames: shots.map(({ frame, file }) => ({ frame, file })), out }));
+    await run(process.execPath, [join(TEMPLATE_DIR, "stills.mjs"), job], { cwd: TEMPLATE_DIR, stdio: "inherit" });
+    return { shots, probe: probeIssues(readJson(out), tl) };
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 }
 
 export async function stills(args) {
@@ -193,7 +202,8 @@ export async function stills(args) {
   await ensureAspectTimings(project);
   const tl = freshTimeline(project, { force: Boolean(args.force) });
   const dir = join(project.paths.out, "stills", ...(project.aspect ? [aspectTag(project.aspect)] : []));
-  await renderStills(project, tl, { dir, only: typeof args.scene === "string" ? args.scene.split(",") : null, ats: args.at !== undefined ? String(args.at).split(",").map(Number) : [0.7] });
+  const { probe } = await renderStills(project, tl, { dir, only: typeof args.scene === "string" ? args.scene.split(",") : null, ats: args.at !== undefined ? String(args.at).split(",").map(Number) : [0.7] });
+  printIssues(probe);
 }
 
 // The pre-render review: every scene as the render will show it (early and late in the scene, so
@@ -209,10 +219,11 @@ export async function preview(args) {
   const dir = join(project.paths.out, "preview");
   rmSync(dir, { recursive: true, force: true });
   const ats = args.at !== undefined ? String(args.at).split(",").map(Number) : PREVIEW_AT;
-  const shots = await renderStills(project, tl, { dir, ats });
+  const { shots, probe } = await renderStills(project, tl, { dir, ats });
   const sheets = await writeImageSheets(shots, join(project.paths.out, "qc"), { prefix: "preview", cols: ats.length * 2 });
   const { issues } = checkProject(project, { needTimings: true });
-  const layout = issues.filter((i) => i.gate === "layout" || i.gate === "rhythm").map((i) => `${i.level}: ${i.msg}`);
+  printIssues(probe);
+  const layout = [...issues.filter((i) => i.gate === "layout" || i.gate === "rhythm"), ...probe].map((i) => `${i.level}: ${i.msg}`);
   writeJson(project.p("plan", "preview.json"), {
     timeline: productsHash(project.root, ["plan/timeline.json"]),
     at: new Date().toISOString(),

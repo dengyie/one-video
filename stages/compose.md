@@ -41,6 +41,7 @@ onevideo render       # 正式渲染 h264 + aac（需要 preview 已审批且没
 
 - `validate` 0 error。render 会重新编译并跑门控，有 error 时拒绝渲染（`--force` 可跳过，仅限调试）。
 - 看过全部 stills：文字溢出、元素重叠、数字格式、图表刻度。
+- `stills` / `preview` 渲染时会量出每帧贴纸（image/icon/lottie/stamp/word）和画面文字的实际位置。贴纸挡住标题、图表标签或卡片字时报 `[probe]`，并给出能避开的 y；`preview` 还会把这些写进 `preview.json` 的 `layout`。字幕、水印、署名不计。挡字是按贴纸实际画出的形状算的，斜贴的印章不会因为外框而误报。
 
 ## 归档到 MangoDrive（archive / restore）
 

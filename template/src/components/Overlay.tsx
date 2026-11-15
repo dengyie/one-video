@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useLayoutEffect, useRef, useState } from "react";
-import { AbsoluteFill, Img, Sequence, random, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Img, Sequence, continueRender, delayRender, random, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { Lottie } from "@remotion/lottie";
 import { evolvePath, getLength, getPointAtLength, getTangentAtLength } from "@remotion/paths";
 import { colorAt, useLayout, useScene, useTheme, useTime, useTimeline } from "../engine/context";
@@ -47,6 +47,23 @@ export const Overlays: React.FC = () => {
     }
     setBoxes((prev) => (sameBoxes(prev, next) ? prev : next));
   });
+  const probe = useTimeline().probe;
+  // Measured once the page has laid the frame out (the renderer sizes it late); the capture waits for it.
+  useLayoutEffect(() => {
+    const me = ref.current;
+    if (!probe || !me) return;
+    const handle = delayRender("probe");
+    let id = 0, tries = 0;
+    const done = () => { cancelAnimationFrame(id); continueRender(handle); };
+    const measure = () => {
+      const root = me.closest("[data-probe=frame]");
+      if (root && !root.getBoundingClientRect().width && ++tries < 60) { id = requestAnimationFrame(measure); return; }
+      console.log(`ONEVIDEO_PROBE ${JSON.stringify({ scene: scene.id, t: Math.round(t * 100) / 100, ...probeBoxes(me, scene.overlays ?? []) })}`);
+      done();
+    };
+    id = requestAnimationFrame(measure);
+    return done;
+  });
   if (!scene.overlays?.length) return null;
   // A pinned overlay fades out with its element as it leaves the frame (a canvas card the camera
   // flew past). With the element gone it falls back to x/y/rect only if the storyboard gave them.
@@ -65,12 +82,77 @@ export const Overlays: React.FC = () => {
           const vis = shown(o);
           if (vis <= 0) return null;
           const out = clamp01((o.end - t) / FADE);
-          return <OverlayView key={i} o={o} i={i} local={t - o.t} out={(o.type === "flash" ? 1 : out) * vis} />;
+          // Under the probe the stickers take hit tests, so coverage follows their drawn (rotated) shape.
+          return <div key={i} data-ov={i} style={{ display: "contents", pointerEvents: probe ? "auto" : undefined }}><OverlayView o={o} i={i} local={t - o.t} out={(o.type === "flash" ? 1 : out) * vis} /></div>;
         })}
       </Anchors.Provider>
     </AbsoluteFill>
   );
 };
+
+// The probe (onevideo stills): on-screen boxes, as frame fractions, of each sticker-like overlay and
+// of every visible line of scene text (header, titles, labels, card text), so the CLI can flag a
+// sticker over text the gates cannot model. Captions, the watermark and credits are left out.
+// `covers` is how much of each line's box the sticker's drawn shape hides, found by hit tests on a
+// grid over their overlap: a tilted stamp's bounding box has empty corners. Only the middle of a
+// line counts, where its glyphs are inked; the line box runs above and below them.
+const PROBED = new Set(["image", "icon", "lottie", "stamp", "word"]);
+type Frac = [number, number, number, number];
+// Boxes are taken relative to the composition's root, which the renderer may place and scale off-page.
+function probeBoxes(layer: HTMLElement, list: Overlay[]) {
+  const doc = layer.ownerDocument;
+  const root = layer.closest("[data-probe=frame]") ?? doc.body;
+  const F = root.getBoundingClientRect();
+  const frame = (r: DOMRect): Frac | null => {
+    const b: Frac = [Math.max(0, (r.left - F.left) / F.width), Math.max(0, (r.top - F.top) / F.height), Math.min(1, (r.right - F.left) / F.width), Math.min(1, (r.bottom - F.top) / F.height)];
+    return b[2] - b[0] > 0.002 && b[3] - b[1] > 0.002 ? (b.map((v) => Math.round(v * 1000) / 1000) as Frac) : null;
+  };
+  const union = (rs: DOMRect[]) => (rs.length ? new DOMRect(Math.min(...rs.map((r) => r.left)), Math.min(...rs.map((r) => r.top)), Math.max(...rs.map((r) => r.right)) - Math.min(...rs.map((r) => r.left)), Math.max(...rs.map((r) => r.bottom)) - Math.min(...rs.map((r) => r.top))) : null);
+  const seen = (el: Element | null) => {
+    let a = 1;
+    for (let e = el; e; e = e.parentElement) {
+      if (e.hasAttribute("data-ov") || e.getAttribute("data-probe") === "skip") return 0;
+      const cs = getComputedStyle(e);
+      if (cs.visibility === "hidden" || cs.display === "none") return 0;
+      a *= Number(cs.opacity);
+    }
+    return a;
+  };
+  const texts: { text: string; box: Frac }[] = [];
+  const walk = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    const text = (n.textContent ?? "").trim();
+    if (!text || seen(n.parentElement) < 0.5) continue;
+    const range = doc.createRange();
+    range.selectNodeContents(n);
+    const r = union([...range.getClientRects()].filter((c) => c.width > 0 && c.height > 0));
+    const box = r && frame(r);
+    if (box) texts.push({ text: text.slice(0, 24), box });
+  }
+  const N = 8;
+  const overlays: { i: number; box: Frac; covers: { t: number; area: number }[] }[] = [];
+  for (const el of layer.querySelectorAll<HTMLElement>("[data-ov]")) {
+    const i = Number(el.dataset.ov);
+    if (!list[i] || !PROBED.has(list[i].type)) continue;
+    const r = union([...el.querySelectorAll("*")].map((c) => c.getBoundingClientRect()).filter((c) => c.width > 0 && c.height > 0));
+    const box = r && frame(r);
+    if (!box) continue;
+    const covers: { t: number; area: number }[] = [];
+    texts.forEach((tx, k) => {
+      const ink = (tx.box[3] - tx.box[1]) * 0.2;
+      const x0 = Math.max(box[0], tx.box[0]), y0 = Math.max(box[1], tx.box[1] + ink), x1 = Math.min(box[2], tx.box[2]), y1 = Math.min(box[3], tx.box[3] - ink);
+      if (x1 <= x0 || y1 <= y0) return;
+      let hits = 0;
+      for (let a = 0; a < N; a++) for (let b = 0; b < N; b++) {
+        const px = F.left + (x0 + ((a + 0.5) / N) * (x1 - x0)) * F.width, py = F.top + (y0 + ((b + 0.5) / N) * (y1 - y0)) * F.height;
+        if (doc.elementsFromPoint(px, py).some((e) => el.contains(e))) hits++;
+      }
+      if (hits) covers.push({ t: k, area: Math.round(((hits / (N * N)) * (x1 - x0) * (y1 - y0)) * 1e6) / 1e6 });
+    });
+    overlays.push({ i, box, covers });
+  }
+  return { overlays, texts };
+}
 
 // The point of `place` on a box, moved by `off` (px), kept far enough inside the frame for a sticker centred on it.
 function placeAt(b: Box, place: string, width: number, height: number, off: [number, number] = [0, 0]): [number, number] {

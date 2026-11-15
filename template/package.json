@@ -8,11 +8,13 @@
   },
   "dependencies": {
     "@iconify-json/lucide": "1.2.151",
+    "@remotion/bundler": "4.0.541",
     "@remotion/cli": "4.0.541",
     "@remotion/layout-utils": "4.0.541",
     "@remotion/lottie": "4.0.541",
     "@remotion/noise": "4.0.541",
     "@remotion/paths": "4.0.541",
+    "@remotion/renderer": "4.0.541",
     "@remotion/rough-notation": "4.0.541",
     "@remotion/shapes": "4.0.541",
     "circle-flags": "2.8.3",

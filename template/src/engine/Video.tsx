@@ -200,7 +200,7 @@ export const Video: React.FC<Timeline> = (timeline) => {
   const play = (group: NonNullable<Timeline["stem"]>) => !timeline.stem || timeline.stem === group;
   return (
     <TimelineContext.Provider value={timeline}>
-      <AbsoluteFill style={{ backgroundColor: theme.colors.bg, fontFamily: theme.fonts.body, color: theme.colors.text }}>
+      <AbsoluteFill data-probe="frame" style={{ backgroundColor: theme.colors.bg, fontFamily: theme.fonts.body, color: theme.colors.text }}>
         <Backdrop variant={theme.background} />
         {timeline.scenes.map((scene) => {
           const Comp = SCENES[scene.type];
@@ -246,8 +246,10 @@ export const Video: React.FC<Timeline> = (timeline) => {
           </Sequence>
         ))}
         <FilmLook />
-        {timeline.captions.enabled && timeline.captions.style !== "none" && <Captions />}
-        {timeline.watermark && <Watermark mark={timeline.watermark} />}
+        <div data-probe="skip" style={{ display: "contents" }}>
+          {timeline.captions.enabled && timeline.captions.style !== "none" && <Captions />}
+          {timeline.watermark && <Watermark mark={timeline.watermark} />}
+        </div>
       </AbsoluteFill>
     </TimelineContext.Provider>
   );

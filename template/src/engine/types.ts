@@ -119,4 +119,6 @@ export type Timeline = {
   scenes: Scene[];
   // Set only for a stem render: the one sound group to play.
   stem?: "voice" | "music" | "sfx";
+  // Set only for onevideo stills / preview: each frame logs its overlay and text boxes (see Overlay.tsx).
+  probe?: boolean;
 };

@@ -81,7 +81,7 @@ export const Credit: React.FC<{ asset: string; corner?: "top-left" | "bottom-rig
     ? { right: pad, bottom: (portrait ? 40 : 12) * u, fontSize: 14 * u, textAlign: "right" }
     : { left: pad, top: (portrait ? 64 : 24) * u, fontSize: 16 * u };
   return (
-    <div style={{ position: "absolute", ...place, color: "rgba(255,255,255,0.6)", textShadow: "0 1px 3px rgba(0,0,0,0.8)", maxWidth: "60%" }}>
+    <div data-probe="skip" style={{ position: "absolute", ...place, color: "rgba(255,255,255,0.6)", textShadow: "0 1px 3px rgba(0,0,0,0.8)", maxWidth: "60%" }}>
       {c}
     </div>
   );
