@@ -5,6 +5,7 @@ import { ONEVIDEO_ROOT, CONFIG_FILE, UserError, loadProject, pipelineDef, styleD
 import { stageStatus, approveStage } from "../lib/core/state.mjs";
 import { checkProject, loadPlan, printIssues } from "../lib/review/check.mjs";
 import { describeFix, fixPlan } from "../lib/review/fixes.mjs";
+import { storedProbes } from "../lib/review/probe.mjs";
 import { DIMENSIONS } from "../lib/timeline/index.mjs";
 
 export async function init(args) {
@@ -76,14 +77,15 @@ export async function validate(args) {
 }
 
 // The fixes the gates suggest (sticker positions, a late opening cue), tried on the storyboard in memory and
-// re-checked; --apply writes them (the previous storyboard is kept in out/qc/storyboard.before-fix.json).
+// re-checked, plus the stills probe's spots for stickers over text; --apply writes them (the previous storyboard is kept in out/qc/storyboard.before-fix.json).
 export async function fix(args) {
   const project = loadProject();
   const plan = loadPlan(project);
   if (!plan.storyboard || !plan.timings) throw new UserError("fix needs plan/storyboard.json and plan/timings.json (run onevideo tts first)");
   const before = checkProject(project, { plan: { ...plan, storyboard: structuredClone(plan.storyboard) } });
   const original = structuredClone(plan.storyboard);
-  const { applied, check } = fixPlan(project, plan);
+  // Stickers the last stills run saw covering text (any frame), while the storyboard is unchanged.
+  const { applied, check } = fixPlan(project, plan, { extra: storedProbes(project) });
   if (!applied.length) { log(`nothing to fix automatically; ${before.errors.length} error(s), ${before.warnings.length} warning(s) remain (onevideo validate)`); return; }
   for (const a of applied) log(`✎ [${a.gate}] ${describeFix(a)}`);
   log(`${before.errors.length} → ${check.errors.length} error(s), ${before.warnings.length} → ${check.warnings.length} warning(s)`);

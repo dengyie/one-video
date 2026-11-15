@@ -544,6 +544,21 @@
           "minimum": -0.5,
           "maximum": 1.5
         },
+        "aspects": {
+          "description": "x/y/size for one frame only, e.g. {\"9:16\": {\"y\": 0.3}}: a sticker that fits the main cut but covers text in a variant (onevideo stills --aspect reports it, onevideo fix writes it)",
+          "type": "object",
+          "propertyNames": { "pattern": "^[0-9]+:[0-9]+$" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "x": { "type": "number", "minimum": -0.5, "maximum": 1.5 },
+              "y": { "type": "number", "minimum": -0.5, "maximum": 1.5 },
+              "size": { "type": "number", "minimum": 8 }
+            }
+          }
+        },
         "size": {
           "type": "number",
           "minimum": 8

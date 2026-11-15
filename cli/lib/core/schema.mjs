@@ -40,6 +40,8 @@ export function validate(schema, value, root = schema, path = "$", errors = []) 
   }
   if (typeOf(value) === "object") {
     for (const k of schema.required ?? []) if (!(k in value)) errors.push(`${path}: missing "${k}"`);
+    if (schema.minProperties !== undefined && Object.keys(value).length < schema.minProperties) errors.push(`${path}: needs ≥ ${schema.minProperties} fields`);
+    if (schema.propertyNames) for (const k of Object.keys(value)) validate(schema.propertyNames, k, root, `${path}.${k}`, errors);
     const props = schema.properties ?? {};
     for (const [k, v] of Object.entries(value)) {
       if (props[k]) validate(props[k], v, root, `${path}.${k}`, errors);

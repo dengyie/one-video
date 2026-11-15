@@ -177,3 +177,13 @@ test("captions stay at the bottom over a dimmed or blurred backdrop", () => {
   placeCaptions([{ id: "s", type: "compare", start: 0, backdrop: { asset: "a", dim: 0.82, blur: 6 } }], caps, { root: "/nonexistent", usedAssets: {}, fps: 30, width: 1920, height: 1080 });
   assert.equal(caps[0].top, undefined);
 });
+
+test("an overlay's aspects entry replaces its spot in that frame only", () => {
+  const ex = example();
+  const sb = structuredClone(ex.storyboard);
+  sb.scenes[0].overlays = [{ type: "stamp", text: "史上最大", x: 0.7, y: 0.3, aspects: { "9:16": { y: 0.2 } } }];
+  const at = (aspect) => compileTimeline({ ...ex, config: { ...ex.config, aspect }, storyboard: sb, assets: null }).timeline.scenes[0].overlays[0];
+  const wide = at("16:9"), tall = at("9:16");
+  assert.deepEqual([wide.x, wide.y, "aspects" in wide], [0.7, 0.3, false]);
+  assert.deepEqual([tall.x, tall.y], [0.7, 0.2]);
+});

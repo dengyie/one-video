@@ -2,12 +2,14 @@
 // moving one sticker changes where the next one fits, so each round takes one change per scene.
 import { checkProject } from "./check.mjs";
 
+const isObj = (v) => Boolean(v) && typeof v === "object" && !Array.isArray(v);
 const fmt = (v) => (v === undefined ? "–" : typeof v === "object" ? JSON.stringify(v) : String(v));
 
 // Applies one fix to `storyboard` in place. Returns what it changed ({ from, to } per key) or null when
 // the target is not in the storyboard as written (an anchored overlay, a cue defined elsewhere);
 // a fix with `add` may write a key the scene does not have yet. `with` lists more changes to the
 // same scene that only make sense together (a cue and the element naming it): all or none.
+// `set` merges one level down too, so { "9:16": { y } } keeps that frame's x.
 export function applyFix(storyboard, fix) {
   const sb = storyboard?.scenes?.find((s) => s.id === fix.scene);
   const parts = [fix, ...(fix.with ?? []).map((w) => ({ add: fix.add, ...w }))];
@@ -23,8 +25,11 @@ export function applyFix(storyboard, fix) {
   for (const [i, { f, parent, key }] of spots.entries()) {
     if (f.set) {
       const obj = (parent[key] ??= {});
-      for (const [k, v] of Object.entries(f.set)) change[k] = { from: obj[k], to: v };
-      Object.assign(obj, f.set);
+      for (const [k, v] of Object.entries(f.set)) {
+        const to = isObj(obj[k]) && isObj(v) ? { ...obj[k], ...v } : v;
+        change[k] = { from: obj[k], to };
+        obj[k] = to;
+      }
     } else {
       change[i ? f.path.join(".") : key] = { from: parent[key], to: f.value };
       parent[key] = f.value;
@@ -35,19 +40,20 @@ export function applyFix(storyboard, fix) {
 
 // Runs the gates on `plan` (in memory), applies their fixes and checks again, up to `rounds` times.
 // A target is changed once, so two gates cannot ping-pong it. Returns { applied, check } with
-// `check` the last result; `plan.storyboard` holds the changed storyboard.
+// `check` the last result; `plan.storyboard` holds the changed storyboard. `extra` are issues measured
+// elsewhere (the stills probe) that the gates cannot re-check; their fixes are offered every round.
 // The camera goes in before stickers are placed against it: a shot track moves where they land.
 // A cue already written gets its element (props) before new cues are made up for the same reveal.
 const FIRST = ["cues", "props", "shots"];
 
-export function fixPlan(project, plan, { rounds = 8 } = {}) {
+export function fixPlan(project, plan, { rounds = 8, extra = [] } = {}) {
   const applied = [];
   const touched = new Set();
   let check = checkProject(project, { plan });
   for (let r = 0; r < rounds; r++) {
     const target = (f) => `${f.scene}/${f.path.join(".")}`;
     const scenes = new Set();
-    const pick = check.issues.filter((i) => i.fix && !touched.has(target(i.fix)))
+    const pick = [...check.issues, ...extra].filter((i) => i.fix && !touched.has(target(i.fix)))
       .sort((a, b) => FIRST.indexOf(b.fix.path[0]) - FIRST.indexOf(a.fix.path[0]))
       .filter((i) => !scenes.has(i.fix.scene) && scenes.add(i.fix.scene));
     let n = 0;

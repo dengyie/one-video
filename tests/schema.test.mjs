@@ -53,3 +53,12 @@ test("every example passes the schemas and the pre-voice content gates", async (
     assert.equal(config.name, name);
   }
 });
+
+test("overlay aspects: per-frame x/y/size keyed by aspect", () => {
+  const sb = JSON.parse(readFileSync(join(ROOT, "examples", "spacex-ipo", "plan", "storyboard.json"), "utf8"));
+  const withOv = (aspects) => { const s = structuredClone(sb); s.scenes[0].overlays = [{ type: "stamp", text: "x", y: 0.3, aspects }]; return validateNamed("storyboard", s); };
+  assert.deepEqual(withOv({ "9:16": { y: 0.2 } }), []);
+  assert.ok(withOv({ tall: { y: 0.2 } }).some((e) => /does not match/.test(e)));
+  assert.ok(withOv({ "9:16": {} }).some((e) => /needs ≥ 1/.test(e)));
+  assert.ok(withOv({ "9:16": { t: 1 } }).some((e) => /unknown field "t"/.test(e)));
+});

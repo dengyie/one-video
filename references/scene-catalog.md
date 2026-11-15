@@ -84,6 +84,7 @@
 - 字幕 `captions.style: "kinetic"`：在 karaoke 逐字点亮的基础上，数字和英文词用强调色，刚念到的字轻微弹起，整行上浮入场，底板改成浅色毛玻璃。
 - Lottie 里的黑色线性图标会自动着色为主题文字色；`tint: "#rrggbb"` 手动指定。用到 CC BY 素材（Noto 动画表情）时，sources 场景和发布文案会自动加署名。
 - `on` 把叠层钉在场景元素上（逐帧量位置，换 9:16/1:1/4:5 也跟着内容走，优先用它代替比例坐标）：stat-cards `card1…` 或该卡的 `cue`；compare `left`/`right`/`left-value`/`right-value`；share `ring`/`seg1…`（图例行）或该段 `cue`、`total`（合计行，或它的 `cue`）；bar-compare `bar1…`（按书写顺序）或该项 `cue`。bar-race `bar1…`（该 series 的条本身，按书写顺序，跟着排名移动）、`rank1…`（固定名次的名字槽，钉“当期第一”用 `rank1`）、`period`（大号期数）；line-chart `point1…`/`last`（第一条线的点，线还没画到也有位置），第 n 条线 `s<n>-point1…`/`s<n>-last`，标注 `note1…` 或该标注的 `cue`；canvas 用元素 `id`（跟着镜头飞行和缩放；`inherit` 的场景也能用上一画布的元素；元素在画外时退回 `x`/`y`）。`place`：`center|top|bottom|left|right|top-left|top-right|bottom-left|bottom-right`，stamp/icon/lottie/image 缺省 `top-right`，callout 缺省 `right`，其余居中。`offset: [dx, dy]`（布局单位）从 place 点再挪开，用于贴在小元素旁边而不是盖住它（如折线点下方 `[0, 160]`）。`mark` 直接圈住元素框，`arrow` 指向元素（`from` 仍是比例）。名字写错或场景没有锚点会编译报错。元素移出画面时，叠层跟着淡出（如镜头飞离的 canvas 卡片）；元素不在时，写了 `x`/`y`/`rect` 就用它们兜底，没写就不显示。
+- `aspects: {"9:16": {x?, y?, size?}}`：只在该画幅生效的位置，主画幅不动。`onevideo stills --aspect 9:16` 实测到贴纸挡字后，`onevideo fix` 会写这里（存在 `out/qc/probe.<画幅>.json`，分镜改过就作废）。
 - `mark.rect`、`arrow.from/to` 是比例坐标，写完一定跑 `onevideo stills --scene <id> --at 0.7` 核对位置。
 
 ## 胶片质感 `look`

@@ -15,7 +15,7 @@ import { toSrt, toVtt } from "../lib/captions/index.mjs";
 import { resolveApiKey, trustedKeyHost } from "../lib/core/http.mjs";
 import { runTts, ttsConfig } from "../lib/voice/tts.mjs";
 import { timingsGate } from "../lib/review/gates.mjs";
-import { probeIssues } from "../lib/review/probe.mjs";
+import { probeIssues, saveProbe } from "../lib/review/probe.mjs";
 import * as media from "./media.mjs";
 import { assetFileExists, clipFrames, countFrames, framesDir } from "../lib/assets/index.mjs";
 import { IMAGE_DEFAULTS, VIDEO_DEFAULTS } from "../lib/generate/index.mjs";
@@ -188,7 +188,9 @@ async function renderStills(project, tl, { dir, only = null, ats = [0.7] }) {
     const job = join(tmp, "job.json"), out = join(tmp, "probe.json");
     writeFileSync(job, JSON.stringify({ entry: ENTRY, composition: COMPOSITION, props: project.paths.timeline, publicDir: project.p("public"), scale: 0.5, probe: true, frames: shots.map(({ frame, file }) => ({ frame, file })), out }));
     await run(process.execPath, [join(TEMPLATE_DIR, "stills.mjs"), job], { cwd: TEMPLATE_DIR, stdio: "inherit" });
-    return { shots, probe: probeIssues(readJson(out), tl) };
+    const probe = probeIssues(readJson(out), tl, { variant: project.aspect ?? null });
+    saveProbe(project, tl.aspect, probe);
+    return { shots, probe };
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

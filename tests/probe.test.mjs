@@ -41,3 +41,19 @@ test("probeIssues leaves anchored overlays' height alone", () => {
   const [w] = probeIssues(shot([{ i: 0, box: [0.3, 0.44, 0.7, 0.52], covers: [{ t: 0, area: 0.004 }] }], [title]), t);
   assert.match(w.msg, /move it clear of the text or show it at another moment/);
 });
+
+test("probe fixes: the main cut moves the overlay, a variant writes only its own aspects entry", async () => {
+  const { applyFix } = await import("../cli/lib/review/fixes.mjs");
+  const rec = { i: 0, box: [0.3, 0.44, 0.7, 0.52], covers: [{ t: 0, area: 0.004 }] };
+  const [main] = probeIssues(shot([rec], [title]), tl());
+  assert.deepEqual(main.fix.path, ["overlays", 0]);
+  const [v] = probeIssues(shot([rec], [title]), tl(), { variant: "9:16" });
+  assert.match(v.msg, / in 9:16 \(onevideo fix\)/);
+  const y = v.fix.set["9:16"].y;
+  const sb = { scenes: [{ id: "s", overlays: [{ type: "stamp", y: 0.5, aspects: { "9:16": { x: 0.3 } } }] }] };
+  assert.ok(applyFix(sb, v.fix));
+  assert.deepEqual(sb.scenes[0].overlays[0], { type: "stamp", y: 0.5, aspects: { "9:16": { x: 0.3, y } } });
+  const bare = { scenes: [{ id: "s", overlays: [{ type: "stamp", y: 0.5 }] }] };
+  assert.ok(applyFix(bare, v.fix));
+  assert.deepEqual(bare.scenes[0].overlays[0].aspects, { "9:16": { y } });
+});
