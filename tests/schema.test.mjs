@@ -60,5 +60,6 @@ test("overlay aspects: per-frame x/y/size keyed by aspect", () => {
   assert.deepEqual(withOv({ "9:16": { y: 0.2 } }), []);
   assert.ok(withOv({ tall: { y: 0.2 } }).some((e) => /does not match/.test(e)));
   assert.ok(withOv({ "9:16": {} }).some((e) => /needs ≥ 1/.test(e)));
+  assert.deepEqual(withOv({ "9:16": { offset: [0, -120] } }), []);
   assert.ok(withOv({ "9:16": { t: 1 } }).some((e) => /unknown field "t"/.test(e)));
 });

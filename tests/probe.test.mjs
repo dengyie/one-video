@@ -35,11 +35,15 @@ test("probeIssues says each pair once and ignores unknown scenes and overlays", 
   assert.deepEqual(probeIssues(shot([{ ...rec, i: 3 }], [title]), tl()), []);
 });
 
-test("probeIssues leaves anchored overlays' height alone", () => {
+test("probeIssues moves an anchored overlay by its offset, in layout units", () => {
   const t = tl();
-  t.scenes[0].overlays[0].on = "title";
+  Object.assign(t.scenes[0].overlays[0], { on: "card1", offset: [0, 20] });
   const [w] = probeIssues(shot([{ i: 0, box: [0.3, 0.44, 0.7, 0.52], covers: [{ t: 0, area: 0.004 }] }], [title]), t);
-  assert.match(w.msg, /move it clear of the text or show it at another moment/);
+  assert.equal(w.fix.set.offset[0], 0);
+  // 1u = 1px at 1080 wide: a move of dy of the 1920 frame is dy * 1920 units.
+  const dy = (w.fix.set.offset[1] - 20) / 1920;
+  assert.ok(Math.abs(dy) >= 0.04 && Math.abs(dy) <= 0.09, String(dy));
+  assert.match(w.msg, /move it to offset \[0, -?\d+\]/);
 });
 
 test("probe fixes: the main cut moves the overlay, a variant writes only its own aspects entry", async () => {
@@ -56,4 +60,18 @@ test("probe fixes: the main cut moves the overlay, a variant writes only its own
   const bare = { scenes: [{ id: "s", overlays: [{ type: "stamp", y: 0.5 }] }] };
   assert.ok(applyFix(bare, v.fix));
   assert.deepEqual(bare.scenes[0].overlays[0].aspects, { "9:16": { y } });
+});
+
+test("probe spots move sideways when no height clears the text, and keep off other stickers", () => {
+  // Lines down the whole left half (a long list): only the right half is clear.
+  const column = Array.from({ length: 18 }, (_, k) => ({ text: `行${k}`, box: [0.05, 0.05 + k * 0.05, 0.55, 0.08 + k * 0.05] }));
+  const rec = { i: 0, box: [0.3, 0.4, 0.5, 0.5], covers: [{ t: 7, area: 0.004 }] };
+  const [side] = probeIssues(shot([rec], column), tl());
+  assert.deepEqual(side.fix.set, { x: 0.75 });
+  assert.match(side.msg, /move it to x 0\.75 \(onevideo fix\)/);
+  // A second sticker sits just above the stamp: the clear height below is taken instead.
+  const t = tl();
+  t.scenes[0].overlays.push({ type: "icon", t: 1, end: 5 });
+  const [below] = probeIssues(shot([{ i: 0, box: [0.3, 0.44, 0.7, 0.52], covers: [{ t: 0, area: 0.004 }] }, { i: 1, box: [0.3, 0.3, 0.7, 0.44], covers: [] }], [title]), t);
+  assert.ok(below.fix.set.y > 0.5, JSON.stringify(below.fix.set));
 });

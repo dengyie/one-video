@@ -145,7 +145,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       }
       const t = clampT(res.t, duration);
       const { at, duration: d, sfx: _sfx, aspects, ...rest } = ov;
-      // A frame's own spot (aspects["9:16"]) replaces x/y/size in that cut only.
+      // A frame's own spot (aspects["9:16"]) replaces x/y/size/offset in that cut only.
       const o = { ...structuredClone(rest), ...aspects?.[config.aspect ?? "16:9"], t: r3(t), end: r3(d ? Math.min(duration + 0.5, t + d) : duration + 0.5) };
       if (ov.type === "lottie") {
         const src = ov.src;
