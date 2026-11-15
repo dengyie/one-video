@@ -179,7 +179,8 @@ export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Fo
   const stageH = height - (scene.header ? headerBottom + 20 * u : pad) - bottom;
   // 1:1 and 4:5 have no room beside the bars for the period label: it gets a strip below them.
   const strip = narrow && !portrait ? 120 * u : 0;
-  const areaH = Math.min((portrait ? 1100 : 700) * u, stageH - (title ? 62 * u : 0) - (unit ? 30 * u : 0) - 16 * u - strip);
+  // 9:16 hangs the period label 150u below the bars: keep it above the caption band too.
+  const areaH = Math.min((portrait ? 1100 : 700) * u, stageH - (title ? 62 * u : 0) - (unit ? 30 * u : 0) - 16 * u - strip - (portrait ? 150 * u : 0));
   const rowH = areaH / top;
   const labelW = (portrait ? 250 : 300) * u;
   const current = periods[pos - i >= 0.5 ? i + 1 : i];

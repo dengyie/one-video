@@ -38,12 +38,15 @@ export function useLayout() {
   const pad = (portrait ? 64 : 96) * u;
   // Narrow: 9:16, 1:1 and 4:5 — too little width for panels side by side at their 16:9 sizes.
   const narrow = width < height * 1.5;
-  // A header title or source line that wraps (a long source list in 9:16) pushes the content down by its extra lines.
+  // Content starts below the header as Header lays it out (title, source line, rule), counting the lines a
+  // long title or source list wraps to (9:16 has half the width); never above the fixed top.
   const header = useContext(SceneContext)?.header;
-  const extra = (text: string | undefined, size: number, latin: number) =>
-    text ? (Math.max(1, Math.ceil((textEms(text, latin) * size * u) / (width - pad * 2))) - 1) * size * u * 1.45 : 0;
-  const wrap = header ? extra(header.title, portrait ? 60 : 48, 0.62) + extra(header.subtitle, portrait ? 32 : 25, 0.55) : 0;
-  return { width, height, u, portrait, narrow, pad, top: (portrait ? 220 : 190) * u + wrap, bottom: (portrait ? 420 : 170) * u };
+  const block = (text: string, size: number, latin: number) =>
+    Math.max(1, Math.ceil((textEms(text, latin) * size * u) / (width - pad * 2))) * size * u * 1.45;
+  const below = header
+    ? (portrait ? 120 : 56) * u + block(header.title, portrait ? 60 : 48, 0.62) + (header.subtitle ? 8 * u + block(header.subtitle, portrait ? 32 : 25, 0.55) : 0) + 20 * u
+    : 0;
+  return { width, height, u, portrait, narrow, pad, top: Math.max((portrait ? 220 : 190) * u, below), bottom: (portrait ? 420 : 170) * u };
 }
 
 // The font size (px) at which text that must stay on one line fits `room` px, at most `max`.
