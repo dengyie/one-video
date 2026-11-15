@@ -53,7 +53,7 @@ onevideo timeline | stills [--scene id] [--at 0.3,0.7] [--aspect 9:16] | studio
 onevideo fix [--apply]                              # 套用门控自带的修法（叠层位置、开场 cue、非图表场景补 auto 镜头轨、图表数字和日期钉到念到它的词、卡片注释和对比条目随念到出现、bar-race 点名念到的柱子、空档后的 cue 挪到句首、几乎不动的镜头推大、接回闲置 cue、错开连续转场），逐轮复查；--apply 写回分镜并备份
 onevideo preview [--at 0.3,0.7]                     # 全部场景静帧联系表 → out/qc/preview-*.jpg + plan/preview.json，给用户审批
 onevideo render [--draft] [--scenes a,b | --from s --to s] [--note …]   # 每次一个版本 → out/versions/vN
-onevideo render --aspect 9:16|1:1|4:5               # 同一剪辑的其他尺寸 → out/<name>.9x16.mp4（字幕按画幅重排，配音复用缓存）
+onevideo render --aspect 9:16|1:1|4:5               # 同一剪辑的其他尺寸 → out/<name>.9x16.mp4（字幕按画幅重排，配音复用缓存，落进字幕带/出画的贴纸自动挪位）
 onevideo versions                                   # 渲染记录：版本、范围、时间轴哈希、备注
 onevideo handoff [--lock …] [--next …]              # 交接页 → plan/handoff.md
 onevideo lib list|search|recipe <name> --id x --set k=v   # 音效 / Lottie / 镜头配方
