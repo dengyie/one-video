@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, timingsGate, normalizeLicense, summarize, questionGate, echoGate, layoutGate, densityGate } from "../cli/lib/review/gates.mjs";
+import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, timingsGate, normalizeLicense, summarize, questionGate, echoGate, layoutGate, fitOverlays, densityGate } from "../cli/lib/review/gates.mjs";
 import { rhythmGate, screenEvents } from "../cli/lib/review/gates.mjs";
 import { checkNotes, checkTone, matchGates, meanLuma, mergePasses, median, noteKind, storyboardSpot, toneOf } from "../cli/lib/review/look-check.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
@@ -203,6 +203,20 @@ test("numbersGate checks the spoken lines, not a stale narration", () => {
   assert.match(numbersGate(script, research).map((i) => i.msg).join("\n"), /"450亿"/);
 });
 
+test("fitOverlays moves overlays placed for 16:9 out of a 9:16 caption band and inside the frame", () => {
+  const img = (x, y, size) => ({ type: "image", asset: "p", x, y, size, t: 0, end: 5 });
+  const word = { type: "word", text: "后黄仁勋时代", x: 0.5, y: 0.78, t: 0, end: 5 };
+  const tl = { width: 1080, height: 1920, captions: { enabled: true, style: "line", items: [{ scene: "a", text: "说话中", start: 1, end: 3 }] },
+    scenes: [{ id: "a", type: "media", start: 0, duration: 6, shots: [{ t: 0, zoom: 1, x: 0.5, y: 0.5 }], overlays: [word, img(0.1, 0.74, 300), img(0.5, 0.3, 300)] }] };
+  assert.ok(layoutGate(tl, {}).some((i) => i.level === "error"));
+  const moved = fitOverlays(tl, {});
+  assert.deepEqual(layoutGate(tl, {}).filter((i) => /caption band|off the frame/.test(i.msg)), []);
+  assert.ok(tl.scenes[0].overlays[0].y < 0.78 && tl.scenes[0].overlays[1].x > 0.1);
+  assert.deepEqual(tl.scenes[0].overlays[2], img(0.5, 0.3, 300), "a sticker already clear stays put");
+  assert.deepEqual([...new Set(moved.map((m) => m.i))].sort(), [0, 1]);
+  assert.deepEqual(fitOverlays(tl, {}), [], "nothing left to move");
+});
+
 test("layoutGate: overlays over spoken captions, off-frame, tiny or stacked stickers, text pushed out by a shot", () => {
   const base = { width: 1920, height: 1080, captions: { enabled: true, style: "line", items: [{ scene: "a", text: "说话中", start: 1, end: 3 }] } };
   const scene = (over) => ({ id: "a", type: "media", start: 0, duration: 6, shots: [{ t: 0, zoom: 1, x: 0.5, y: 0.5 }], overlays: [], ...over });
@@ -223,6 +237,8 @@ test("layoutGate: overlays over spoken captions, off-frame, tiny or stacked stic
   assert.match(low.find((i) => /off the frame/.test(i.msg)).msg, /move it up to y 0\.7$/, "inside and above the band");
   assert.match(low.find((i) => /caption band/.test(i.msg)).msg, /move it up to y 0\.7 or to a side/);
   assert.ok(run({ overlays: [img(0.8, 0.3, 160)] }).some((i) => /thumbnail/.test(i.msg)));
+  // Inside the frame, but cropped once the shot pushes in.
+  assert.match(run({ overlays: [img(0.88, 0.3, 300)], shots: [{ t: 0, zoom: 1, x: 0.5, y: 0.5 }, { t: 2, zoom: 1.2, x: 0.5, y: 0.5 }] })[0].msg, /off the frame at x 0\.88, y 0\.3 once the shot pushes in — move it to x 0\.82, y 0\.3$/);
   assert.ok(run({ overlays: [img(0.4, 0.3, 300), img(0.45, 0.32, 300)] }).some((i) => /overlaps overlay 0/.test(i.msg)));
   // A keyword clear of the band at first, carried into it by a push-in partway through the line.
   const word = (y) => ({ type: "word", text: "≈48亿美元", x: 0.5, y, t: 0, end: 5 });
@@ -244,6 +260,10 @@ test("layoutGate: overlays over spoken captions, off-frame, tiny or stacked stic
   assert.ok(run(map(0.6)).some((i) => /covers the map pin/.test(i.msg)));
   assert.ok(run(map(0.45)).some((i) => /covers the map label "总部"/.test(i.msg)));
   assert.ok(!run(map(0.25)).some((i) => /covers the map/.test(i.msg)));
+  // Lifted out of the caption band past a sticker, it skips the pin and its label too.
+  const lifted = map(0.86);
+  lifted.overlays.push({ ...img(0.5, 0.7, 240), t: 0, end: 5 });
+  assert.match(run(lifted).find((i) => /caption band/.test(i.msg)).msg, /move it up to y 0\.4\d? or to a side/);
   // Every element it covers is named; a globe centres the view at mid-frame.
   assert.ok(run(map(0.5)).some((i) => /covers the map pin, label "总部"/.test(i.msg)));
   assert.ok(run(map(0.5, { mode: "globe" })).some((i) => /covers the map pin/.test(i.msg)));

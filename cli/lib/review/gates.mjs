@@ -4,7 +4,7 @@ import { normalizeLicense } from "../core/license.mjs";
 import { extractNumbers, parseNumber, spokenLength, normalizeForMatch } from "../core/text.mjs";
 import { timingHashes } from "../voice/tts.mjs";
 import { sceneLines } from "../captions/lines.mjs";
-import { captionBand } from "../captions/layout.mjs";
+import { captionBand, viewAt } from "../captions/layout.mjs";
 import { countryCentroid } from "../library/geo.mjs";
 import { MAX_STILL, OVERLAY_EFFECTS, named, propTimes, screenEvents } from "../timeline/index.mjs";
 import { laidOut, weakMove } from "../timeline/shots.mjs";
@@ -530,34 +530,42 @@ export function layoutGate(timeline, config) {
         return false;
       };
       const bandHit = (bx) => spoken.find((c) => c.scene === sc.id && !c.top && inBand(c, bx));
-      // Where to move it: pulled inside the frame (0.02 margin), then up to the first place that
-      // stays out of the caption band through every shot move and clear of every sticker up at the same time.
-      // Heights are tried in hundredths, so the suggestion is a value to type in.
+      // The part of the frame on screen through the overlay's whole life: a push-in crops its edges.
+      const vis = [0, 0, 1, 1];
+      for (let t = o.t; t < Math.min(o.end, sc.duration); t += 0.25) {
+        const v = viewAt(sc.shots, t), r = 0.5 / v.zoom;
+        vis.splice(0, 4, Math.max(vis[0], v.x - r), Math.max(vis[1], v.y - r), Math.min(vis[2], v.x + r), Math.min(vis[3], v.y + r));
+      }
+      const mapped = [];
+      if (sc.type === "map") for (let t = o.t; t < o.end; t += 0.25) mapped.push(...mapBoxes(sc, t, width, height, pace));
+      // Where to move it: pulled inside the frame on screen (0.02 margin), then up to the first place that
+      // stays out of the caption band through every shot move and clear of every sticker up at the same
+      // time and of the map's pins and labels. Heights are tried in hundredths, so the suggestion is a value to type in.
       const others = boxes.filter((b, k) => b && k !== i && sc.overlays[k].t < o.end && o.t < sc.overlays[k].end);
-      const dx = box[0] < 0.02 ? 0.02 - box[0] : box[2] > 0.98 ? 0.98 - box[2] : 0;
-      const dy0 = box[1] < 0.02 ? 0.02 - box[1] : box[3] > 0.98 ? 0.98 - box[3] : 0;
+      const dx = box[0] < vis[0] + 0.02 ? vis[0] + 0.02 - box[0] : box[2] > vis[2] - 0.02 ? vis[2] - 0.02 - box[2] : 0;
+      const dy0 = box[1] < vis[1] + 0.02 ? vis[1] + 0.02 - box[1] : box[3] > vis[3] - 0.02 ? vis[3] - 0.02 - box[3] : 0;
       const r2 = (v) => Math.round(v * 100) / 100;
       const spot = () => {
-        if (box[2] - box[0] > 0.96) return null;
+        if (box[2] - box[0] > vis[2] - vis[0] - 0.04) return null;
         const y0 = o.y ?? 0.5;
-        for (let y = Math.floor((y0 + dy0) * 100 + 1e-6) / 100; box[1] + y - y0 >= 0.02 - 1e-9; y = r2(y - 0.01)) {
+        for (let y = Math.floor((y0 + dy0) * 100 + 1e-6) / 100; box[1] + y - y0 >= vis[1] + 0.02 - 1e-9; y = r2(y - 0.01)) {
           const dy = y - y0;
           const bx = [box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy];
-          if (bandHit(bx) || others.some((b) => meets(b, bx))) continue;
+          if (bandHit(bx) || others.some((b) => meets(b, bx)) || mapped.some((m) => meets(m.box, bx))) continue;
           const set = { ...(dx && { x: r2((o.x ?? 0.5) + dx) }), y: r2(y) };
           return { text: dx ? `move it to x ${set.x}, y ${set.y}` : `move it ${dy < 0 ? "up " : ""}to y ${set.y}`, fix: { scene: sc.id, path: ["overlays", i], set } };
         }
         return null;
       };
       const moved = spot();
-      if (box[0] < -0.01 || box[1] < -0.01 || box[2] > 1.01 || box[3] > 1.01) out.push(issue("warn", "layout", `${name} runs off the frame at x ${o.x ?? 0.5}, y ${o.y ?? 0.5} — ${moved?.text ?? "move it inward"}`, at, moved?.fix));
+      const cropped = box[0] < vis[0] - 0.01 || box[1] < vis[1] - 0.01 || box[2] > vis[2] + 0.01 || box[3] > vis[3] + 0.01;
+      if (cropped) out.push(issue("warn", "layout", `${name} runs off the frame at x ${o.x ?? 0.5}, y ${o.y ?? 0.5}${box[0] < -0.01 || box[1] < -0.01 || box[2] > 1.01 || box[3] > 1.01 ? "" : " once the shot pushes in"} — ${moved?.text ?? "move it inward"}`, at, moved?.fix));
       if (o.type === "image" && (o.size ?? 160) < g.minSticker) out.push(issue("warn", "layout", `${name}: size ${o.size ?? 160} reads as a thumbnail — use ${g.minSticker}+ or make it a backdrop / photo-stack (gates.minSticker)`, at));
       const hit = bandHit(box);
       if (hit) out.push(issue("error", "layout", `${name} sits in the caption band while "${hit.text}" is spoken — ${moved?.text ?? `move it above y ${portrait ? 0.7 : 0.8}`} or to a side`, at, moved?.fix));
       for (const p of placed) if (p.o.t < o.end && o.t < p.o.end && meets(p.box, box)) out.push(issue("warn", "layout", `${name} overlaps overlay ${p.i} (${p.o.type}) — space them out or stagger their times`, at));
       if (sc.type === "map") {
-        const hits = new Set();
-        for (let t = o.t; t < o.end; t += 0.25) for (const m of mapBoxes(sc, t, width, height, pace)) if (meets(m.box, box)) hits.add(m.what);
+        const hits = new Set(mapped.filter((m) => meets(m.box, box)).map((m) => m.what));
         if (hits.size) out.push(issue("warn", "layout", `${name} covers the map ${[...hits].join(", ")} — move it clear of the pins and labels or show it after the camera has moved on`, at));
       }
       placed.push({ i, o, box });
@@ -579,6 +587,24 @@ export function layoutGate(timeline, config) {
     }
   }
   return out;
+}
+
+// A cut in another frame (--aspect 9:16) keeps the storyboard's fractional overlay spots, which can
+// land in that frame's taller caption band or off its narrower edges: each such overlay takes the
+// spot layoutGate suggests, in that cut's timeline only. A few passes, since one move can block another.
+export function fitOverlays(timeline, config) {
+  const moved = [];
+  for (let pass = 0; pass < 3; pass++) {
+    const fixes = layoutGate(timeline, config).filter((i) => i.fix?.path?.[0] === "overlays");
+    if (!fixes.length) break;
+    for (const { fix } of fixes) {
+      const o = timeline.scenes.find((s) => s.id === fix.scene)?.overlays?.[fix.path[1]];
+      if (!o || Object.entries(fix.set).every(([k, v]) => o[k] === v)) continue;
+      Object.assign(o, fix.set);
+      moved.push({ scene: fix.scene, i: fix.path[1], set: fix.set });
+    }
+  }
+  return moved;
 }
 
 // Material density on the compiled timeline: distinct assets (photos, footage, captures, logos and
