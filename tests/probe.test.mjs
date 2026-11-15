@@ -75,3 +75,14 @@ test("probe spots move sideways when no height clears the text, and keep off oth
   const [below] = probeIssues(shot([{ i: 0, box: [0.3, 0.44, 0.7, 0.52], covers: [{ t: 0, area: 0.004 }] }, { i: 1, box: [0.3, 0.3, 0.7, 0.44], covers: [] }], [title]), t);
   assert.ok(below.fix.set.y > 0.5, JSON.stringify(below.fix.set));
 });
+
+test("probeIssues reports scene text cut at the frame edge once, naming the shot when it is pushed in", () => {
+  const cutTitle = { text: "SpaceX", box: [0, 0.3, 1, 0.4], cut: ["left", "right"] };
+  const probes = [...shot([], [cutTitle, title]), ...shot([], [cutTitle])];
+  const out = probeIssues(probes, tl());
+  assert.equal(out.length, 1);
+  assert.match(out[0].msg, /scene "s" text "SpaceX" runs off the left and right edge at 12\.0s — make the text smaller or shorter, or break the line/);
+  const t = tl();
+  t.scenes[0].shots = [{ t: 0, zoom: 1 }, { t: 1.5, zoom: 1.2 }, { t: 5, zoom: 1 }];
+  assert.match(probeIssues(probes, t)[0].msg, /keep the shot wider there/);
+});

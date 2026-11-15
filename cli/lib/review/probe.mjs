@@ -49,6 +49,17 @@ export function probeIssues(probes, timeline, { variant = null } = {}) {
   for (const p of probes) for (const rec of p.scenes ?? []) {
     const sc = byId.get(rec.scene);
     if (!sc) continue;
+    // Scene text cut at the frame edge (a long title in a narrow frame, a label a push-in carries out).
+    for (const t of rec.texts) {
+      if (!t.cut?.length || said.has(`${sc.id}#cut#${t.text}`)) continue;
+      said.add(`${sc.id}#cut#${t.text}`);
+      const zoom = ((sc.shots ?? []).filter((s) => s.t <= rec.t).at(-1)?.zoom ?? 1) > 1.001;
+      out.push({
+        level: "warn", gate: "probe",
+        msg: `scene "${sc.id}" text "${t.text}" runs off the ${t.cut.join(" and ")} edge at ${(sc.start + rec.t).toFixed(1)}s — ${zoom ? "keep the shot wider there, or make the text smaller or shorter" : "make the text smaller or shorter, or break the line"}`,
+        at: { scene: sc.id, from: sc.start + rec.t, to: sc.start + rec.t, field: "props" },
+      });
+    }
     for (const { i, box, covers } of rec.overlays) {
       const o = sc.overlays?.[i];
       if (!o) continue;

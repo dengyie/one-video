@@ -118,7 +118,26 @@ function probeBoxes(layer: HTMLElement, list: Overlay[]) {
     }
     return a;
   };
-  const texts: { text: string; box: Frac }[] = [];
+  // The sides where a line runs past the frame while nothing of its own clips it sooner (a mask or a
+  // scrolling strip hides its overflow on purpose): its words are cut at the frame edge.
+  const cutSides = (n: Node, r: DOMRect) => {
+    let [l, t, rt, b] = [F.left, F.top, F.right, F.bottom];
+    for (let e = n.parentElement; e && e !== root; e = e.parentElement) {
+      const cs = getComputedStyle(e);
+      if (cs.overflowX === "visible" && cs.overflowY === "visible") continue;
+      const c = e.getBoundingClientRect();
+      if (cs.overflowX !== "visible") [l, rt] = [Math.max(l, c.left), Math.min(rt, c.right)];
+      if (cs.overflowY !== "visible") [t, b] = [Math.max(t, c.top), Math.min(b, c.bottom)];
+    }
+    const sx = F.width * 0.005, sy = F.height * 0.005;
+    return [
+      r.left < F.left - 2 * sx && l <= F.left + sx && "left",
+      r.right > F.right + 2 * sx && rt >= F.right - sx && "right",
+      r.top < F.top - 2 * sy && t <= F.top + sy && "top",
+      r.bottom > F.bottom + 2 * sy && b >= F.bottom - sy && "bottom",
+    ].filter((s): s is string => Boolean(s));
+  };
+  const texts: { text: string; box: Frac; cut?: string[] }[] = [];
   const walk = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let n = walk.nextNode(); n; n = walk.nextNode()) {
     const text = (n.textContent ?? "").trim();
@@ -127,7 +146,8 @@ function probeBoxes(layer: HTMLElement, list: Overlay[]) {
     range.selectNodeContents(n);
     const r = union([...range.getClientRects()].filter((c) => c.width > 0 && c.height > 0));
     const box = r && frame(r);
-    if (box) texts.push({ text: text.slice(0, 24), box });
+    const cut = box ? cutSides(n, r) : [];
+    if (box) texts.push({ text: text.slice(0, 24), box, ...(cut.length ? { cut } : {}) });
   }
   const N = 8;
   const overlays: { i: number; box: Frac; covers: { t: number; area: number }[] }[] = [];
