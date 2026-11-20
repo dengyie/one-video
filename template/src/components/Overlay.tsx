@@ -64,7 +64,9 @@ export const Overlays: React.FC = () => {
     id = requestAnimationFrame(measure);
     return done;
   });
-  if (!scene.overlays?.length) return null;
+  // A scene without stickers still mounts the layer under the probe, so its text is checked for
+  // running off the frame.
+  if (!scene.overlays?.length) return probe ? <AbsoluteFill ref={ref} style={{ pointerEvents: "none" }} /> : null;
   // A pinned overlay fades out with its element as it leaves the frame (a canvas card the camera
   // flew past). With the element gone it falls back to x/y/rect only if the storyboard gave them.
   const shown = (o: Overlay) => {
