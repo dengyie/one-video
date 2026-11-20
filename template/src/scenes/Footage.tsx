@@ -1,7 +1,8 @@
 import React from "react";
 import { AbsoluteFill, Img, staticFile, useVideoConfig } from "remotion";
-import { useLayout, useScene, useTheme, useTime, useTimeline } from "../engine/context";
+import { textEms, useLayout, useScene, useTheme, useTime, useTimeline } from "../engine/context";
 import { clamp01, easeInOut, easeOut, lerp } from "../engine/motion";
+import { seenSpan } from "../engine/camera";
 import { ClipVideo, rampTime, seqSrc, type Ramp } from "../components/Media";
 import { depthSrc, ForegroundCut, ParallaxCanvas, type Matte, type ParallaxMove } from "../components/Depth";
 
@@ -11,18 +12,25 @@ type Title = { text: string; t?: number; x?: number; y?: number; size?: number; 
 
 const TitleText: React.FC<{ title: Title }> = ({ title }) => {
   const theme = useTheme();
+  const scene = useScene();
   const { u, width, height } = useLayout();
   const t = useTime();
   const local = t - (title.t ?? 0.2);
   if (local < 0) return null;
   const gone = title.duration !== undefined ? clamp01((local - title.duration) / 0.3) : 0;
   if (gone >= 1) return null;
-  const size = (title.size ?? 260) * u;
+  // The asked size, shrunk until the title and its kicker fit across what the shots keep on screen
+  // while it shows (a 9:16 cut of a title sized for 16:9, a push-in): em widths at weight 900.
+  const t0 = title.t ?? 0.2;
+  const [l, r] = seenSpan(scene.shots, t0, title.duration !== undefined ? t0 + title.duration + 0.3 : scene.duration);
+  const x = title.x ?? 0.5, room = 2 * Math.max(0.1, Math.min(x - l, r - x)) * width * 0.92;
+  const ems = Math.max(textEms(title.text) - 0.03 * [...title.text].length, title.kicker ? 0.16 * textEms(title.kicker) + 0.04 * [...title.kicker].length : 0);
+  const size = Math.min((title.size ?? 260) * u, ems ? room / ems : Infinity);
   const slam = title.style === "slam";
   const p = slam ? clamp01(local / 0.25) : easeOut(local / 0.7);
   const k = easeOut(clamp01((local - 0.25) / 0.5));
   return (
-    <div style={{ position: "absolute", left: (title.x ?? 0.5) * width, top: (title.y ?? 0.42) * height, transform: "translate(-50%, -50%)", textAlign: "center", opacity: 1 - gone }}>
+    <div style={{ position: "absolute", left: x * width, top: (title.y ?? 0.42) * height, transform: "translate(-50%, -50%)", textAlign: "center", opacity: 1 - gone }}>
       {title.kicker && <div style={{ fontSize: size * 0.16, fontWeight: 700, letterSpacing: size * 0.04, whiteSpace: "nowrap", color: theme.colors.highlight, opacity: k, marginBottom: size * 0.04 }}>{title.kicker}</div>}
       <div style={{ overflow: slam ? "visible" : "hidden" }}>
         <div style={{

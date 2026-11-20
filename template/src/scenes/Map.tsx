@@ -6,6 +6,7 @@ import world50 from "world-atlas/countries-50m.json";
 import { colorAt, cueOr, useLayout, useRevealAt, useScene, useTheme, useTime } from "../engine/context";
 import { clamp01, easeInOut, easeOut, easeOutBack, lerp } from "../engine/motion";
 import { Stage, Title } from "./Stage";
+import { seenSpan } from "../engine/camera";
 
 // Natural Earth (world-atlas) draws Taiwan as its own feature; for Chinese-language videos a
 // highlight of China always includes it (the compiler resolves names to these numeric ids).
@@ -78,6 +79,11 @@ export const MapScene: React.FC<{
     return { i, x: xy[0], y: xy[1], text: pn.label, o: easeOut((t - s - 0.15) / 0.4) };
   });
   const appear = easeOut(t / 0.6);
+  // What the shots keep on screen now, in px across the scene: labels stay inside it.
+  const span = seenSpan(scene.shots, t, t).map((f) => f * width) as [number, number];
+  // Boxes of the labels already on screen this frame (pins, then countries, then routes), so later
+  // labels step clear of earlier ones instead of stacking on them.
+  const placed: Box[] = [];
   // Style borders are translucent whites: enough to read land against the sea on any theme.
   const land = theme.colors.border;
   return (
@@ -137,7 +143,7 @@ export const MapScene: React.FC<{
           );
         })}
       </svg>
-      {placePinLabels(pinAt.map((p) => p && p.text ? { ...p, text: p.text } : null), u).map((l) => <Label key={`p${l.i}`} x={l.x} y={l.y} o={l.o} text={l.text} />)}
+      {placePinLabels(pinAt.map((p) => p && p.text ? { ...p, text: p.text } : null), u, span, placed).map((l) => <Label key={`p${l.i}`} x={l.x} y={l.y} o={l.o} text={l.text} />)}
       {highlight.map((h, i) => {
         if (!h.label) return null;
         const f = feats.find((x) => String(x.id) === h.id);
@@ -150,15 +156,17 @@ export const MapScene: React.FC<{
         // A country label centred on a visible pin would hide it: it drops below the pin instead.
         const w = labelWidth(h.label) * u, lh = 52 * u;
         const under = pinAt.find((p) => p && p.o > 0 && Math.abs(p.x - xy[0]) < w / 2 + 14 * u && Math.abs(p.y - xy[1]) < lh / 2 + 14 * u);
-        const y = under ? under.y + 22 * u + lh / 2 : xy[1];
-        return <Label key={`h${i}`} x={under ? under.x : xy[0]} y={y} o={o} text={h.label} center color={h.color ?? colorAt(theme, i)} />;
+        const [x, y] = clearOf(placed, inFrame(under ? under.x : xy[0], w, span, u), under ? under.y + 22 * u + lh / 2 : xy[1], w, lh, 1, u, o);
+        return <Label key={`h${i}`} x={x} y={y} o={o} text={h.label} center color={h.color ?? colorAt(theme, i)} />;
       })}
       {routes.map((r, i) => {
         if (!r.label) return null;
         const s = r.cue ? cueOr(scene, r.cue, 0) : at(i, routes.length);
         const mid = proj(geoInterpolate(r.from, r.to)(0.5));
         if (!mid) return null;
-        return <Label key={`r${i}`} x={mid[0]} y={mid[1] - 40 * u} o={easeOut((t - s - (r.duration ?? 1.4) * 0.6) / 0.4)} text={r.label} center />;
+        const w = labelWidth(r.label) * u, o = easeOut((t - s - (r.duration ?? 1.4) * 0.6) / 0.4);
+        const [x, y] = clearOf(placed, inFrame(mid[0], w, span, u), mid[1] - 40 * u, w, 52 * u, -1, u, o);
+        return <Label key={`r${i}`} x={x} y={y} o={o} text={r.label} center />;
       })}
       {title && <Stage><Title text={title} /></Stage>}
     </div>
@@ -183,17 +191,33 @@ const Label: React.FC<{ x: number; y: number; o: number; text: string; center?: 
 // Label width in u, estimated from the text (CJK ≈ 1em per char at 28u, plus padding).
 const labelWidth = (text: string) => [...text].reduce((a, c) => a + (c.charCodeAt(0) > 0x2e80 ? 1 : 0.6), 0) * 28 + 36;
 
-// Pin labels go right of their pin; when one would overlap an earlier label it flips to the
-// left, then steps down until clear. Width is estimated from the text (CJK ≈ 1em per char).
-function placePinLabels(items: ({ i: number; x: number; y: number; text: string; o: number } | null)[], u: number) {
-  const placed: { x: number; y: number; w: number; h: number }[] = [];
+// Centre x that keeps a centred label of width w inside the on-screen span (24u margin).
+const inFrame = (x: number, w: number, [l, r]: [number, number], u: number) => Math.min(Math.max(x, l + 24 * u + w / 2), r - 24 * u - w / 2);
+
+type Box = { x: number; y: number; w: number; h: number };
+const hits = (placed: Box[], b: Box) => placed.some((p) => b.x < p.x + p.w && p.x < b.x + b.w && b.y < p.y + p.h && p.y < b.y + b.h);
+
+// A centred label at (x, y) that would overlap a label already placed steps `dir` (1 down, -1 up)
+// a row at a time until clear (at most 6 rows); a visible one is then added to `placed`.
+export function clearOf(placed: Box[], x: number, y: number, w: number, h: number, dir: 1 | -1, u: number, o = 1): [number, number] {
+  let box = { x: x - w / 2, y: y - h / 2, w, h };
+  for (let k = 0; k < 6 && hits(placed, box); k++) box = { ...box, y: box.y + dir * (h + 6 * u) };
+  if (o > 0) placed.push(box);
+  return [x, box.y + h / 2];
+}
+
+// Pin labels go right of their pin; when one would overlap an earlier label or run off the frame
+// it flips to the left, then steps down until clear, and stays inside the frame. Width is
+// estimated from the text (CJK ≈ 1em per char). Their boxes go into `placed`.
+export function placePinLabels(items: ({ i: number; x: number; y: number; text: string; o: number } | null)[], u: number, [l, r]: [number, number], placed: Box[] = []) {
   const out: { i: number; x: number; y: number; text: string; o: number }[] = [];
-  const hit = (b: { x: number; y: number; w: number; h: number }) => placed.some((p) => b.x < p.x + p.w && p.x < b.x + b.w && b.y < p.y + p.h && p.y < b.y + b.h);
+  const hit = (b: Box) => hits(placed, b);
   for (const it of items) {
     if (!it || it.o <= 0) continue;
     const w = labelWidth(it.text) * u, h = 52 * u;
     let box = { x: it.x + 22 * u, y: it.y - 26 * u - h / 2, w, h };
-    if (hit(box)) box = { ...box, x: it.x - 22 * u - w };
+    if (hit(box) || box.x + w > r - 24 * u) box = { ...box, x: it.x - 22 * u - w };
+    if (box.x < l + 24 * u) box = { ...box, x: Math.min(it.x + 22 * u, r - 24 * u - w) };
     for (let k = 0; k < 6 && hit(box); k++) box = { ...box, y: box.y + h + 6 * u };
     placed.push(box);
     out.push({ ...it, x: box.x, y: box.y + h / 2 });

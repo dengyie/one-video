@@ -26,6 +26,20 @@ export function viewAt(shots: Shot[] | undefined, t: number): View {
   return clampView(v);
 }
 
+// The span of the layer (0–1 across) the shot track keeps on screen through the whole of [a, b]:
+// the overlap of every framing in that window, so text fitted to it never leaves the frame there.
+export function seenSpan(shots: Shot[] | undefined, a: number, b: number): [number, number] {
+  if (!shots?.length) return [0, 1];
+  let l = 0, r = 1;
+  for (let t = a; ; t = Math.min(b, t + 0.1)) {
+    const v = viewAt(shots, t), half = 0.5 / Math.max(1, v.zoom);
+    l = Math.max(l, v.x - half);
+    r = Math.min(r, v.x + half);
+    if (t >= b) break;
+  }
+  return [l, r];
+}
+
 // Weaker copy of a view for a layer further away (the backdrop): it zooms and travels `k` as far.
 export const farther = (v: View, k: number): View => clampView({ zoom: 1 + (v.zoom - 1) * k, x: 0.5 + (v.x - 0.5) * k, y: 0.5 + (v.y - 0.5) * k, rotate: v.rotate * k });
 
