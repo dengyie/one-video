@@ -60,6 +60,35 @@ export function probeIssues(probes, timeline, { variant = null } = {}) {
         at: { scene: sc.id, from: sc.start + rec.t, to: sc.start + rec.t, field: "props" },
       });
     }
+    // Scene text on scene text (a label plate stacked on another label, crowded chart labels): a solid
+    // line hidden over a third of a glyph by another. Hit-tested when the probe measured it (`over`: what
+    // is drawn on top, plates included), else the inked middles of the boxes, as far as their own
+    // clipping lets them show. The same words drawn twice (an echo, an outline layer) are not a clash.
+    const solid = (t) => (t.a ?? 1) >= 0.8 && !(t.v && !t.v.length);
+    const inked = rec.texts.map((t) => {
+      if (!solid(t)) return null;
+      const ink = (t.box[3] - t.box[1]) * 0.2, v = t.v ?? t.box;
+      const b = [Math.max(t.box[0], v[0]), Math.max(t.box[1] + ink, v[1]), Math.min(t.box[2], v[2]), Math.min(t.box[3] - ink, v[3])];
+      return area(b) > 0 ? b : null;
+    });
+    const clashes = [];
+    rec.texts.forEach((under, k) => {
+      if (rec.hit) {
+        for (const { t: j, area: a } of under.over ?? []) if (rec.texts[j]) clashes.push({ top: rec.texts[j], under, a, drawn: true });
+      } else for (let j = k + 1; j < rec.texts.length; j++) if (inked[j] && inked[k]) clashes.push({ top: rec.texts[j], under, a: cut(inked[j], inked[k]) });
+    });
+    for (const { top, under, a, drawn } of clashes) {
+      if (top.text === under.text || !solid(top) || !solid(under)) continue;
+      if (a <= COVER_GLYPH * Math.min(glyph(under.box), area(under.box))) continue;
+      const key = `${sc.id}#text#${[top.text, under.text].sort().join("\n")}`;
+      if (said.has(key)) continue;
+      said.add(key);
+      out.push({
+        level: "warn", gate: "probe",
+        msg: `scene "${sc.id}" text ${drawn ? `"${top.text}" covers "${under.text}"` : `"${under.text}" and "${top.text}" overlap`} at ${(sc.start + rec.t).toFixed(1)}s — move one of them, shorten it, or show them at different moments`,
+        at: { scene: sc.id, from: sc.start + rec.t, to: sc.start + rec.t, field: "props" },
+      });
+    }
     for (const { i, box, covers } of rec.overlays) {
       const o = sc.overlays?.[i];
       if (!o) continue;

@@ -86,3 +86,39 @@ test("probeIssues reports scene text cut at the frame edge once, naming the shot
   t.scenes[0].shots = [{ t: 0, zoom: 1 }, { t: 1.5, zoom: 1.2 }, { t: 5, zoom: 1 }];
   assert.match(probeIssues(probes, t)[0].msg, /keep the shot wider there/);
 });
+
+// Scene text over scene text: map labels stacked on one another, crowded chart labels.
+const labels = (a, b) => shot([], [{ text: "东京·羽田国际机场", box: [0.7, 0.38, 0.86, 0.41], ...a }, { text: "上海—东京航线", box: [0.72, 0.39, 0.85, 0.42], ...b }]);
+
+test("probeIssues flags scene text sitting on other scene text, once per pair", () => {
+  const out = probeIssues([...labels(), ...labels()], tl());
+  assert.equal(out.length, 1);
+  assert.equal(out[0].gate, "probe");
+  assert.match(out[0].msg, /scene "s" text "东京·羽田国际机场" and "上海—东京航线" overlap at 12\.0s/);
+  assert.deepEqual(out[0].at, { scene: "s", from: 12, to: 12, field: "props" });
+});
+
+test("probeIssues leaves text overlaps that do not read as a clash", () => {
+  // The same words drawn twice (an echo, an outline layer).
+  assert.deepEqual(probeIssues(labels({}, { text: "东京·羽田国际机场" }), tl()), []);
+  // A line its ancestors clip away (an odometer reel's hidden digits), or show only clear of the other.
+  assert.deepEqual(probeIssues(labels({}, { v: [] }), tl()), []);
+  assert.deepEqual(probeIssues(labels({}, { v: [0.72, 0.41, 0.85, 0.42] }), tl()), []);
+  // Mid-crossfade: one of them is fading.
+  assert.deepEqual(probeIssues(labels({ a: 0.6 }), tl()), []);
+  // Lines touching at their edges: the overlap stays outside the inked middle.
+  assert.deepEqual(probeIssues(labels({}, { box: [0.72, 0.405, 0.85, 0.435] }), tl()), []);
+});
+
+test("probeIssues trusts hit-tested text coverage: a label plate over a line, not boxes that touch", () => {
+  // The route label's plate hides the lower half of the pin label though the text boxes only graze.
+  const texts = [{ text: "东京·羽田国际机场", box: [0.718, 0.376, 0.866, 0.42], over: [{ t: 1, area: 0.002 }] }, { text: "上海—东京航线", box: [0.738, 0.402, 0.861, 0.446] }];
+  const [w, ...rest] = probeIssues([{ frame: 0, scenes: [{ scene: "s", t: 2, overlays: [], texts, hit: true }] }], tl());
+  assert.deepEqual(rest, []);
+  assert.match(w.msg, /text "上海—东京航线" covers "东京·羽田国际机场" at 12\.0s/);
+  // Measured, and nothing on top: boxes that do meet are left alone.
+  assert.deepEqual(probeIssues([{ frame: 0, scenes: [{ scene: "s", t: 2, overlays: [], texts: labels()[0].scenes[0].texts, hit: true }] }], tl()), []);
+  // A sliver under the plate is not a clash.
+  texts[0].over[0].area = 0.0001;
+  assert.deepEqual(probeIssues([{ frame: 0, scenes: [{ scene: "s", t: 2, overlays: [], texts, hit: true }] }], tl()), []);
+});
