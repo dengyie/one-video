@@ -221,8 +221,10 @@
             "ambient",
             "pulse",
             "documentary",
-            "bright"
-          ]
+            "bright",
+            "story"
+          ],
+          "description": "story: scored to the cut — intro, rise, turn, climax and resolve follow the script beats (or music.arc), one motif throughout"
         },
         "seed": {
           "type": "integer"
@@ -255,6 +257,19 @@
             { "type": "number", "minimum": 0 },
             { "const": "auto" }
           ]
+        },
+        "arc": {
+          "type": "array",
+          "description": "story preset: where each mood starts (a scene id or seconds), overriding the script beats",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["at", "mood"],
+            "properties": {
+              "at": { "oneOf": [{ "type": "string" }, { "type": "number", "minimum": 0 }] },
+              "mood": { "enum": ["intro", "rise", "turn", "climax", "resolve"] }
+            }
+          }
         }
       }
     },

@@ -43,7 +43,7 @@ OneVideo 把“做一条视频”拆成 11 个阶段。每个阶段都有一份�
 onevideo init <dir> --pipeline data-explainer|documentary|shorts|promo|graphics [--style midnight-data] [--aspect 16:9] [--example spacex-motion|spacex-ipo|promo-demo|graphics-demo]
 onevideo status | validate [--strict] | approve <stage> [--note …]
 onevideo tts [--sample|--dry|--force|--only a,b]   # 逐句合成 → plan/timings.json（含响度归一化）
-onevideo music [--preset ambient|pulse|documentary|bright]
+onevideo music [--preset ambient|pulse|documentary|bright|story]   # story：80 BPM 叙事配乐，按 script beat 分 intro→rise→turn→climax→resolve，段落对齐场景切点（music.arc 可覆盖）；改剪辑后重跑
 onevideo assets suggest [--scene a,b] [--per 3] [--kind image|video|both] [--write [--no-generate]] [--no-llm]   # 按场景出检索词并找授权候选（默认图片+视频，每场景保证一条动态镜头）→ plan/asset-suggestions.json；--write 追加进 assets.json，并给每场景补一张经 API 站生成的 AI 图
 onevideo assets search <q> [--provider nasa,wikimedia,openverse,pexels] | assets fetch [--only a,b] [--force] [--jobs 3]   # 含 generate：AI 生图 / 生视频（并发）
 onevideo depth [asset ids] [--step N]               # 深度图 + 亮度网格：主体穿越、关键词避让、自动加底、字幕避让

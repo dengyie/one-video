@@ -6,6 +6,7 @@ import { UserError, loadProject, readJson, writeJson, log, warn, ONEVIDEO_ROOT }
 import { runTts, ttsConfig } from "../lib/voice/tts.mjs";
 import { sceneLines } from "../lib/captions/index.mjs";
 import { writeMusic, synthSfx, SFX, MUSIC_PRESETS } from "../lib/audio/synth.mjs";
+import { STORY_BPM, storyArc, writeStory } from "../lib/audio/story.mjs";
 import { writeWav } from "../lib/audio/wav.mjs";
 import { checkProject, printIssues } from "../lib/review/check.mjs";
 import { search, fetchAsset, scoreCandidate, sceneQueries, sceneCandidates, candidateItems, generatedItem, assetFileExists, depthPath, depthStep, lumaPath, framesDir, countFrames } from "../lib/assets/index.mjs";
@@ -98,11 +99,24 @@ export async function music(args) {
     return;
   }
   const preset = args.preset ?? config.music?.preset ?? "ambient";
-  if (!MUSIC_PRESETS[preset]) throw new UserError(`unknown preset "${preset}" (${Object.keys(MUSIC_PRESETS).join(", ")})`);
+  if (!MUSIC_PRESETS[preset] && preset !== "story") throw new UserError(`unknown preset "${preset}" (${[...Object.keys(MUSIC_PRESETS), "story"].join(", ")})`);
   const duration = args.duration ? Number(args.duration) : pre.timeline ? pre.timeline.duration + 2 : null;
   if (!duration) throw new UserError("need timings to size the music; run: onevideo tts (or pass --duration <sec>)");
   mkdirSync(paths.musicDir, { recursive: true });
   const bgm = join(paths.musicDir, "bgm.wav");
+  if (preset === "story") {
+    // Scored to this cut: sections start on the scenes whose script beat opens them.
+    const beatOf = new Map((pre.plan.script?.scenes ?? []).map((s) => [s.id, s.beat]));
+    const scenes = (pre.timeline?.scenes ?? []).map((s) => ({ id: s.id, start: s.start, beat: beatOf.get(s.id) }));
+    let sections;
+    try { sections = storyArc(scenes, duration, config.music?.arc); } catch (e) { throw new UserError(e.message); }
+    writeStory(bgm, duration, { seed: config.music?.seed ?? 7, sections });
+    const grid = gridBeats(STORY_BPM, duration);
+    const cut = Object.fromEntries(scenes.map((s) => [s.id, s.start]));
+    writeFileSync(beatsFile(bgm), JSON.stringify({ bpm: STORY_BPM, beats: grid, downbeats: everyFourth(grid), source: "synth:story", scored: true, sections, cut }));
+    log(`music: story, ${duration.toFixed(1)}s — ${sections.map((s) => `${s.mood} ${s.start.toFixed(1)}s`).join(" → ")} → public/music/bgm.wav`);
+    return;
+  }
   writeMusic(bgm, duration, { preset, seed: config.music?.seed ?? 7 });
   // The synth knows its own tempo: the beat grid is exact, no detection needed.
   const grid = gridBeats(MUSIC_PRESETS[preset].bpm, duration);

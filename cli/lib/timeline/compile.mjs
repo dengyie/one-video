@@ -93,7 +93,8 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
   // music.offset starts the track that many seconds in; "auto" picks the start that lands the
   // hard cuts on downbeats (a dry compile without snapping says where they fall).
   let offset = typeof config.music?.offset === "number" ? config.music.offset : 0;
-  if (config.music?.offset === "auto" && grid.downbeats?.length) {
+  // A scored track (preset story) is written for this cut from its first frame: never shifted.
+  if (config.music?.offset === "auto" && grid.downbeats?.length && !grid.scored) {
     const dry = compileTimeline({ config: { ...config, music: { ...config.music, offset: 0 }, beats: { ...config.beats, snap: false } }, script, storyboard, timings, assets, research, root });
     if (dry.timeline) offset = bestOffset(hardCuts(dry.timeline), grid.downbeats);
   }
@@ -181,7 +182,11 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       if (!lastCanvas) errors.push(`scene "${sb.id}": canvas inherit needs an earlier canvas scene`);
       else {
         const own = new Map((props.items ?? []).map((it) => [it.id, it]));
-        props.items = [...lastCanvas.items.filter((it) => !own.has(it.id)).map(settled), ...(props.items ?? [])];
+        const before = new Map(lastCanvas.items.map((it) => [it.id, it]));
+        // An own item without a type continues the inherited one of that id: it stays on screen in
+        // its final state (its own fields restyle that state) and plays only its new morphs.
+        const carried = (it) => (it.type === undefined && before.has(it.id) ? { ...settled(before.get(it.id)), ...it, morph: it.morph ?? [] } : it);
+        props.items = [...lastCanvas.items.filter((it) => !own.has(it.id)).map(settled), ...(props.items ?? []).map(carried)];
         const end = lastCanvas.path?.[lastCanvas.path.length - 1];
         if (end) props.path = [{ ...end, at: 0, cue: undefined, cut: true }, ...(props.path ?? [])];
       }
@@ -348,6 +353,12 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     ? { src: musicSrc, offset, volume: config.music?.volume ?? 0.22, duckTo: config.music?.duckTo ?? 0.07, fade: 1.2, credit: config.music?.file ? config.music?.credit ?? null : "OneVideo 程序化合成" }
     : null;
   if (config.music?.enabled !== false && !music) warnings.push(`no background music (public/${musicSrc})${config.music?.file ? "" : "; run: onevideo music"}`);
+  // The story score turns where its scenes started when it was written; a re-timed cut drifts off it.
+  if (music && grid.scored && grid.cut) {
+    const moved = scenes.filter((s) => grid.cut[s.id] !== undefined && Math.abs(grid.cut[s.id] - s.start) > 0.75).map((s) => s.id);
+    const changed = scenes.length !== Object.keys(grid.cut).length || scenes.some((s) => grid.cut[s.id] === undefined);
+    if (moved.length || changed) warnings.push(`music was scored for an earlier cut (${moved.length ? `scenes ${moved.join(", ")} moved` : "scenes changed"}); run: onevideo music`);
+  }
   if (config.music?.file && !config.music?.credit) warnings.push("music.file has no music.credit; add the track title/author/license for the publish credits");
   const usedSfx = [...new Set(sfx.map((s) => s.sound))];
   if (root) for (const name of usedSfx) if (!existsSync(join(root, "public", sfxFile(name)))) errors.push(`sfx "${name}" missing: public/${sfxFile(name)}; run: onevideo music`);

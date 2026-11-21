@@ -4,7 +4,7 @@ import { writeWav } from "./wav.mjs";
 
 export const SR = 44100;
 
-const NOTE = (midi) => 440 * 2 ** ((midi - 69) / 12);
+export const NOTE = (midi) => 440 * 2 ** ((midi - 69) / 12);
 
 // Chord progressions as MIDI roots + intervals; each preset sets mood, tempo and texture.
 export const MUSIC_PRESETS = {
@@ -14,13 +14,13 @@ export const MUSIC_PRESETS = {
   bright: { bpm: 104, bars: 4, chords: [[60, [0, 7, 12, 16]], [55, [0, 7, 12, 16]], [57, [0, 7, 12, 15]], [53, [0, 7, 12, 16]]], pad: 0.7, pulse: 0.7, bass: 0.6, air: 0.3, bright: 0.7 },
 };
 
-function rng(seed) {
+export function rng(seed) {
   let s = seed >>> 0 || 1;
   return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
 }
 
 // One-pole low-pass, used for warmth and to shape noise.
-function lowpass(buf, cutoffHz) {
+export function lowpass(buf, cutoffHz) {
   const a = Math.exp((-2 * Math.PI * cutoffHz) / SR);
   let y = 0;
   for (let i = 0; i < buf.length; i++) buf[i] = y = (1 - a) * buf[i] + a * y;
@@ -116,7 +116,7 @@ export function synthMusic(durationSec, { preset = "ambient", seed = 7 } = {}) {
   return interleave(L, R, peak ? 0.707 / peak : 1);
 }
 
-function interleave(L, R, gain = 1) {
+export function interleave(L, R, gain = 1) {
   const out = new Int16Array(L.length * 2);
   for (let i = 0; i < L.length; i++) {
     out[2 * i] = Math.max(-32768, Math.min(32767, Math.round(L[i] * gain * 32767)));
