@@ -13,7 +13,8 @@ export const FILL_MAX = 200 * 2 ** 20; // larger files are only proxied, never c
 export const driveVideoPath = (root, slug) => `/${[root, slug, DRIVE_FILE].join("/").split("/").filter(Boolean).join("/")}`;
 
 export class DriveLink {
-  constructor({ url, user, pass }, fetchFn = fetch, now = Date.now) {
+  // The default wraps fetch: called as this.fetch(...) the Workers runtime throws "Illegal invocation".
+  constructor({ url, user, pass }, fetchFn = (...a) => fetch(...a), now = Date.now) {
     if (!url || !user || !pass) throw new Error("drive: DRIVE_URL / DRIVE_USER / DRIVE_PASS are not all set");
     this.url = url.replace(/\/+$/, "");
     this.user = user;
