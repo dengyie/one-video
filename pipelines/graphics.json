@@ -1,0 +1,143 @@
+{
+  "name": "graphics",
+  "description": "Motion graphics drawn entirely by code (16:9 or 9:16, 30–120 s): kinetic type, charts, canvas flights, maps and procedural backdrops, procedural music — no asset stage, no photos, footage or generated media.",
+  "defaults": {
+    "style": "vector-flow",
+    "aspect": "16:9",
+    "fps": 30,
+    "targetSeconds": 60,
+    "drawn": true,
+    "music": {
+      "preset": "pulse",
+      "volume": 0.22,
+      "duckTo": 0.08
+    },
+    "sfx": {
+      "transition": "auto",
+      "motion": "auto",
+      "volume": 0.45
+    },
+    "captions": {
+      "style": "line"
+    },
+    "gates": {
+      "minAssetsPerMinute": 0,
+      "goodAssetsPerMinute": 0
+    }
+  },
+  "sceneMix": {
+    "prefer": [
+      "kinetic",
+      "canvas",
+      "stat-cards",
+      "scale-compare",
+      "unit-grid",
+      "line-chart",
+      "map"
+    ],
+    "limit": {
+      "static": 0.25
+    }
+  },
+  "stages": [
+    {
+      "id": "research",
+      "director": "stages/research.md",
+      "purpose": "Dated, sourced facts; every number in the video must come from here — the drawing is code, the numbers are not.",
+      "produces": [
+        "plan/research.json"
+      ],
+      "approval": true,
+      "schema": "research"
+    },
+    {
+      "id": "proposal",
+      "director": "stages/proposal.md",
+      "purpose": "Angle, audience, structure, length and style — one page for the user to approve.",
+      "produces": [
+        "plan/proposal.md"
+      ],
+      "approval": true
+    },
+    {
+      "id": "script",
+      "director": "stages/script.md",
+      "purpose": "Narration per scene, written for the ear; numbers checked against research.",
+      "produces": [
+        "plan/script.json"
+      ],
+      "approval": true,
+      "schema": "script"
+    },
+    {
+      "id": "storyboard",
+      "director": "stages/storyboard.md",
+      "purpose": "Every frame drawn by code: kinetic type, charts, canvas flights, maps, unit grids and code-drawn backdrops (aurora / particles / waves) — no photos, footage, captures or generated media (drawn gate). A visual change every 2–4 seconds.",
+      "produces": [
+        "plan/storyboard.json"
+      ],
+      "approval": true,
+      "schema": "storyboard"
+    },
+    {
+      "id": "voice",
+      "director": "stages/voice.md",
+      "purpose": "Sentence-level TTS; measured line timings drive every frame.",
+      "produces": [
+        "plan/timings.json"
+      ],
+      "approval": false,
+      "command": "onevideo tts --sample  →  onevideo tts"
+    },
+    {
+      "id": "compose",
+      "director": "stages/compose.md",
+      "purpose": "Compile the timeline, procedural music/SFX.",
+      "produces": [
+        "plan/timeline.json"
+      ],
+      "approval": false,
+      "command": "onevideo music && onevideo timeline"
+    },
+    {
+      "id": "preview",
+      "director": "stages/compose.md",
+      "purpose": "Stills of every scene tiled into out/qc/preview-*.jpg; the user signs off on the picture before the full render.",
+      "produces": [
+        "plan/preview.json"
+      ],
+      "approval": true,
+      "command": "onevideo preview"
+    },
+    {
+      "id": "render",
+      "director": "stages/compose.md",
+      "purpose": "Full-quality Remotion render.",
+      "produces": [
+        "out/{name}.mp4"
+      ],
+      "approval": false,
+      "command": "onevideo render"
+    },
+    {
+      "id": "review",
+      "director": "stages/review.md",
+      "purpose": "Automated QC plus a look at every sampled frame; human sign-off.",
+      "produces": [
+        "plan/review.json"
+      ],
+      "approval": true,
+      "command": "onevideo qc"
+    },
+    {
+      "id": "publish",
+      "director": "stages/publish.md",
+      "purpose": "Captions, chapters, description and credits.",
+      "produces": [
+        "plan/publish.json"
+      ],
+      "approval": false,
+      "command": "onevideo publish"
+    }
+  ]
+}

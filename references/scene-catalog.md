@@ -41,7 +41,8 @@
 - `enter` / `exit`：转场类型 `fade`、`slide`、`push`、`whip`、`zoom`、`punch`、`iris`、`wipe`、`clock`、`dip`、`through`（镜头冲进上一镜的主体，糊开后露出下一场景，下一场景从同一点浮出；主体默认取上一镜素材末帧深度图里最近 8% 像素的重心，没有深度图时取画面中心，也可写 `focus: [x, y]` 指定屏幕点；最适合实拍接画布）、`cut`，或 `{type, duration, direction, sfx}`；相邻两场景重叠播放，边界类型取 `next.enter ?? prev.exit ?? theme.transition`。
 - `camera`：`static`、`drift`（默认）、`push`、`pull`、`pan-left`、`pan-right`、`rise`、`handheld`，或 `{move, amount}`。
 - 图标：任意 props 里的 `icon` 字段写 Lucide 名（`rocket`、`user-round`）或 `flag:<iso2>`（圆形国旗），编译时只内联用到的 SVG；未知名字会报错。
-- `background`：`default`、`plain`、`grid`、`stars`、`media`。
+- `background`：`default`、`plain`、`grid`、`stars`、`aurora`（流动光带）、`particles`（漂移星座连线）、`waves`（等高波纹）、`media`。后三种是纯代码绘制、逐帧确定的背景，风格 `vector-flow` 默认 `aurora`。
+- **纯代码可用的场景**（`graphics` 流水线 / `drawn: true`）：title、chapter、stat-cards、bar-compare、bar-race、line-chart、share、timeline、compare、quote（不带 `asset`）、bullets、sources、kinetic、headline、unit-grid、scale-compare、price-chart、map、canvas（不含 image 元素）。media、focus、split、photo-stack、footage、parallax、device、match-cut 需要素材，drawn 门控会报错。
 - `hold`：旁白结束后停留的时间（默认 0.5s）；`duration` / `minDuration` 给无旁白或需要更长停留的场景。
 - `sfx: [{sound, at}]`：`at` 同 cue 语法。
 - `intent`：一句话写明这个画面要让观众记住什么，方便审稿。

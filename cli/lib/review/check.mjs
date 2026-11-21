@@ -1,7 +1,7 @@
 // Collects every pre-compose issue for a project; used by `validate`, `timeline` and `render`.
 import { existsSync } from "node:fs";
 import { readJson } from "../core/project.mjs";
-import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, timingsGate, rhythmGate, openingGate, questionGate, echoGate, deviceGate, layoutGate, fitOverlays, densityGate, summarize } from "./gates.mjs";
+import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, drawnGate, timingsGate, rhythmGate, openingGate, questionGate, echoGate, deviceGate, layoutGate, fitOverlays, densityGate, summarize } from "./gates.mjs";
 import { compileTimeline } from "../timeline/index.mjs";
 
 export function loadPlan(project) {
@@ -40,6 +40,7 @@ export function checkProject(project, { needTimings = false, plan = loadPlan(pro
   }
   if (boardOk) {
     issues.push(...storyboardGate(plan.storyboard, plan.script, config, plan.assets));
+    issues.push(...drawnGate(plan.storyboard, plan.assets, config));
     if (plan.assets && !plan.timings) issues.push(...assetsGate(plan.assets, config));
     if (plan.timings) {
       issues.push(...timingsGate(plan.script, plan.timings, config));

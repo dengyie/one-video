@@ -1,0 +1,396 @@
+{
+  "scenes": [
+    {
+      "id": "hook",
+      "type": "kinetic",
+      "background": "particles",
+      "enter": "cut",
+      "exit": {
+        "type": "zoom",
+        "duration": 0.6
+      },
+      "intent": "粒子星座上逐行排字：问题先砸下来，再让九位数的光速计数落定",
+      "cues": {
+        "q": "光一秒",
+        "exact": "精确地说",
+        "si": "国际单位制"
+      },
+      "props": {
+        "kicker": "SPEED OF LIGHT",
+        "lines": [
+          {
+            "text": "光一秒能跑多远？",
+            "style": "slam",
+            "cue": "q",
+            "size": 1.15
+          },
+          {
+            "text": "国际单位制定义的常数",
+            "style": "type",
+            "cue": "si",
+            "size": 0.6,
+            "emphasis": [
+              "定义"
+            ]
+          }
+        ],
+        "number": {
+          "value": 299792458,
+          "format": {
+            "suffix": " 米/秒"
+          },
+          "label": "真空光速 c",
+          "cue": "exact"
+        }
+      },
+      "shots": [
+        {
+          "at": 0,
+          "zoom": 1.12,
+          "y": 0.46,
+          "snap": false
+        },
+        {
+          "cue": "exact",
+          "zoom": 1,
+          "ease": 1.2
+        },
+        {
+          "cue": "si",
+          "zoom": 1.06,
+          "y": 0.55,
+          "ease": 1.4
+        }
+      ]
+    },
+    {
+      "id": "earth",
+      "type": "map",
+      "enter": {
+        "type": "zoom",
+        "duration": 0.6
+      },
+      "intent": "旋转的地球仪：赤道一圈 4 万公里，光一秒绕 7.5 圈——圈数砸在地球上",
+      "cues": {
+        "laps": "7.5圈"
+      },
+      "props": {
+        "mode": "globe",
+        "spin": 30,
+        "views": [
+          {
+            "center": [
+              20,
+              8
+            ],
+            "zoom": 0.9
+          },
+          {
+            "cue": "laps",
+            "center": [
+              80,
+              4
+            ],
+            "zoom": 1.05
+          }
+        ]
+      },
+      "overlays": [
+        {
+          "type": "word",
+          "text": "≈ 4 万公里 / 圈",
+          "style": "rise",
+          "at": "4万公里",
+          "y": 0.16,
+          "size": 64,
+          "duration": 2.4
+        },
+        {
+          "type": "word",
+          "text": "× 7.5",
+          "style": "slam",
+          "at": "7.5圈",
+          "y": 0.5,
+          "size": 240,
+          "color": "#FACC15"
+        }
+      ],
+      "shots": [
+        {
+          "at": 0,
+          "zoom": 1,
+          "snap": false
+        },
+        {
+          "at": 0.4,
+          "zoom": 1.08,
+          "ease": 2.5
+        },
+        {
+          "cue": "laps",
+          "zoom": 1.16,
+          "cut": true
+        }
+      ]
+    },
+    {
+      "id": "distance",
+      "type": "scale-compare",
+      "background": "waves",
+      "enter": {
+        "type": "through",
+        "duration": 0.7
+      },
+      "intent": "嵌套圆对数缩放：赤道周长 → 地月距离 → 日地距离，镜头一路拉远看量级",
+      "header": {
+        "title": "有多远",
+        "subtitle": "来源：NASA 行星数据表（轨道半长轴）"
+      },
+      "cues": {
+        "moon": "月球",
+        "sun": "太阳"
+      },
+      "props": {
+        "items": [
+          {
+            "label": "赤道一圈",
+            "value": 40075,
+            "format": {
+              "compact": "zh",
+              "suffix": "公里"
+            }
+          },
+          {
+            "label": "地月距离",
+            "value": 384400,
+            "format": {
+              "compact": "zh",
+              "suffix": "公里"
+            },
+            "cue": "moon"
+          },
+          {
+            "label": "日地距离",
+            "value": 149598000,
+            "format": {
+              "compact": "zh",
+              "suffix": "公里"
+            },
+            "cue": "sun",
+            "color": "#FACC15"
+          }
+        ]
+      },
+      "shots": [
+        {
+          "at": 0,
+          "zoom": 1.05,
+          "snap": false
+        },
+        {
+          "cue": "moon",
+          "zoom": 1,
+          "ease": 0.9
+        },
+        {
+          "cue": "sun",
+          "zoom": 1.1,
+          "ease": 1.6
+        }
+      ]
+    },
+    {
+      "id": "travel",
+      "type": "canvas",
+      "background": "grid",
+      "enter": {
+        "type": "zoom",
+        "duration": 0.6
+      },
+      "intent": "无限画布：镜头从 1.3 秒飞到 8 分 19 秒，两段光行时间拉成两根光条，长短一眼可见",
+      "cues": {
+        "moon": "月球过来",
+        "sun": "太阳过来",
+        "wait": "要8分19秒"
+      },
+      "props": {
+        "items": [
+          {
+            "id": "moon",
+            "type": "stat",
+            "x": 760,
+            "y": 520,
+            "value": 1.3,
+            "format": {
+              "suffix": " 秒",
+              "decimals": 1
+            },
+            "label": "月球 → 地球",
+            "cue": "moon"
+          },
+          {
+            "id": "sun",
+            "type": "stat",
+            "x": 1960,
+            "y": 520,
+            "w": 620,
+            "value": 499,
+            "format": {
+              "suffix": " 秒"
+            },
+            "label": "太阳 → 地球",
+            "color": "#FACC15",
+            "cue": "sun"
+          },
+          {
+            "id": "bar-moon",
+            "type": "bar",
+            "x": 1360,
+            "y": 1060,
+            "w": 1700,
+            "h": 70,
+            "value": 1.3,
+            "max": 499,
+            "format": {
+              "suffix": " 秒",
+              "decimals": 1
+            },
+            "label": "月光",
+            "cue": "wait"
+          },
+          {
+            "id": "bar-sun",
+            "type": "bar",
+            "x": 1360,
+            "y": 1200,
+            "w": 1700,
+            "h": 70,
+            "value": 499,
+            "max": 499,
+            "format": {
+              "suffix": " 秒"
+            },
+            "label": "阳光",
+            "color": "#FACC15",
+            "cue": "wait",
+            "offset": 0.3
+          }
+        ],
+        "links": [
+          {
+            "from": "moon",
+            "to": "sun",
+            "cue": "sun",
+            "dashed": true
+          }
+        ],
+        "path": [
+          {
+            "focus": "moon",
+            "zoom": 1.5
+          },
+          {
+            "cue": "sun",
+            "focus": "sun",
+            "zoom": 1.4,
+            "fly": 1
+          },
+          {
+            "cue": "wait",
+            "focus": [
+              "moon",
+              "sun",
+              "bar-moon",
+              "bar-sun"
+            ],
+            "fly": 1.1
+          }
+        ]
+      },
+      "sfx": [
+        {
+          "sound": "pop",
+          "at": "月球过来"
+        }
+      ],
+      "shots": [
+        {
+          "at": 0,
+          "zoom": 1,
+          "snap": false
+        },
+        {
+          "cue": "wait",
+          "zoom": 1.04,
+          "ease": 1.5
+        }
+      ],
+      "overlays": [
+        {
+          "type": "word",
+          "text": "= 8 分 19 秒",
+          "style": "slam",
+          "at": "要8分19秒",
+          "y": 0.5,
+          "size": 88,
+          "color": "#FACC15"
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "type": "kinetic",
+      "background": "aurora",
+      "enter": {
+        "type": "fade",
+        "duration": 0.8
+      },
+      "intent": "极光缓缓流动，结论逐行浮现，最后一句落在“八分多钟前”",
+      "cues": {
+        "sun": "太阳",
+        "ago": "八分多钟前"
+      },
+      "props": {
+        "lines": [
+          {
+            "text": "抬头看到的太阳",
+            "style": "rise",
+            "cue": "sun",
+            "size": 0.95
+          },
+          {
+            "text": "早已是八分多钟前",
+            "style": "blur",
+            "cue": "ago",
+            "size": 0.95,
+            "emphasis": [
+              "八分多钟前"
+            ]
+          }
+        ]
+      },
+      "shots": [
+        {
+          "at": 0,
+          "zoom": 1.08,
+          "snap": false
+        },
+        {
+          "cue": "ago",
+          "zoom": 1,
+          "ease": 2.4
+        }
+      ]
+    },
+    {
+      "id": "credits",
+      "type": "sources",
+      "background": "stars",
+      "duration": 4,
+      "captions": false,
+      "props": {
+        "auto": true
+      }
+    }
+  ]
+}

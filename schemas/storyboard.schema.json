@@ -338,6 +338,9 @@
             "plain",
             "grid",
             "stars",
+            "aurora",
+            "particles",
+            "waves",
             "media"
           ]
         },

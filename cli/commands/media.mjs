@@ -126,6 +126,7 @@ export async function assets(args) {
   const project = loadProject();
   const { paths, config } = project;
   const [w, h] = DIMENSIONS[config.aspect ?? "16:9"];
+  if (config.drawn && (sub === "suggest" || sub === "fetch")) throw new UserError(`this project is drawn by code (pipeline ${config.pipeline}): it takes no photos, footage or generated media — draw the scene instead (references/scene-catalog.md), or set "drawn": false in onevideo.json to leave the pipeline's rule`);
   if (sub === "search") {
     const query = args._.slice(1).join(" ");
     if (!query) throw new UserError("usage: onevideo assets search <query> [--provider nasa,wikimedia,openverse,pexels] [--kind image|video]");

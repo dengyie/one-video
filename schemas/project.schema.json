@@ -373,6 +373,10 @@
     "gates": {
       "type": "object"
     },
+    "drawn": {
+      "type": "boolean",
+      "description": "Every frame is drawn by code (pipeline graphics): no photos, footage, captures or generated media; the drawn gate holds the storyboard to it."
+    },
     "look": {
       "type": "object",
       "additionalProperties": false,

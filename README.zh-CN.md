@@ -125,7 +125,7 @@ ln -s "$PWD" ~/.claude/skills/onevideo
 |---|---|
 | `cli/` | `onevideo` 原生命令行工具，零外部 NPM 依赖 |
 | `template/` | Remotion 动效引擎（分镜组件、主题设计系统、动态转场） |
-| `pipelines/` | 数据解说、纪录片、短视频等预置流水线阶段编排 |
+| `pipelines/` | 数据解说、纪录片、短视频、promo、graphics（纯代码绘制，无素材阶段）等预置流水线阶段编排 |
 | `stages/` | 各阶段导演规范与自检清单 |
 | `styles/` | 视觉风格设计 Token 与配色资产 |
 | `schemas/` | 各阶段产物与项目配置 JSON Schema 强校验契约 |

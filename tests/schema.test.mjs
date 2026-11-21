@@ -37,17 +37,20 @@ test("every pipeline stage points at an existing director and every style parses
 });
 
 test("every example passes the schemas and the pre-voice content gates", async () => {
-  const { schemaGate, numbersGate, storyboardGate, captionGate } = await import("../cli/lib/review/gates.mjs");
+  const { schemaGate, numbersGate, storyboardGate, captionGate, drawnGate } = await import("../cli/lib/review/gates.mjs");
   const dirs = readdirSync(join(ROOT, "examples"));
-  assert.ok(dirs.includes("spacex-motion") && dirs.includes("spacex-ipo"));
+  assert.ok(dirs.includes("spacex-motion") && dirs.includes("spacex-ipo") && dirs.includes("graphics-demo"));
   for (const name of dirs) {
     const read = (f) => JSON.parse(readFileSync(join(ROOT, "examples", name, f), "utf8"));
+    // A drawn example (pipeline graphics) has no asset plan at all.
+    const has = (f) => existsSync(join(ROOT, "examples", name, f));
     const config = read("onevideo.json"), plan = (f) => read(join("plan", `${f}.json`));
-    const [research, script, storyboard, assets] = ["research", "script", "storyboard", "assets"].map(plan);
+    const [research, script, storyboard, assets] = ["research", "script", "storyboard", "assets"].map((f) => (f === "assets" && !has("plan/assets.json") ? null : plan(f)));
     const errors = [
       ...schemaGate("project", config), ...schemaGate("research", research), ...schemaGate("script", script),
-      ...schemaGate("storyboard", storyboard), ...schemaGate("assets", assets),
+      ...schemaGate("storyboard", storyboard), ...(assets ? schemaGate("assets", assets) : []),
       ...numbersGate(script, research), ...captionGate(script, config), ...storyboardGate(storyboard, script, config, assets),
+      ...drawnGate(storyboard, assets, config),
     ].filter((i) => i.level === "error");
     assert.deepEqual(errors, [], name);
     assert.equal(config.name, name);

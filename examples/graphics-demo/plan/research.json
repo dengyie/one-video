@@ -1,0 +1,22 @@
+{
+  "topic": "光速与天体距离",
+  "question": "光一秒能跑多远，太阳光要走多久才到地球？",
+  "audience": "对科学感兴趣的中文观众",
+  "asOf": "2026-11-22",
+  "facts": [
+    { "id": "speed-of-light", "claim": "真空中的光速 c 是国际单位制的定义常数，精确等于 299,792,458米每秒", "value": 299792458, "unit": "m/s", "confidence": "confirmed",
+      "source": { "publisher": "BIPM", "title": "SI defining constants", "url": "https://www.bipm.org/en/measurement-units/si-defining-constants" } },
+    { "id": "earth-radius", "claim": "地球赤道半径 6378.137 公里", "value": 6378.137, "unit": "km", "confidence": "confirmed",
+      "source": { "publisher": "NASA NSSDCA", "title": "Earth Fact Sheet", "url": "https://nssdc.gsfc.nasa.gov/planetary/factsheet/earthfact.html" } },
+    { "id": "equator-laps", "claim": "按赤道半径推算赤道周长约 40075 公里，即约4万公里；光一秒约绕赤道7.5圈（299792.458 ÷ 40075 ≈ 7.48）", "value": 40075, "unit": "km", "confidence": "estimate",
+      "source": { "publisher": "NASA NSSDCA / BIPM", "title": "推算：2π × 赤道半径（Earth Fact Sheet），光速取 SI 定义值", "url": "https://nssdc.gsfc.nasa.gov/planetary/factsheet/earthfact.html" } },
+    { "id": "moon-distance", "claim": "地月平均距离（月球轨道半长轴）0.3844 × 10^6 公里，约38.44万公里", "value": 384400, "unit": "km", "confidence": "confirmed",
+      "source": { "publisher": "NASA NSSDCA", "title": "Moon Fact Sheet", "url": "https://nssdc.gsfc.nasa.gov/planetary/factsheet/moonfact.html" } },
+    { "id": "sun-distance", "claim": "日地平均距离（地球轨道半长轴）149.598 × 10^6 公里，约1.496亿公里", "value": 149598000, "unit": "km", "confidence": "confirmed",
+      "source": { "publisher": "NASA NSSDCA", "title": "Earth Fact Sheet", "url": "https://nssdc.gsfc.nasa.gov/planetary/factsheet/earthfact.html" } },
+    { "id": "moon-light-time", "claim": "光走完地月平均距离约1.3秒（384400 ÷ 299792.458 ≈ 1.28）", "value": 1.28, "unit": "s", "confidence": "estimate",
+      "source": { "publisher": "NASA NSSDCA / BIPM", "title": "推算：Moon Fact Sheet 半长轴 ÷ SI 光速", "url": "https://nssdc.gsfc.nasa.gov/planetary/factsheet/moonfact.html" } },
+    { "id": "sun-light-time", "claim": "光走完日地平均距离约 499 秒，即8分19秒（149598000 ÷ 299792.458 ≈ 499.0）", "value": 499, "unit": "s", "confidence": "estimate",
+      "source": { "publisher": "NASA NSSDCA / BIPM", "title": "推算：Earth Fact Sheet 半长轴 ÷ SI 光速", "url": "https://nssdc.gsfc.nasa.gov/planetary/factsheet/earthfact.html" } }
+  ]
+}

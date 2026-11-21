@@ -1,0 +1,41 @@
+{
+  "name": "vector-flow",
+  "description": "Ink-dark violet with aurora accents; made for code-drawn motion graphics (pipeline graphics).",
+  "colors": {
+    "bg": "#07061A",
+    "bgAlt": "#140F33",
+    "surface": "rgba(255,255,255,0.06)",
+    "border": "rgba(190,180,255,0.16)",
+    "text": "#F4F2FF",
+    "muted": "#9C96C4",
+    "accent": "#8B5CF6",
+    "accent2": "#2DD4BF",
+    "positive": "#4ADE80",
+    "negative": "#FB7185",
+    "highlight": "#FACC15"
+  },
+  "palette": [
+    "#8B5CF6",
+    "#2DD4BF",
+    "#FACC15",
+    "#F472B6",
+    "#60A5FA",
+    "#4ADE80",
+    "#FB923C",
+    "#A5A1C8"
+  ],
+  "fonts": {
+    "body": "\"PingFang SC\", \"Noto Sans SC\", \"Noto Sans CJK SC\", \"Microsoft YaHei\", \"Hiragino Sans GB\", sans-serif",
+    "number": "\"SF Pro Display\", \"DIN Alternate\", \"Roboto Mono\", \"PingFang SC\", sans-serif"
+  },
+  "background": "aurora",
+  "radius": 22,
+  "transition": "zoom",
+  "motion": {
+    "pace": "medium",
+    "spring": {
+      "damping": 160
+    }
+  },
+  "captionBg": "rgba(7,6,26,0.72)"
+}

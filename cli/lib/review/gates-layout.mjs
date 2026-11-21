@@ -9,6 +9,7 @@ import { textEms } from "../../../shared/labels.mjs";
 import { paceOf } from "../../../shared/reveal.mjs";
 import { LAID_OUT_ZOOM, laidOut } from "../timeline/shots.mjs";
 import { mapBoxes } from "./map-model.mjs";
+import { assetRefs } from "./gates-plan.mjs";
 import { STATIC_TYPES, issue } from "./issue.mjs";
 
 // Layout, checked on the compiled timeline before anything is rendered: what a contact sheet
@@ -139,13 +140,10 @@ export function fitOverlays(timeline, config) {
 // AI-generated stills and clips alike) per minute, and text-only scenes held with nothing to look at.
 // Charts, maps and timelines are their own evidence and are not flagged.
 export const DENSITY_DEFAULTS = { minAssetsPerMinute: 4, goodAssetsPerMinute: 8, bareTextMax: 6 };
-function assetRefs(v, out = new Set()) {
-  if (Array.isArray(v)) v.forEach((x) => assetRefs(x, out));
-  else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) (k === "asset" || k === "avatar" || k === "logo") && typeof x === "string" ? out.add(x) : assetRefs(x, out);
-  return out;
-}
 export function densityGate(timeline, assets, config) {
   const g = { ...DENSITY_DEFAULTS, ...(config.gates ?? {}) };
+  // A drawn project has no media by design (the drawn gate holds it to that).
+  if (config.drawn) return [];
   if (!g.minAssetsPerMinute && !g.goodAssetsPerMinute) return [];
   const generated = new Set((assets?.items ?? []).filter((a) => a.generate || normalizeLicense(a.license) === "generated").map((a) => a.id));
   const out = [];

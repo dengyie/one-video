@@ -1,0 +1,34 @@
+{
+  "name": "graphics-demo",
+  "title": "光有多快 · 纯代码示例",
+  "pipeline": "graphics",
+  "style": "vector-flow",
+  "aspect": "16:9",
+  "fps": 30,
+  "language": "zh-CN",
+  "targetSeconds": 36,
+  "drawn": true,
+  "watermark": "OneVideo · 示例",
+  "music": {
+    "preset": "pulse",
+    "volume": 0.22,
+    "duckTo": 0.08,
+    "offset": "auto"
+  },
+  "sfx": {
+    "transition": "auto",
+    "volume": 0.45,
+    "motion": "auto"
+  },
+  "captions": {
+    "style": "line"
+  },
+  "gates": {
+    "minAssetsPerMinute": 0,
+    "goodAssetsPerMinute": 0
+  },
+  "tts": {
+    "voice": "白桦",
+    "style": "科普旁白。清晰、好奇、节奏轻快，重音落在数字上，不要播音腔。"
+  }
+}

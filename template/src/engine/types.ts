@@ -28,7 +28,7 @@ export type TransitionIn = { type: Transition; frames: number; lead: number; dir
 export type TransitionOut = { type: Transition; frames: number; tail: number; direction: Direction; nextOpaque: boolean; focus?: Focus };
 export type CameraMove = "static" | "drift" | "push" | "pull" | "pan-left" | "pan-right" | "rise" | "handheld";
 export type Camera = { move: CameraMove; amount?: number };
-export type Background = "default" | "plain" | "grid" | "stars" | "media";
+export type Background = "default" | "plain" | "grid" | "stars" | "aurora" | "particles" | "waves" | "media";
 
 export type Overlay = {
   type: "lottie" | "icon" | "burst" | "confetti" | "arrow" | "mark" | "callout" | "stamp" | "lower-third" | "spotlight" | "flash" | "image" | "word";

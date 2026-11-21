@@ -1,0 +1,46 @@
+{
+  "title": "光有多快",
+  "summary": "从光速的定义值出发，用地球、月球和太阳三个尺度，算出我们看到的阳光是多久之前出发的。",
+  "scenes": [
+    {
+      "id": "hook",
+      "beat": "hook",
+      "chapter": "光速",
+      "question": "光一秒能跑多远？",
+      "narration": "光一秒能跑多远？精确地说，是299,792,458米，这个数是国际单位制直接定义的。",
+      "claims": ["speed-of-light"]
+    },
+    {
+      "id": "earth",
+      "beat": "setup",
+      "chapter": "尺度",
+      "question": "这到底有多远？",
+      "narration": "地球赤道一圈约4万公里，光一秒钟就能绕上7.5圈。",
+      "claims": ["equator-laps"]
+    },
+    {
+      "id": "distance",
+      "beat": "build",
+      "chapter": "尺度",
+      "question": "月亮和太阳有多远？",
+      "narration": "再往外，月球平均距离约38.44万公里，太阳约1.496亿公里。",
+      "claims": ["moon-distance", "sun-distance"]
+    },
+    {
+      "id": "travel",
+      "beat": "climax",
+      "chapter": "时间",
+      "question": "光要走多久？",
+      "narration": "光从月球过来约1.3秒，从太阳过来，要8分19秒。",
+      "claims": ["moon-light-time", "sun-light-time"]
+    },
+    {
+      "id": "outro",
+      "beat": "landing",
+      "chapter": "时间",
+      "question": "这意味着什么？",
+      "narration": "所以你抬头看到的太阳，永远是它八分多钟前的样子。"
+    },
+    { "id": "credits", "beat": "credits" }
+  ]
+}

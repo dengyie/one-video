@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, timingsGate, normalizeLicense, summarize, questionGate, echoGate, layoutGate, fitOverlays, densityGate } from "../cli/lib/review/gates.mjs";
+import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, timingsGate, normalizeLicense, summarize, questionGate, echoGate, layoutGate, fitOverlays, densityGate, drawnGate } from "../cli/lib/review/gates.mjs";
 import { rhythmGate, screenEvents } from "../cli/lib/review/gates.mjs";
 import { checkNotes, checkTone, matchGates, meanLuma, mergePasses, median, noteKind, storyboardSpot, toneOf } from "../cli/lib/review/look-check.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
@@ -293,6 +293,30 @@ test("densityGate: assets per minute, AI-generated ones counted, bare text scene
   const bare = densityGate(tl([sc("a", "media", 50, { overlays: photos(8) }), sc("q", "quote", 8), sc("k", "kinetic", 4), sc("c", "bar-race", 9), sc("s", "sources", 9)]), assets, {});
   assert.deepEqual(msgs(bare, "density").filter((m) => /no photo/.test(m)).length, 1);
   assert.ok(bare.some((i) => /scene "q"/.test(i.msg)));
+});
+
+test("drawnGate holds a drawn project to code-drawn frames", () => {
+  const drawn = { drawn: true };
+  const board = { scenes: [
+    { id: "k", type: "kinetic", background: "aurora", props: { lines: [{ text: "光" }] } },
+    { id: "m", type: "media", props: { asset: "photo" } },
+    { id: "c", type: "canvas", backdrop: { asset: "sky" }, props: { items: [{ id: "i", type: "image", asset: "logo-img" }] }, overlays: [{ type: "image", asset: "sticker" }] },
+    { id: "d", type: "device", props: { screens: [{ id: "s", asset: "shot" }] } },
+    { id: "b", type: "stat-cards", background: "media", props: { cards: [] } },
+  ] };
+  const out = drawnGate(board, { items: [{ id: "photo" }] }, drawn);
+  const errs = out.filter((i) => i.level === "error").map((i) => i.msg);
+  assert.ok(errs.some((m) => /scene "m" uses media .*props\.asset "photo"/.test(m)), errs.join("\n"));
+  const c = errs.find((m) => /scene "c"/.test(m));
+  for (const id of ["sky", "logo-img", "sticker"]) assert.ok(c.includes(`"${id}"`), c);
+  assert.ok(errs.some((m) => /scene "d" uses media/.test(m)));
+  assert.ok(errs.some((m) => /scene "b" has background "media"/.test(m)));
+  assert.ok(!errs.some((m) => /scene "k"/.test(m)));
+  assert.deepEqual(out.filter((i) => i.level === "warn").map((i) => i.gate), ["drawn"]);
+  // Not a drawn project: the gate says nothing; a drawn one skips the asset-density gate.
+  assert.deepEqual(drawnGate(board, { items: [{ id: "photo" }] }, {}), []);
+  assert.deepEqual(drawnGate({ scenes: [board.scenes[0]] }, null, drawn), []);
+  assert.deepEqual(densityGate({ duration: 60, scenes: [{ id: "k", type: "kinetic", duration: 60, props: {}, overlays: [] }] }, null, drawn), []);
 });
 
 // A hand-built timeline: scene a 0–10s with a cue at 3s, a weak drift at 5s and a real push at 6s;

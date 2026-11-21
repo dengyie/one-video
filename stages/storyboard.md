@@ -46,6 +46,15 @@
 - AI 生成的图和视频在画面里不加任何说明：叠层 `label` 不写“AI 生成”“示意”，片尾也不列；视频质量第一，AI 标识由用户投稿时在平台打。
 - 文字场景（title / kinetic / bullets / quote）超过 6 秒，背后要有一张素材（授权或 AI 生成均可）（`backdrop` 或 image 叠层），否则 density 门控警告。
 
+## graphics 流水线（纯代码）
+
+`drawn: true` 的项目没有素材：上面“素材怎么用”不适用，density 门控也不检查。画面的证据由数字和图形本身给出——
+
+- 量级用 `scale-compare`，比例用 `unit-grid`，几个数字之间的关系放进 `canvas` 让镜头飞，地理用 `map`（`mode: "globe"` + `spin`）。
+- 文字场景背后用代码背景撑住画面：`background` 写 `aurora` / `particles` / `waves`（或 `grid` / `stars`），相邻场景换着用。
+- 不能写任何 `asset`（场景 props、`backdrop`、image 叠层、canvas image 元素）或 `background: "media"`，drawn 门控报错；要用照片就换流水线，或在 `onevideo.json` 写 `"drawn": false`。
+- 节奏照常：每 2–4 秒一个新变化，每个场景有 `shots`，关键数字用 `word` 叠层砸出来。
+
 ## 版面（layout 门控，timeline 时检查）
 
 - 叠层不能压在正在念的字幕上（报错）：横屏放到 y 0.8 以上、竖屏 0.7 以上，或放到两侧。报错里会给出最近的可用高度（`move it up to y 0.68`）：整段推镜里都不进字幕带、也不撞同时在屏的叠层，照填即可。

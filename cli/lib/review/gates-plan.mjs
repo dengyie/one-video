@@ -10,6 +10,35 @@ import { GATE_DEFAULTS, STATIC_TYPES, issue } from "./issue.mjs";
 
 const DEFAULT_HOLD_EST = 0.5;
 
+// Media a plan points at: every `asset`, `avatar` or `logo` id anywhere under v (scene props,
+// backdrops, overlays, device screens, split sides), with the path it was found at.
+export function assetPaths(v, path = "", out = []) {
+  if (Array.isArray(v)) v.forEach((x, i) => assetPaths(x, `${path}[${i}]`, out));
+  else if (v && typeof v === "object") {
+    for (const [k, x] of Object.entries(v)) {
+      if ((k === "asset" || k === "avatar" || k === "logo") && typeof x === "string") out.push({ id: x, path: path ? `${path}.${k}` : k });
+      else assetPaths(x, path ? `${path}.${k}` : k, out);
+    }
+  }
+  return out;
+}
+export const assetRefs = (v) => new Set(assetPaths(v).map((r) => r.id));
+
+// A drawn project (config.drawn, pipeline graphics): every frame comes from code. Photos, footage,
+// screen captures and generated media are errors wherever the storyboard names them; Lucide icons,
+// flags, Lottie animations from the local library, maps and procedural sound stay allowed.
+export function drawnGate(storyboard, assets, config) {
+  if (!config.drawn) return [];
+  const out = [];
+  for (const sc of storyboard.scenes ?? []) {
+    const refs = assetPaths(sc);
+    if (refs.length) out.push(issue("error", "drawn", `scene "${sc.id}" uses media in a drawn project: ${refs.map((r) => `${r.path} "${r.id}"`).join(", ")} — draw it instead (kinetic, canvas, charts, unit-grid, scale-compare, map, icons) or switch the pipeline`));
+    if (sc.background === "media") out.push(issue("error", "drawn", `scene "${sc.id}" has background "media" in a drawn project — use aurora, particles, waves, grid or stars`));
+  }
+  if (assets?.items?.length) out.push(issue("warn", "drawn", `plan/assets.json lists ${assets.items.length} item(s) a drawn project never shows; remove it`));
+  return out;
+}
+
 export function schemaGate(name, value) {
   const schema = loadSchema(name);
   const errors = validate(schema, value);

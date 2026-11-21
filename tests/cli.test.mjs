@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ROOT } from "./helpers.mjs";
+import { ROOT, estimatedTimings } from "./helpers.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { resolveApiKey, viaApiBase, requireApiKey } from "../cli/lib/core/http.mjs";
 import { reviewSubject } from "../cli/lib/core/state.mjs";
@@ -212,4 +212,44 @@ test("ONEVIDEO_API_BASE moves the default relay and its key trust to another gat
     for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
     Object.assign(process.env, saved);
   }
+});
+
+test("graphics pipeline: the drawn example compiles with no media, and asset search is refused", async () => {
+  const dir = join(mkdtempSync(join(tmpdir(), "ov-cli-")), "drawn");
+  assert.equal(ov(ROOT, "init", dir, "--example", "graphics-demo").status, 0);
+  const config = json(join(dir, "onevideo.json"));
+  assert.equal(config.pipeline, "graphics");
+  assert.equal(config.drawn, true);
+  assert.ok(!existsSync(join(dir, "plan", "assets.json")));
+  // Caption timings ESTIMATED from the script (no TTS here), with the real line hashes.
+  writeFileSync(join(dir, "plan", "timings.json"), JSON.stringify(await estimatedTimings(json(join(dir, "plan", "script.json")), config)));
+  const r = ov(dir, "timeline", "--force");
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const out = r.stdout + r.stderr;
+  assert.doesNotMatch(out, /\[(drawn|density|schema:\w+|facts|ids)\]/);
+  const tl = json(join(dir, "plan", "timeline.json"));
+  assert.ok(!JSON.stringify(tl.scenes).includes('"asset"'));
+  assert.ok(tl.scenes.some((s) => s.background === "particles"));
+
+  const sb = json(join(dir, "plan", "storyboard.json"));
+  sb.scenes[1].backdrop = { asset: "earth-photo" };
+  writeFileSync(join(dir, "plan", "storyboard.json"), JSON.stringify(sb));
+  const v = ov(dir, "validate");
+  assert.equal(v.status, 1);
+  assert.match(v.stdout + v.stderr, /\[drawn\] scene "earth" uses media in a drawn project: backdrop\.asset "earth-photo"/);
+
+  const a = ov(dir, "assets", "suggest", "--no-llm");
+  assert.equal(a.status, 1);
+  assert.match(a.stderr, /drawn by code \(pipeline graphics\)/);
+});
+
+test("init --pipeline graphics carries the drawn defaults", () => {
+  const dir = join(mkdtempSync(join(tmpdir(), "ov-cli-")), "g");
+  assert.equal(ov(ROOT, "init", dir, "--pipeline", "graphics").status, 0);
+  const c = json(join(dir, "onevideo.json"));
+  assert.equal(c.drawn, true);
+  assert.equal(c.style, "vector-flow");
+  assert.equal(c.gates.minAssetsPerMinute, 0);
+  assert.match(ov(dir, "status").stdout, /storyboard/);
+  assert.doesNotMatch(ov(dir, "status").stdout, /\bassets\b/);
 });
