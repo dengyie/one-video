@@ -113,3 +113,13 @@ test("files over the fill limit are proxied but never cached whole; one fill per
 test("missing secrets fail loudly", () => {
   assert.throws(() => new DriveLink({ url: "https://x", user: "", pass: "p" }), /DRIVE_URL \/ DRIVE_USER \/ DRIVE_PASS/);
 });
+
+test("the default fetch is not called as a method (Workers throws Illegal invocation)", async () => {
+  const real = globalThis.fetch;
+  globalThis.fetch = function (url) {
+    if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation");
+    return Promise.resolve(json({ code: 200, data: { token: "t" } }));
+  };
+  try { await new DriveLink({ url: "https://drive.example/api", user: "u", pass: "p" }).login(); }
+  finally { globalThis.fetch = real; }
+});
