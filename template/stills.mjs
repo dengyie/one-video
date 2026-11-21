@@ -1,5 +1,5 @@
 // Stills for onevideo stills / preview: one bundle for the whole batch (the CLI re-bundles per
-// still), and with `probe` the overlay and text boxes each frame logs (Overlay.tsx probeBoxes).
+// still), and with `probe` the overlay and text boxes each frame logs (src/engine/probe.ts).
 // Usage: node stills.mjs <job.json>; job = { entry, props, publicDir, scale, probe, frames: [{ frame, file }], out }.
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";

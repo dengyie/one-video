@@ -205,6 +205,9 @@ export const CanvasScene: React.FC<{ items?: Item[]; path?: Stop[]; links?: Link
   const screen = { w: width / u, h: height / u };
   const cam = cameraAt(path, items, t, screen);
   const before = cameraAt(path, items, t - 1 / fps, screen);
+  // In flight between stops: text the camera carries past the frame edge now is not a layout fault.
+  const ahead = cameraAt(path, items, t + 0.1, screen);
+  const flying = Math.abs(ahead.zoom - cam.zoom) > 0.002 * cam.zoom || Math.hypot(ahead.x - cam.x, ahead.y - cam.y) * cam.zoom > 1;
   const jumped = path.some((st, i) => i > 0 && st.cut && (st.t ?? 0) > t - 1 / fps && (st.t ?? 0) <= t);
   const k = cam.zoom * u;
   const toScreen = (x: number, y: number) => ({ x: (x - cam.x) * k + width / 2, y: (y - cam.y) * k + height / 2 });
@@ -231,57 +234,59 @@ export const CanvasScene: React.FC<{ items?: Item[]; path?: Stop[]; links?: Link
   const pos = new Map(shown.map((x) => [x.it.id, x]));
 
   return (
-    <MotionBlur id={`${scene.id}-canvas`} vx={vx} vy={vy} radial={radial}>
-      {(floor ?? !scene.backdrop) && <Floor cam={cam} u={u} width={width} height={height} color={theme.colors.muted} id={`${scene.id}-cv`.replace(/[^a-zA-Z0-9_-]/g, "_")} />}
-      <svg width={width} height={height} style={{ position: "absolute", inset: 0 }}>
-        {links.map((l, i) => {
-          const a = pos.get(l.from), b = pos.get(l.to);
-          if (!a || !b || t < (l.t ?? 0)) return null;
-          const p = easeInOut((t - (l.t ?? 0)) / 0.7) * Math.min(a.e, b.e);
-          const A0 = toScreen(a.s.x!, a.s.y!), B0 = toScreen(b.s.x!, b.s.y!);
-          // Run edge to edge: trim each end to where it leaves its item's box.
-          const A = edge(A0, B0, a.s.w! * k, a.s.h! * k, 10 * k), B = edge(B0, A0, b.s.w! * k, b.s.h! * k, 10 * k);
-          const len = Math.hypot(B.x - A.x, B.y - A.y);
+    <div data-moving={flying ? "1" : undefined} style={{ display: "contents" }}>
+      <MotionBlur id={`${scene.id}-canvas`} vx={vx} vy={vy} radial={radial}>
+        {(floor ?? !scene.backdrop) && <Floor cam={cam} u={u} width={width} height={height} color={theme.colors.muted} id={`${scene.id}-cv`.replace(/[^a-zA-Z0-9_-]/g, "_")} />}
+        <svg width={width} height={height} style={{ position: "absolute", inset: 0 }}>
+          {links.map((l, i) => {
+            const a = pos.get(l.from), b = pos.get(l.to);
+            if (!a || !b || t < (l.t ?? 0)) return null;
+            const p = easeInOut((t - (l.t ?? 0)) / 0.7) * Math.min(a.e, b.e);
+            const A0 = toScreen(a.s.x!, a.s.y!), B0 = toScreen(b.s.x!, b.s.y!);
+            // Run edge to edge: trim each end to where it leaves its item's box.
+            const A = edge(A0, B0, a.s.w! * k, a.s.h! * k, 10 * k), B = edge(B0, A0, b.s.w! * k, b.s.h! * k, 10 * k);
+            const len = Math.hypot(B.x - A.x, B.y - A.y);
+            return (
+              <line key={i} x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke={l.color ?? theme.colors.muted} strokeWidth={4 * k} strokeLinecap="round"
+                strokeDasharray={l.dashed ? `${12 * k} ${12 * k}` : `${len} ${len}`} strokeDashoffset={l.dashed ? 0 : len * (1 - p)} opacity={l.dashed ? p : 0.8} />
+            );
+          })}
+        </svg>
+        {shown.map(({ it, s, prev, p, e, enter, roll, lay }) => {
+          if (e <= 0) return null;
+          const c = toScreen(s.x!, s.y!);
+          const w = s.w! * k, h = s.h! * k;
+          if (c.x + w / 2 < -width * 0.2 || c.x - w / 2 > width * 1.2 || c.y + h / 2 < -height * 0.2 || c.y - h / 2 > height * 1.2) return null;
+          const pop = it.settled ? 1 : lerp(0.82, 1, easeOutBack(e));
+          const card = boxed(s.type) || (prev && boxed(prev.type));
+          const cardO = boxed(s.type) ? (prev && !boxed(prev.type) ? p : 1) : prev && boxed(prev.type) ? 1 - p : 0;
+          const accent = s.color ?? theme.colors.accent;
+          // The plate wipes open from its accent edge before the content lands on it.
+          const wipe = lay === undefined ? 1 : easeOut(clamp01(lay / 0.4));
           return (
-            <line key={i} x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke={l.color ?? theme.colors.muted} strokeWidth={4 * k} strokeLinecap="round"
-              strokeDasharray={l.dashed ? `${12 * k} ${12 * k}` : `${len} ${len}`} strokeDashoffset={l.dashed ? 0 : len * (1 - p)} opacity={l.dashed ? p : 0.8} />
+            <div key={it.id} data-anchor={it.id} style={{
+              position: "absolute", left: c.x - w / 2, top: c.y - h / 2, width: w, height: h,
+              transform: `${card ? tilt + " " : ""}scale(${pop})`, opacity: e * (s.opacity ?? 1),
+            }}>
+              {card && (
+                <div style={{
+                  position: "absolute", inset: 0, opacity: cardO, background: theme.colors.surface, border: `${Math.max(1, 2 * k)}px solid ${theme.colors.border}`,
+                  borderRadius: (s.radius ?? theme.radius) * k, boxShadow: `inset ${6 * k}px 0 0 ${accent}`,
+                  clipPath: wipe < 1 ? `inset(0 ${((1 - wipe) * 100).toFixed(1)}% 0 0 round ${(s.radius ?? theme.radius) * k}px)` : undefined,
+                }} />
+              )}
+              {prev && (
+                <div style={{ position: "absolute", inset: 0, opacity: 1 - p, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Content s={{ ...prev, w: s.w, h: s.h }} scale={k} theme={theme} t={t} enter={enter} />
+                </div>
+              )}
+              <div style={{ position: "absolute", inset: 0, opacity: prev ? p : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Content s={s} scale={k} theme={theme} t={t} enter={prev ? t - 0.9 * p : it.settled ? -99 : enter} roll={roll} lay={prev ? undefined : lay} />
+              </div>
+            </div>
           );
         })}
-      </svg>
-      {shown.map(({ it, s, prev, p, e, enter, roll, lay }) => {
-        if (e <= 0) return null;
-        const c = toScreen(s.x!, s.y!);
-        const w = s.w! * k, h = s.h! * k;
-        if (c.x + w / 2 < -width * 0.2 || c.x - w / 2 > width * 1.2 || c.y + h / 2 < -height * 0.2 || c.y - h / 2 > height * 1.2) return null;
-        const pop = it.settled ? 1 : lerp(0.82, 1, easeOutBack(e));
-        const card = boxed(s.type) || (prev && boxed(prev.type));
-        const cardO = boxed(s.type) ? (prev && !boxed(prev.type) ? p : 1) : prev && boxed(prev.type) ? 1 - p : 0;
-        const accent = s.color ?? theme.colors.accent;
-        // The plate wipes open from its accent edge before the content lands on it.
-        const wipe = lay === undefined ? 1 : easeOut(clamp01(lay / 0.4));
-        return (
-          <div key={it.id} data-anchor={it.id} style={{
-            position: "absolute", left: c.x - w / 2, top: c.y - h / 2, width: w, height: h,
-            transform: `${card ? tilt + " " : ""}scale(${pop})`, opacity: e * (s.opacity ?? 1),
-          }}>
-            {card && (
-              <div style={{
-                position: "absolute", inset: 0, opacity: cardO, background: theme.colors.surface, border: `${Math.max(1, 2 * k)}px solid ${theme.colors.border}`,
-                borderRadius: (s.radius ?? theme.radius) * k, boxShadow: `inset ${6 * k}px 0 0 ${accent}`,
-                clipPath: wipe < 1 ? `inset(0 ${((1 - wipe) * 100).toFixed(1)}% 0 0 round ${(s.radius ?? theme.radius) * k}px)` : undefined,
-              }} />
-            )}
-            {prev && (
-              <div style={{ position: "absolute", inset: 0, opacity: 1 - p, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Content s={{ ...prev, w: s.w, h: s.h }} scale={k} theme={theme} t={t} enter={enter} />
-              </div>
-            )}
-            <div style={{ position: "absolute", inset: 0, opacity: prev ? p : 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Content s={s} scale={k} theme={theme} t={t} enter={prev ? t - 0.9 * p : it.settled ? -99 : enter} roll={roll} lay={prev ? undefined : lay} />
-            </div>
-          </div>
-        );
-      })}
-    </MotionBlur>
+      </MotionBlur>
+    </div>
   );
 };

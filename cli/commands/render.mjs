@@ -9,12 +9,12 @@ import { productsHash, reviewSubject, stageStatus } from "../lib/core/state.mjs"
 import { checkProject, printIssues } from "../lib/review/check.mjs";
 import { REMOTION_BIN, TEMPLATE_DIR, requireRemotion, run, ffmpeg } from "../lib/core/ffmpeg.mjs";
 import { runQc } from "../lib/vision/qc.mjs";
-import { DIMENSIONS } from "../lib/timeline/index.mjs";
+import { aspectTag, DIMENSIONS, withAspect } from "../lib/timeline/index.mjs";
 import { buildPublishKit, stemGroups } from "../lib/publish/kit.mjs";
 import { toSrt, toVtt } from "../lib/captions/index.mjs";
 import { resolveApiKey, trustedKeyHost } from "../lib/core/http.mjs";
-import { runTts, ttsConfig } from "../lib/voice/tts.mjs";
-import { timingsGate } from "../lib/review/gates.mjs";
+import { ttsConfig } from "../lib/voice/tts.mjs";
+import { ensureVariantTimings } from "../lib/voice/variant.mjs";
 import { probeIssues, saveProbe } from "../lib/review/probe.mjs";
 import * as media from "./media.mjs";
 import { assetFileExists, clipFrames, countFrames, framesDir } from "../lib/assets/index.mjs";
@@ -64,34 +64,6 @@ function freshTimeline(project, { force = false } = {}) {
   return res.timeline;
 }
 
-// The same cut in another frame (--aspect 9:16 for a vertical feed, 1:1, 4:5): layouts are in units
-// of the short edge, so the plan compiles as is into its own timeline (plan/timeline.9x16.json) and
-// renders beside the main cut (out/<name>.9x16.mp4) without touching its versions.
-export const aspectTag = (aspect) => String(aspect).replace(":", "x");
-export function withAspect(project, aspect) {
-  if (!aspect || aspect === true) return project;
-  if (!DIMENSIONS[aspect]) throw new UserError(`--aspect "${aspect}": one of ${Object.keys(DIMENSIONS).join(", ")}`);
-  if (aspect === (project.config.aspect ?? "16:9") && !project.config.width) return project;
-  const { width: _w, height: _h, ...config } = project.config;
-  const tag = aspectTag(aspect);
-  return {
-    ...project, config: { ...config, aspect }, aspect,
-    paths: { ...project.paths, timeline: project.p("plan", `timeline.${tag}.json`), timings: project.p("plan", `timings.${tag}.json`), audioDir: project.p("public", "audio", tag), audioRel: `audio/${tag}` },
-  };
-}
-
-// Captions wrap shorter in a narrow frame, so a variant has its own caption timings: the same voice
-// audio (cached by content in public/audio/lines, no new synthesis in scene unit) with the lines
-// placed again on its pauses.
-async function ensureAspectTimings(project) {
-  if (!project.aspect || !existsSync(project.paths.script)) return;
-  const script = readJson(project.paths.script);
-  const timings = existsSync(project.paths.timings) ? readJson(project.paths.timings) : null;
-  if (timings && !timingsGate(script, timings, project.config).length) return;
-  log(`caption timings for ${project.aspect} → ${relative(project.root, project.paths.timings)}`);
-  writeJson(project.paths.timings, await runTts(project, script));
-}
-
 function commonFlags(project) {
   return [`--props=${project.paths.timeline}`, `--public-dir=${project.p("public")}`];
 }
@@ -101,7 +73,7 @@ export async function render(args) {
   const project = withAspect(loadProject(), args.aspect);
   await ensureClipFrames(project);
   await ensureMusicBeats(project);
-  await ensureAspectTimings(project);
+  await ensureVariantTimings(project);
   const tl = freshTimeline(project, { force: Boolean(args.force) });
   mkdirSync(join(project.paths.out, "versions"), { recursive: true });
   const draft = Boolean(args.draft);
@@ -201,7 +173,7 @@ export async function stills(args) {
   const project = withAspect(loadProject(), args.aspect);
   await ensureClipFrames(project);
   await ensureMusicBeats(project);
-  await ensureAspectTimings(project);
+  await ensureVariantTimings(project);
   const tl = freshTimeline(project, { force: Boolean(args.force) });
   const dir = join(project.paths.out, "stills", ...(project.aspect ? [aspectTag(project.aspect)] : []));
   const { probe } = await renderStills(project, tl, { dir, only: typeof args.scene === "string" ? args.scene.split(",") : null, ats: args.at !== undefined ? String(args.at).split(",").map(Number) : [0.7] });

@@ -26,12 +26,48 @@ test("lib domains only import the layers below them", () => {
   for (const d of dirs) for (const f of readdirSync(join(LIB, d)).filter((x) => x.endsWith(".mjs"))) {
     for (const spec of imports(join(LIB, d, f))) {
       const m = spec.match(/^\.\.\/([a-z]+)\//);
+      if (spec.startsWith("../../../shared/")) continue; // the bottom layer, shared with the renderer
       if (spec.startsWith("../../")) { if (d !== "assets") bad.push(`${d}/${f} → ${spec}`); continue; }
       if (m && !ALLOWED[d].includes(m[1])) bad.push(`${d}/${f} → ${spec}`);
     }
   }
   // generate reaches into assets only for the media helpers, never the fetch barrel.
   for (const f of readdirSync(join(LIB, "generate"))) for (const spec of imports(join(LIB, "generate", f))) if (spec.startsWith("../assets/") && spec !== "../assets/media.mjs") bad.push(`generate/${f} → ${spec}`);
+  assert.deepEqual(bad, []);
+});
+
+// shared/: the geometry both the renderer and the gates run (camera, label placement, boxes, easing).
+// Plain ESM with no dependencies, so webpack and node load the same file.
+test("shared modules are dependency-free leaves", () => {
+  const dir = join(ROOT, "shared");
+  const bad = [];
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".mjs"))) {
+    const src = readFileSync(join(dir, f), "utf8");
+    for (const m of src.matchAll(/(?:from|import\()\s*["']([^"']+)["']/g)) if (!/^\.\/[a-z]+\.mjs$/.test(m[1])) bad.push(`${f} → ${m[1]}`);
+    if (!src.startsWith("// @ts-check")) bad.push(`${f}: missing // @ts-check`);
+  }
+  assert.deepEqual(bad, []);
+});
+
+// Template layers: engine pure modules → components → scenes → engine/Video → Root.
+test("template layers only import downward", () => {
+  const SRC = join(ROOT, "template", "src");
+  const PURE = new Set(["types.ts", "motion.ts", "format.ts", "camera.ts", "probe.ts"]);
+  const files = (d) => readdirSync(join(SRC, d)).filter((f) => /\.tsx?$/.test(f)).map((f) => [d, f]);
+  const bad = [];
+  for (const [d, f] of [...files("engine"), ...files("components"), ...files("scenes"), [".", "Root.tsx"], [".", "index.ts"]]) {
+    const src = readFileSync(join(SRC, d, f), "utf8");
+    const specs = [...src.matchAll(/(?:from|import\()\s*["']([^"']+)["']/g)].map((m) => m[1]);
+    for (const s of specs) {
+      const where = `${d}/${f} → ${s}`;
+      if (s.startsWith("../../../")) { if (!s.startsWith("../../../shared/") && !(f === "demo.ts" && s.startsWith("../../../styles/"))) bad.push(where); continue; }
+      if (d === "engine" && PURE.has(f) && !s.startsWith("./types")) bad.push(`${where} (pure engine module)`);
+      if (/\/scenes(\/|$)|^\.\.\/scenes/.test(s) && !(d === "engine" && f === "Video.tsx")) bad.push(`${where} (only engine/Video mounts scenes)`);
+      if (/engine\/(Video|Captions)$|^\.\/(Video|Captions)$/.test(s) && !(d === "engine" && f === "Video.tsx") && !(d === "." && f === "Root.tsx" && /Video$/.test(s))) bad.push(`${where} (composition root)`);
+      if (d === "components" && s.startsWith("../scenes")) bad.push(where);
+    }
+    if (d === "engine" && PURE.has(f) && /from\s*["'](react|remotion)["']/.test(src)) bad.push(`${d}/${f}: pure engine module imports react/remotion`);
+  }
   assert.deepEqual(bad, []);
 });
 

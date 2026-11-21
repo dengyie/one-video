@@ -22,6 +22,9 @@ export const AUTO_SHOTS = [
 export const FRAMED = new Set(["footage", "media", "photo-stack", "parallax", "focus", "split", "device", "match-cut", "canvas", "map"]);
 const TEXT_LED = new Set(["title", "quote", "bullets", "chapter", "sources", "kinetic"]);
 export const laidOut = (type) => !FRAMED.has(type) && !TEXT_LED.has(type);
+// How far a laid-out scene may push in. Measured: centred grids, timelines and compares hold 1.1
+// (nvidia v12); stat cards and chart axis labels left the frame at 1.12.
+export const LAID_OUT_ZOOM = 1.1;
 export const GENTLE_ZOOM = 1.03;
 const GENTLE_SHOTS = [{ zoom: 1, x: 0.5, y: 0.5 }, { zoom: GENTLE_ZOOM, x: 0.5, y: 0.5 }];
 

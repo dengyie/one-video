@@ -7,6 +7,8 @@ import { colorAt, cueOr, useLayout, useRevealAt, useScene, useTheme, useTime } f
 import { clamp01, easeInOut, easeOut, easeOutBack, lerp } from "../engine/motion";
 import { Stage, Title } from "./Stage";
 import { seenSpan } from "../engine/camera";
+import { clearOf, inFrame, labelWidth, LABEL_H, mapViewAt, placePinLabels, visibleOnGlobe } from "../../../shared/labels.mjs";
+import type { Rect } from "../../../shared/boxes.mjs";
 
 // Natural Earth (world-atlas) draws Taiwan as its own feature; for Chinese-language videos a
 // highlight of China always includes it (the compiler resolves names to these numeric ids).
@@ -27,22 +29,6 @@ function countries(detail: "110m" | "50m"): any[] {
   return cache[detail];
 }
 
-// Camera path through the views: hold each, ease to the next over `fly` seconds ending at its cue.
-function viewAt(views: View[], starts: number[], t: number, fly: number): { center: [number, number]; zoom: number } {
-  let c = views[0].center, z = Math.log(views[0].zoom);
-  for (let i = 1; i < views.length; i++) {
-    const p = easeInOut((t - (starts[i] - fly)) / fly);
-    if (p <= 0) break;
-    // Shortest way round in longitude.
-    let dLon = views[i].center[0] - c[0];
-    if (dLon > 180) dLon -= 360;
-    if (dLon < -180) dLon += 360;
-    c = [c[0] + dLon * p, lerp(c[1], views[i].center[1], p)];
-    z = lerp(z, Math.log(views[i].zoom), p);
-  }
-  return { center: c, zoom: Math.exp(z) };
-}
-
 export const MapScene: React.FC<{
   mode?: "map" | "globe"; title?: string; views?: View[]; highlight?: HL[]; pins?: Pin[]; routes?: Route[]; spin?: number; fly?: number; detail?: "auto" | "110m" | "50m";
 }> = ({ mode = "map", title, views, highlight = [], pins = [], routes = [], spin = 0, fly = 1.6, detail = "auto" }) => {
@@ -53,7 +39,9 @@ export const MapScene: React.FC<{
   const t = useTime();
   const vs: View[] = views?.length ? views : [{ center: [mode === "globe" ? 105 : 20, mode === "globe" ? 25 : 20], zoom: 1 }];
   const starts = vs.map((v, i) => (i === 0 ? 0 : v.cue ? cueOr(scene, v.cue, 0) : v.at ?? at(i, vs.length)));
-  const view = viewAt(vs, starts, t, fly);
+  const view = mapViewAt(vs, starts, t, fly);
+  // The camera is between two views (the stills probe lets text it carries past the edge go).
+  const flying = vs.some((_, i) => i > 0 && t > starts[i] - fly && t < starts[i]);
   const lon = view.center[0] + spin * t;
   const globe = mode === "globe";
   const base = globe ? Math.min(width, height) * 0.42 : width / (2 * Math.PI);
@@ -75,7 +63,7 @@ export const MapScene: React.FC<{
   const pinAt = pins.map((pn, i) => {
     const xy = proj([pn.lon, pn.lat]);
     if (!xy || (globe && !visibleOnGlobe([pn.lon, pn.lat], [lon, view.center[1]]))) return null;
-    const s = pn.cue ? cueOr(scene, pn.cue, 0) : at(i, pins.length);
+    const s = at(i, pins.length, pn.cue);
     return { i, x: xy[0], y: xy[1], text: pn.label, o: easeOut((t - s - 0.15) / 0.4) };
   });
   const appear = easeOut(t / 0.6);
@@ -83,11 +71,11 @@ export const MapScene: React.FC<{
   const span = seenSpan(scene.shots, t, t).map((f) => f * width) as [number, number];
   // Boxes of the labels already on screen this frame (pins, then countries, then routes), so later
   // labels step clear of earlier ones instead of stacking on them.
-  const placed: Box[] = [];
+  const placed: Rect[] = [];
   // Style borders are translucent whites: enough to read land against the sea on any theme.
   const land = theme.colors.border;
   return (
-    <div style={{ position: "absolute", inset: 0 }}>
+    <div data-moving={flying ? "1" : undefined} style={{ position: "absolute", inset: 0 }}>
       <svg width={width} height={height} style={{ position: "absolute", inset: 0, opacity: appear }}>
         {globe && (
           <>
@@ -110,7 +98,7 @@ export const MapScene: React.FC<{
           return <path key={f.id ?? f.properties?.name} d={d} fill={p > 0 ? color : land} fillOpacity={p > 0 ? lerp(0.3, 0.88, p) : 1} stroke={p > 0.5 ? color : theme.colors.border} strokeWidth={(p > 0.5 ? 2 : 0.8) * u} />;
         })}
         {routes.map((r, i) => {
-          const s = r.cue ? cueOr(scene, r.cue, 0) : at(i, routes.length);
+          const s = at(i, routes.length, r.cue);
           const dur = r.duration ?? 1.4;
           const p = easeInOut((t - s) / dur);
           if (p <= 0) return null;
@@ -130,7 +118,7 @@ export const MapScene: React.FC<{
           const xy = proj([pn.lon, pn.lat]);
           if (!xy) return null;
           if (globe && !visibleOnGlobe([pn.lon, pn.lat], [lon, view.center[1]])) return null;
-          const s = pn.cue ? cueOr(scene, pn.cue, 0) : at(i, pins.length);
+          const s = at(i, pins.length, pn.cue);
           const p = easeOutBack(clamp01((t - s) / 0.4));
           if (p <= 0) return null;
           const color = pn.color ?? theme.colors.highlight;
@@ -154,18 +142,18 @@ export const MapScene: React.FC<{
         if (!xy) return null;
         const o = easeOut((t - hlStart[i] - 0.3) / 0.5);
         // A country label centred on a visible pin would hide it: it drops below the pin instead.
-        const w = labelWidth(h.label) * u, lh = 52 * u;
+        const w = labelWidth(h.label) * u, lh = LABEL_H * u;
         const under = pinAt.find((p) => p && p.o > 0 && Math.abs(p.x - xy[0]) < w / 2 + 14 * u && Math.abs(p.y - xy[1]) < lh / 2 + 14 * u);
         const [x, y] = clearOf(placed, inFrame(under ? under.x : xy[0], w, span, u), under ? under.y + 22 * u + lh / 2 : xy[1], w, lh, 1, u, o);
         return <Label key={`h${i}`} x={x} y={y} o={o} text={h.label} center color={h.color ?? colorAt(theme, i)} />;
       })}
       {routes.map((r, i) => {
         if (!r.label) return null;
-        const s = r.cue ? cueOr(scene, r.cue, 0) : at(i, routes.length);
+        const s = at(i, routes.length, r.cue);
         const mid = proj(geoInterpolate(r.from, r.to)(0.5));
         if (!mid) return null;
         const w = labelWidth(r.label) * u, o = easeOut((t - s - (r.duration ?? 1.4) * 0.6) / 0.4);
-        const [x, y] = clearOf(placed, inFrame(mid[0], w, span, u), mid[1] - 40 * u, w, 52 * u, -1, u, o);
+        const [x, y] = clearOf(placed, inFrame(mid[0], w, span, u), mid[1] - 40 * u, w, LABEL_H * u, -1, u, o);
         return <Label key={`r${i}`} x={x} y={y} o={o} text={r.label} center />;
       })}
       {title && <Stage><Title text={title} /></Stage>}
@@ -188,46 +176,5 @@ const Label: React.FC<{ x: number; y: number; o: number; text: string; center?: 
   );
 };
 
-// Label width in u, estimated from the text (CJK ≈ 1em per char at 28u, plus padding).
-const labelWidth = (text: string) => [...text].reduce((a, c) => a + (c.charCodeAt(0) > 0x2e80 ? 1 : 0.6), 0) * 28 + 36;
-
-// Centre x that keeps a centred label of width w inside the on-screen span (24u margin).
-const inFrame = (x: number, w: number, [l, r]: [number, number], u: number) => Math.min(Math.max(x, l + 24 * u + w / 2), r - 24 * u - w / 2);
-
-type Box = { x: number; y: number; w: number; h: number };
-const hits = (placed: Box[], b: Box) => placed.some((p) => b.x < p.x + p.w && p.x < b.x + b.w && b.y < p.y + p.h && p.y < b.y + b.h);
-
-// A centred label at (x, y) that would overlap a label already placed steps `dir` (1 down, -1 up)
-// a row at a time until clear (at most 6 rows); a visible one is then added to `placed`.
-export function clearOf(placed: Box[], x: number, y: number, w: number, h: number, dir: 1 | -1, u: number, o = 1): [number, number] {
-  let box = { x: x - w / 2, y: y - h / 2, w, h };
-  for (let k = 0; k < 6 && hits(placed, box); k++) box = { ...box, y: box.y + dir * (h + 6 * u) };
-  if (o > 0) placed.push(box);
-  return [x, box.y + h / 2];
-}
-
-// Pin labels go right of their pin; when one would overlap an earlier label or run off the frame
-// it flips to the left, then steps down until clear, and stays inside the frame. Width is
-// estimated from the text (CJK ≈ 1em per char). Their boxes go into `placed`.
-export function placePinLabels(items: ({ i: number; x: number; y: number; text: string; o: number } | null)[], u: number, [l, r]: [number, number], placed: Box[] = []) {
-  const out: { i: number; x: number; y: number; text: string; o: number }[] = [];
-  const hit = (b: Box) => hits(placed, b);
-  for (const it of items) {
-    if (!it || it.o <= 0) continue;
-    const w = labelWidth(it.text) * u, h = 52 * u;
-    let box = { x: it.x + 22 * u, y: it.y - 26 * u - h / 2, w, h };
-    if (hit(box) || box.x + w > r - 24 * u) box = { ...box, x: it.x - 22 * u - w };
-    if (box.x < l + 24 * u) box = { ...box, x: Math.min(it.x + 22 * u, r - 24 * u - w) };
-    for (let k = 0; k < 6 && hit(box); k++) box = { ...box, y: box.y + h + 6 * u };
-    placed.push(box);
-    out.push({ ...it, x: box.x, y: box.y + h / 2 });
-  }
-  return out;
-}
-
-// Point on the near hemisphere of an orthographic globe centred on `c`.
-function visibleOnGlobe(p: [number, number], c: [number, number]): boolean {
-  const r = Math.PI / 180;
-  const cos = Math.sin(p[1] * r) * Math.sin(c[1] * r) + Math.cos(p[1] * r) * Math.cos(c[1] * r) * Math.cos((p[0] - c[0]) * r);
-  return cos > 0.05;
-}
+// Label placement (pins, countries, routes stepping clear of each other) is shared/labels.mjs, so
+// the layout gate predicts the same boxes this draws.

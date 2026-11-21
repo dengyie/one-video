@@ -152,7 +152,7 @@ test("render concurrency defaults by cores and memory", async () => {
 });
 
 test("render --aspect keeps a variant's timeline, caption timings and voice files apart", async () => {
-  const { withAspect, aspectTag } = await import("../cli/commands/render.mjs");
+  const { withAspect, aspectTag } = await import("../cli/lib/timeline/aspect.mjs");
   const root = "/p";
   const project = { root, config: { name: "demo", aspect: "16:9", width: 1920 }, p: (...xs) => join(root, ...xs), paths: { timeline: "/p/plan/timeline.json", timings: "/p/plan/timings.json", audioDir: "/p/public/audio" } };
   assert.equal(withAspect(project, undefined), project);

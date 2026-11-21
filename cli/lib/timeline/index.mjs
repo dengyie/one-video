@@ -8,3 +8,4 @@ export * from "./props.mjs";
 export * from "./anchors.mjs";
 export * from "./credits.mjs";
 export * from "./events.mjs";
+export * from "./aspect.mjs";

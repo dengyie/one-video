@@ -6,9 +6,11 @@
     "jsx": "react-jsx",
     "strict": true,
     "resolveJsonModule": true,
+    "allowJs": true,
+    "checkJs": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src"]
+  "include": ["src", "../shared"]
 }

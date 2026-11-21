@@ -1,14 +1,12 @@
 // Stickers over scene text, from the boxes the stills probe measured on screen (template/stills.mjs,
-// Overlay.tsx probeBoxes): titles, chart labels and card text the layout gate cannot model.
+// template/src/engine/probe.ts): titles, chart labels and card text the layout gate cannot model.
 // The last stills run of each frame is kept (out/qc/probe.<aspect>.json) for onevideo fix, as long as
 // the storyboard it measured is still the one on disk.
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { readJson, writeJson } from "../core/project.mjs";
 import { productsHash } from "../core/state.mjs";
-const meets = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
-const area = (b) => Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]);
-const cut = (a, b) => area([Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])]);
+import { area, meets, overlap as cut } from "../../../shared/boxes.mjs";
 // A sticker counts as covering a line once it hides about a third of one character (a glyph is
 // roughly line-height square); a graze along an edge reads fine.
 export const COVER_GLYPH = 0.35;
@@ -50,7 +48,9 @@ export function probeIssues(probes, timeline, { variant = null } = {}) {
     const sc = byId.get(rec.scene);
     if (!sc) continue;
     // Scene text cut at the frame edge (a long title in a narrow frame, a label a push-in carries out).
-    for (const t of rec.texts) {
+    // Not while the camera travels (a shot move, a canvas or map flight: `moving`): text it carries
+    // across the edge is on its way in or out; a still where the camera holds reports it.
+    for (const t of rec.moving ? [] : rec.texts) {
       if (!t.cut?.length || said.has(`${sc.id}#cut#${t.text}`)) continue;
       said.add(`${sc.id}#cut#${t.text}`);
       const zoom = ((sc.shots ?? []).filter((s) => s.t <= rec.t).at(-1)?.zoom ?? 1) > 1.001;

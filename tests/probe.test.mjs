@@ -87,6 +87,16 @@ test("probeIssues reports scene text cut at the frame edge once, naming the shot
   assert.match(probeIssues(probes, t)[0].msg, /keep the shot wider there/);
 });
 
+test("probeIssues lets text the camera carries past the edge go while it travels, not once it holds", () => {
+  const cutTitle = { text: "857亿美元", box: [0.2, -0.05, 0.8, 0.04], cut: ["top"] };
+  const flying = [{ frame: 0, file: "x.jpg", scenes: [{ scene: "s", t: 2, moving: true, overlays: [], texts: [cutTitle] }] }];
+  assert.deepEqual(probeIssues(flying, tl()), []);
+  // A sticker over a line is still a clash mid-flight.
+  const over = [{ frame: 0, file: "x.jpg", scenes: [{ scene: "s", t: 2, moving: true, overlays: [{ i: 0, box: [0.3, 0.44, 0.7, 0.52], covers: [{ t: 0, area: 0.004 }] }], texts: [title] }] }];
+  assert.equal(probeIssues(over, tl()).length, 1);
+  assert.equal(probeIssues([...flying, ...shot([], [cutTitle])], tl()).length, 1);
+});
+
 // Scene text over scene text: map labels stacked on one another, crowded chart labels.
 const labels = (a, b) => shot([], [{ text: "东京·羽田国际机场", box: [0.7, 0.38, 0.86, 0.41], ...a }, { text: "上海—东京航线", box: [0.72, 0.39, 0.85, 0.42], ...b }]);
 

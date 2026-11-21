@@ -2,6 +2,8 @@ import React, { createContext, useContext } from "react";
 import { useCurrentFrame, useVideoConfig } from "remotion";
 import type { Scene, Theme, Timeline } from "./types";
 import { PACE, progress } from "./motion";
+import { textEms as sharedEms } from "../../../shared/labels.mjs";
+import { cueOr as sharedCueOr, revealAt as sharedRevealAt } from "../../../shared/reveal.mjs";
 
 export const TimelineContext = createContext<Timeline | null>(null);
 export const SceneContext = createContext<Scene | null>(null);
@@ -52,7 +54,7 @@ export function useLayout() {
 // The font size (px) at which text that must stay on one line fits `room` px, at most `max`.
 // Widths are estimated: CJK a full em, Latin and digits about 0.62 em in the bold faces used
 // (`latin` overrides that for regular-weight running text, which is narrower).
-export const textEms = (text: string, latin = 0.62) => [...text].reduce((n, c) => n + (c.charCodeAt(0) > 0x2e80 ? 1 : latin), 0);
+export const textEms = (text: string, latin = 0.62) => sharedEms(text, latin);
 export function fitFont(text: string, room: number, max: number): number {
   const ems = textEms(text);
   return ems ? Math.min(max, room / ems) : max;
@@ -62,14 +64,8 @@ export function usePace(): number {
   return PACE[useTheme().motion?.pace ?? "medium"];
 }
 
-// When item i of n appears: its named cue if the storyboard gave one, otherwise a stagger
-// spread across the first ~55% of the scene so reveals follow the narration loosely.
-export function revealAt(scene: Scene, pace: number, i: number, n: number, cue?: string): number {
-  if (cue && scene.cues[cue] !== undefined) return scene.cues[cue];
-  const first = 0.35 * pace;
-  const span = Math.max(0, Math.min(scene.duration * 0.55, n * 1.4 * pace) - first);
-  return n <= 1 ? first : first + (span * i) / (n - 1);
-}
+// When item i of n appears: its named cue, otherwise the shared stagger (shared/reveal.mjs).
+export const revealAt = (scene: Scene, pace: number, i: number, n: number, cue?: string): number => sharedRevealAt(scene, pace, i, n, cue);
 
 export function useRevealAt() {
   const scene = useScene();
@@ -83,7 +79,6 @@ export function useReveal(at: number, dur = 0.6): number {
   return progress(t, at, dur * pace);
 }
 
-export const cueOr = (scene: Scene, name: string | undefined, fallback: number) =>
-  name && scene.cues[name] !== undefined ? scene.cues[name] : fallback;
+export const cueOr = (scene: Scene, name: string | undefined, fallback: number): number => sharedCueOr(scene, name, fallback);
 
 export const colorAt = (theme: Theme, i: number, override?: string) => override ?? theme.palette[i % theme.palette.length];

@@ -139,8 +139,9 @@ export function alignLines(weights, duration, pauses, kinds = []) {
 }
 
 // Build plan/timings.json from the script. Audio is cached by content hash, so editing one
-// scene (or one line, in line unit) re-synthesizes only that part.
-export async function runTts(project, script, { force = false, only = [], dry = false } = {}) {
+// scene (or one line, in line unit) re-synthesizes only that part. `cachedOnly` returns null
+// instead of synthesizing when some unit is not cached yet (no key needed).
+export async function runTts(project, script, { force = false, only = [], dry = false, cachedOnly = false } = {}) {
   const { config, paths } = project;
   const t = ttsConfig(config);
   const lexicon = { ...(config.lexicon ?? {}), ...(script.lexicon ?? {}) };
@@ -168,6 +169,7 @@ export async function runTts(project, script, { force = false, only = [], dry = 
     return null;
   }
 
+  if (cachedOnly && jobs.length) return null;
   if (jobs.length) {
     const key = requireApiKey(t.keyEnv, t.baseUrl);
     mkdirSync(paths.linesDir, { recursive: true });
