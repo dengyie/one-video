@@ -75,3 +75,16 @@ commands                     → 以上任意
 - 加一种字幕能力（新格式、新排版规则）：放 `captions/`；时间线编译只调用 `placeCaptions`，播放器渲染在 `template/src/engine/Captions.tsx`。
 - 加一个生成后端或素材源：生成放 `generate/`（复用 `common.mjs` 的 `genConfig` / `firstModel`），素材源加进 `assets/sources.mjs` 的 `PROVIDERS`。
 - 时间线新工序：在 `timeline/` 加文件，导出纯函数，由 `compile.mjs` 调用，并加进 `timeline/index.mjs`。
+
+## 播放站（`web/`）
+
+`npm run web:deploy` = `web/sync.mjs`（拉已发布项目 → `web/site/`）+ `wrangler deploy`（Worker `onevideo-web`，静态资源 `web/site/`，`/v/*` 先过 `worker.mjs`）。
+
+| 文件 | 内容 |
+|---|---|
+| `sync.mjs` | 列出渲染节点上 `plan/publish.json` 存在的项目；海报、字幕、简介进静态资源。配了 `ONEVIDEO_DRIVE_*` 时成片上传到 MangoDrive `<root>/<slug>/web/video.mp4`（回读 sha256 校验），`videos.json` 条目写 `source: "drive"`，不受 Workers 静态资源 25 MiB 单文件限制；没配时成片走静态资源，超 25 MiB 直接让同步失败（不再静默跳过） |
+| `drive.mjs` | 纯 fetch：`DriveLink`（登录、签名直链缓存 5 分钟、token 过期重登）、`proxyVideo`（透传 Range → 206/416，签名失效换链重试一次，Drive 出错 502；GET 时后台把整片灌进边缘缓存，≤200 MiB）。Worker 与 `tests/web-drive.test.mjs` 共用 |
+| `worker.mjs` | `/v/<slug>/video.mp4` 且 slug 在已部署 `videos.json` 里标了 drive → 先查边缘缓存，否则 `proxyVideo`；其余走静态资源（边缘缓存补 206） |
+| `secrets.mjs` | 把 `ONEVIDEO_DRIVE_USER/PASS/ROOT` 和公网 API（`ONEVIDEO_WEB_DRIVE_URL`，默认 `https://api-drive.mangoqwq.com/api`）写成 Worker secret（`wrangler secret bulk`，经 stdin，不打印不落盘）；改密码后重跑 |
+
+Worker 只代理 `videos.json` 列出的 slug 的固定路径，不接受任意 Drive 路径。`web/site/.assetsignore` 排除点文件（同步戳 `.synced`、上传中转 `.upload.mp4`）和 `description.txt`（已内联进 `videos.json`）。
