@@ -7,6 +7,7 @@ import { MapScene } from "./Map";
 import { FocusScene, PhotoStackScene, SplitScene } from "./Frame";
 import { FootageScene, ParallaxScene } from "./Footage";
 import { CanvasScene } from "./Canvas";
+import { TableauScene } from "./Tableau";
 import { DeviceScene, MatchCutScene } from "./Promo";
 
 // Scene registry: keys must match the storyboard schema's scene type enum.
@@ -36,6 +37,7 @@ export const SCENES: Record<string, React.FC<any>> = {
   footage: FootageScene,
   parallax: ParallaxScene,
   canvas: CanvasScene,
+  tableau: TableauScene,
   device: DeviceScene,
   "match-cut": MatchCutScene,
 };

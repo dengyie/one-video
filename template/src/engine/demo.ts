@@ -54,6 +54,21 @@ const specs: Spec[] = [
     routes: [{ from: [110.95, 19.6], to: [103.8, 1.35], label: "示例航线" }] } },
   { id: "globe", type: "map", seconds: 5, props: { mode: "globe", spin: 8, views: [{ center: [-90, 25], zoom: 1 }],
     pins: [{ lon: -80.6, lat: 28.5, label: "卡纳维拉尔角" }, { lon: -97.2, lat: 26, label: "博卡奇卡" }] } },
+  { id: "tableau", type: "tableau", seconds: 8, props: {
+    elements: [
+      { id: "sky", type: "sky", tone: "night", to: [{ t: 3, dur: 2, tone: "storm" }] },
+      { id: "stars", type: "stars", to: [{ t: 2.5, dur: 1.5, opacity: 0 }] },
+      { id: "moon", type: "moon", x: 0.74, y: 0.2, to: [{ t: 2.5, dur: 1.5, opacity: 0 }] },
+      { id: "clouds", type: "clouds", cover: 0.25, to: [{ t: 2.5, dur: 2.5, cover: 0.95, speed: 0.05 }] },
+      { id: "sea", type: "sea", swell: 0.25, to: [{ t: 3, dur: 3, swell: 0.95 }] },
+      { id: "cliff", type: "cliff", side: "left", x: 0.27, y: 0.6 },
+      { id: "lh", type: "lighthouse", x: 0.17, y: 0.6, h: 0.36 },
+      { id: "boat", type: "boat", x: 0.62, size: 0.12, t: 1, to: [{ t: 3, dur: 4, x: 0.5 }] },
+      { id: "rain", type: "rain", intensity: 0, to: [{ t: 3.5, dur: 1.5, intensity: 1 }] },
+      { id: "bolt", type: "lightning", x: 0.7, strikes: [{ t: 5.2 }, { t: 6.6, x: 0.82 }] },
+    ],
+    camera: [{ t: 0, x: 0.5, y: 0.5, zoom: 1 }, { t: 1, x: 0.42, y: 0.56, zoom: 1.25, dur: 5, sway: 0.8 }],
+  } },
   { id: "sources", type: "sources", seconds: 4, props: { items: ["示例数据，仅用于预览场景"] } },
 ];
 

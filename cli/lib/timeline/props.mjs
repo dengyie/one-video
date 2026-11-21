@@ -2,6 +2,9 @@
 import { snapToBar, snapToBeat } from "../audio/beats.mjs";
 import { resolveWhen } from "./cues.mjs";
 import { clampT, r3 } from "./util.mjs";
+import { settledElement } from "../../../shared/tableau.mjs";
+
+export { settledElement };
 
 // An inherited canvas item arrives in its final form: already shown, morphs applied.
 export const settled = (it) => {
@@ -29,6 +32,16 @@ export function resolvePropTimes(type, props, ctx, errors, where) {
     for (const [i, it] of (props.items ?? []).entries()) { fix(it, `item ${it.id ?? i}`); for (const [j, m] of (it.morph ?? []).entries()) fix(m, `item ${it.id ?? i} morph ${j}`); }
     for (const [i, v] of (props.path ?? []).entries()) fix(v, `path ${i}`, i === 0 ? null : v.cut ? "bar" : "beat");
     for (const [i, l] of (props.links ?? []).entries()) fix(l, `link ${i}`);
+  }
+  if (type === "tableau") {
+    for (const [i, el] of (props.elements ?? []).entries()) {
+      const name = `element ${el.id ?? i}`;
+      fix(el, name);
+      for (const [j, k] of (el.to ?? []).entries()) { fix(k, `${name} to ${j}`); k.t ??= 0; }
+      el.to?.sort((a, b) => a.t - b.t);
+      for (const [j, k] of (el.strikes ?? []).entries()) { fix(k, `${name} strike ${j}`, "beat"); k.t ??= 0; }
+    }
+    for (const [i, v] of (props.camera ?? []).entries()) { fix(v, `camera ${i}`, i === 0 ? null : v.cut ? "bar" : "beat"); v.t ??= 0; }
   }
   if (type === "footage") {
     // A keyframe without a time starts at 0, as the player reads it; cues may resolve out of order.

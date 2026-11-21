@@ -32,7 +32,7 @@ export function drawnGate(storyboard, assets, config) {
   const out = [];
   for (const sc of storyboard.scenes ?? []) {
     const refs = assetPaths(sc);
-    if (refs.length) out.push(issue("error", "drawn", `scene "${sc.id}" uses media in a drawn project: ${refs.map((r) => `${r.path} "${r.id}"`).join(", ")} — draw it instead (kinetic, canvas, charts, unit-grid, scale-compare, map, icons) or switch the pipeline`));
+    if (refs.length) out.push(issue("error", "drawn", `scene "${sc.id}" uses media in a drawn project: ${refs.map((r) => `${r.path} "${r.id}"`).join(", ")} — draw it instead (kinetic, canvas, tableau, charts, unit-grid, scale-compare, map, icons) or switch the pipeline`));
     if (sc.background === "media") out.push(issue("error", "drawn", `scene "${sc.id}" has background "media" in a drawn project — use aurora, particles, waves, grid or stars`));
   }
   if (assets?.items?.length) out.push(issue("warn", "drawn", `plan/assets.json lists ${assets.items.length} item(s) a drawn project never shows; remove it`));

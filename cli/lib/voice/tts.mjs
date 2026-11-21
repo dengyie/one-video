@@ -1,8 +1,11 @@
 // Narration TTS. Default unit "scene": one call per scene so the voice keeps natural prosody
 // across sentences; caption lines are then placed on the pauses found in that audio.
 // Unit "line" synthesizes every caption line separately (exact timing, choppier delivery).
+// A designed or cloned voice (`tts.design` / `tts.ref`): every scene is spoken by the voiceclone
+// model in the voice of one reference clip — a clip the voicedesign model makes once from a
+// description of the speaker (cached by that description), or a recording of the project's own.
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { request, requireApiKey, pool } from "../core/http.mjs";
 import { parseWav, readWav, toMono, trimSilence, concatWithGaps, findPauses, writeWav } from "../audio/wav.mjs";
@@ -25,11 +28,26 @@ export const TTS_DEFAULTS = {
   tail: 0.35,
   // Narration is normalized as a whole (one gain for every scene) to this integrated loudness.
   loudness: -16,
+  designModel: "mimo-v2.5-tts-voicedesign",
+  cloneModel: "mimo-v2.5-tts-voiceclone",
+  // What the designed speaker reads for the reference clip: varied tones, natural pauses.
+  designText: "那天晚上，风一阵比一阵紧。我站在窗边，看着远处那点灯光，忽明忽暗的……说实话，我心里也没底。可是天总会亮的，对吧？",
 };
+
+const sha = (...parts) => createHash("sha1").update(parts.join("\u0001")).digest("hex").slice(0, 12);
 
 export function ttsConfig(config) {
   const t = { ...TTS_DEFAULTS, ...(config.tts ?? {}) };
   t.pause = { ...TTS_DEFAULTS.pause, ...(config.tts?.pause ?? {}) };
+  // A cloned voice: the clone model speaks, and the voice is named by its reference so changing
+  // the description (or pointing at another recording) re-synthesizes every scene.
+  if (t.design || t.ref) {
+    if (t.design && t.ref) throw new UserError("tts: set either design (a described voice) or ref (a recording), not both");
+    if (t.protocol !== "chat") throw new UserError("tts: a designed or cloned voice needs protocol chat");
+    t.model = config.tts?.model ?? t.cloneModel;
+    t.voiceTag = t.design ? `design:${sha(t.designModel, t.design, t.designText)}` : `ref:${t.ref}`;
+    t.voice = t.voiceTag;
+  }
   return t;
 }
 
@@ -58,13 +76,44 @@ export function timingHashes(scene, config, lexicon) {
   return lines.map((_, i) => `${h}.${i}`);
 }
 
+// Where the designed voice's reference clip is cached (per description).
+export const designFile = (t, linesDir) => join(linesDir, `voice-${t.voiceTag.replace(/^design:/, "")}.wav`);
+
+// The reference clip as the clone model takes it (a data URL), making it first for a design.
+export async function voiceRef(t, { root, linesDir }, key) {
+  let file;
+  if (t.ref) {
+    file = join(root, t.ref);
+    if (!existsSync(file)) throw new UserError(`tts.ref: no file ${t.ref} (a WAV recording of the voice, 5–30 s, in the project)`);
+  } else {
+    file = designFile(t, linesDir);
+    if (!existsSync(file)) {
+      log(`  designing the voice: ${t.design}`);
+      const wav = await synthesize(t.designText, { ...t, model: t.designModel, style: t.design, instructions: undefined, refData: undefined, design: true }, key);
+      mkdirSync(linesDir, { recursive: true });
+      writeFileSync(file, wav);
+    }
+  }
+  const wav = readFileSync(file);
+  if (wav.subarray(0, 4).toString() !== "RIFF") throw new UserError(`voice reference ${file} is not a WAV file`);
+  return `data:audio/wav;base64,${wav.toString("base64")}`;
+}
+
+// The chat request for one synthesis: the style (or, for voicedesign, the speaker description) is
+// the user turn, the text the assistant turn; the voice is a preset name, or the reference clip.
+export function chatRequest(speak, t) {
+  const messages = [{ role: "assistant", content: speak }];
+  if (t.style ?? t.instructions) messages.unshift({ role: "user", content: t.style ?? t.instructions });
+  // `design: true` marks the voicedesign call itself, which takes no voice.
+  const audio = t.design === true ? { format: "wav" } : { format: "wav", voice: t.refData ?? t.voice };
+  return { model: t.model, messages, audio, stream: false };
+}
+
 async function synthesize(speak, t, key) {
   const base = t.baseUrl.replace(/\/$/, "");
   let wav;
   if (t.protocol === "chat") {
-    const messages = [{ role: "assistant", content: speak }];
-    if (t.style ?? t.instructions) messages.unshift({ role: "user", content: t.style ?? t.instructions });
-    const json = { model: t.model, messages, audio: { format: "wav", voice: t.voice }, stream: false };
+    const json = chatRequest(speak, t);
     const res = await request(`${base}/chat/completions`, { method: "POST", json, key, timeoutSec: 240, retries: 3 });
     let data;
     try { data = JSON.parse(res.body.toString()).choices?.[0]?.message?.audio?.data; } catch { /* reported below */ }
@@ -173,6 +222,7 @@ export async function runTts(project, script, { force = false, only = [], dry = 
   if (jobs.length) {
     const key = requireApiKey(t.keyEnv, t.baseUrl);
     mkdirSync(paths.linesDir, { recursive: true });
+    if (t.voiceTag) t.refData = await voiceRef(t, { root: project.root, linesDir: paths.linesDir }, key);
     let done = 0;
     await pool(jobs, t.concurrency, async (job) => {
       const buf = await synthesize(job.speak, t, key);
@@ -184,7 +234,7 @@ export async function runTts(project, script, { force = false, only = [], dry = 
   const uncached = scenes.flatMap((s) => s.units).filter((u) => !existsSync(u.file));
   if (uncached.length) throw new UserError(`${uncached.length} ${t.unit}(s) outside --only are not synthesized yet (first: scene "${uncached[0].scene}"); run: onevideo tts`);
 
-  const out = { sampleRate: t.sampleRate, voice: { model: t.model, voice: t.voice, protocol: t.protocol, unit: t.unit }, scenes: {} };
+  const out = { sampleRate: t.sampleRate, voice: { model: t.model, voice: t.voice, protocol: t.protocol, unit: t.unit, ...(t.design && { design: t.design }) }, scenes: {} };
   const joinedById = {};
   const spansById = {};
   for (const s of scenes) {

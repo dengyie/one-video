@@ -19,7 +19,7 @@ export const AUTO_SHOTS = [
 // under a header that does not ride the camera, so a push crops its outer labels or runs it under
 // the header: its auto track only breathes (GENTLE_ZOOM, centred, too small to count as something
 // new) and it gets no drift — its rhythm comes from cues.
-export const FRAMED = new Set(["footage", "media", "photo-stack", "parallax", "focus", "split", "device", "match-cut", "canvas", "map"]);
+export const FRAMED = new Set(["footage", "media", "photo-stack", "parallax", "focus", "split", "device", "match-cut", "canvas", "map", "tableau"]);
 const TEXT_LED = new Set(["title", "quote", "bullets", "chapter", "sources", "kinetic"]);
 export const laidOut = (type) => !FRAMED.has(type) && !TEXT_LED.has(type);
 // How far a laid-out scene may push in. Measured: centred grids, timelines and compares hold 1.1

@@ -20,7 +20,7 @@ import { MOTION_GAIN, MOTION_SFX, motionCues, overlaySound, sfxFile, sfxVariants
 import { bestOffset, compileShots, hardCuts, laidOut, rampShots, stillShots } from "./shots.mjs";
 import { MAX_STILL, OVERLAY_EFFECTS, screenEvents } from "./events.mjs";
 import { anchorNames } from "./anchors.mjs";
-import { resolveDeviceRects, resolvePropTimes, settled } from "./props.mjs";
+import { resolveDeviceRects, resolvePropTimes, settled, settledElement } from "./props.mjs";
 import { collectAssetRefs, credit, libraryCredit, sourceList } from "./credits.mjs";
 import { clampT, r3 } from "./util.mjs";
 
@@ -103,6 +103,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
   const downbeats = shift(grid.downbeats);
   const snap = config.beats?.snap !== false;
   let lastCanvas = null;
+  let lastTableau = null;
 
   for (const sb of storyboard.scenes) {
     const sc = scriptById.get(sb.id);
@@ -191,7 +192,23 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
         if (end) props.path = [{ ...end, at: 0, cue: undefined, cut: true }, ...(props.path ?? [])];
       }
     }
+    // A tableau with `inherit` continues the previous one the same way: its elements in their final
+    // state (an own element with that id and no type keyframes on from there), the camera cut in
+    // where it stopped.
+    if (sb.type === "tableau" && props.inherit) {
+      if (!lastTableau) errors.push(`scene "${sb.id}": tableau inherit needs an earlier tableau scene`);
+      else {
+        const own = new Map((props.elements ?? []).map((el) => [el.id, el]));
+        const before = new Map(lastTableau.elements.map((el) => [el.id, el]));
+        const carried = (el) => (el.type === undefined && before.has(el.id) ? { ...settledElement(before.get(el.id)), ...el, t: 0, settled: true, to: el.to ?? [] } : el);
+        props.elements = [...lastTableau.elements.filter((el) => !own.has(el.id)).map(settledElement), ...(props.elements ?? []).map(carried)];
+        const end = lastTableau.camera?.[lastTableau.camera.length - 1];
+        if (end) props.camera = [{ ...end, at: 0, cue: undefined, t: undefined, cut: true }, ...(props.camera ?? [])];
+      }
+    }
+    for (const [i, el] of (props.elements ?? []).entries()) if (sb.type === "tableau" && !el.type) errors.push(`scene "${sb.id}" element ${el.id ?? i}: no type (only an inheriting scene may continue an element by id)`);
     resolvePropTimes(sb.type, props, ctx, errors, `scene "${sb.id}"`);
+    if (sb.type === "tableau") lastTableau = { elements: props.elements ?? [], camera: props.camera ?? [] };
     if (sb.type === "device") resolveDeviceRects(props, assetById, errors, `scene "${sb.id}"`);
     if (sb.type === "canvas") lastCanvas = { items: props.items ?? [], path: props.path ?? [] };
     let shots;
@@ -246,7 +263,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     const chapter = sb.chapter ?? sc.chapter;
     if (chapter) chapters.push({ title: chapter, start: r3(start) });
     // A shot track also covers long stretches where nothing else changes (rhythm gate's maxStill).
-    if (shots && sb.type !== "sources" && sb.type !== "canvas" && !laidOut(sb.type)) {
+    if (shots && sb.type !== "sources" && sb.type !== "canvas" && sb.type !== "tableau" && !laidOut(sb.type)) {
       const seen = { id: sb.id, type: sb.type, start: 0, duration, cues, props, overlays, lines, captions: sb.captions ?? !readAloud(sb, lines) };
       shots = stillShots(shots, screenEvents({ scenes: [seen] }).map((e) => e.t), duration, config.gates?.maxStill ?? MAX_STILL);
     }

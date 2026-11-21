@@ -43,3 +43,39 @@ test("scene unit gives every line the scene audio hash; line unit hashes each li
   assert.notEqual(lined[0], lined[1]);
   assert.equal(ttsConfig({}).protocol, "chat");
 });
+
+test("designed voice: clone model, voice named by the description, reference clip as a data URL", async () => {
+  const { chatRequest, voiceRef, designFile } = await import("../cli/lib/voice/tts.mjs");
+  const { mkdtempSync, writeFileSync: write } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join: pjoin } = await import("node:path");
+  const base = { aspect: "16:9", tts: { style: "讲故事" } };
+  const a = ttsConfig({ ...base, tts: { ...base.tts, design: "六十多岁的老渔夫，嗓音低沉" } });
+  const b = ttsConfig({ ...base, tts: { ...base.tts, design: "四十岁的女性，声音柔和" } });
+  assert.equal(a.model, "mimo-v2.5-tts-voiceclone");
+  assert.match(a.voice, /^design:[0-9a-f]{12}$/);
+  assert.notEqual(a.voice, b.voice);
+  const scene = { id: "s", narration: "一句话。" };
+  assert.notEqual(timingHashes(scene, { ...base, tts: a }, {})[0], timingHashes(scene, { ...base, tts: b }, {})[0]);
+  assert.notEqual(timingHashes(scene, base, {})[0], timingHashes(scene, { ...base, tts: { ...base.tts, design: "六十多岁的老渔夫，嗓音低沉" } }, {})[0]);
+  assert.throws(() => ttsConfig({ tts: { design: "老渔夫的声音", ref: "v.wav" } }), /either design/);
+  assert.throws(() => ttsConfig({ tts: { design: "老渔夫的声音", protocol: "speech" } }), /protocol chat/);
+  // The design call carries the description as the user turn and no voice; clone calls carry the clip.
+  const design = chatRequest(a.designText, { ...a, model: a.designModel, style: a.design, design: true });
+  assert.equal(design.model, "mimo-v2.5-tts-voicedesign");
+  assert.equal(design.messages[0].content, a.design);
+  assert.equal(design.audio.voice, undefined);
+  const clone = chatRequest("一句话。", { ...a, refData: "data:audio/wav;base64,UklGRg==" });
+  assert.equal(clone.audio.voice, "data:audio/wav;base64,UklGRg==");
+  assert.deepEqual(clone.messages.map((m) => m.role), ["user", "assistant"]);
+  assert.equal(chatRequest("x", ttsConfig({})).audio.voice, "mimo_default");
+  // A cached design clip (or a ref recording) is read without any request.
+  const dir = mkdtempSync(pjoin(tmpdir(), "ov-voice-"));
+  write(designFile(a, dir), Buffer.from("RIFF0000WAVE"));
+  assert.equal(await voiceRef(a, { root: dir, linesDir: dir }, null), `data:audio/wav;base64,${Buffer.from("RIFF0000WAVE").toString("base64")}`);
+  write(pjoin(dir, "me.wav"), Buffer.from("RIFFxxxxWAVE"));
+  const r = ttsConfig({ tts: { ref: "me.wav" } });
+  assert.equal(r.voice, "ref:me.wav");
+  assert.match(await voiceRef(r, { root: dir, linesDir: dir }, null), /^data:audio\/wav;base64,/);
+  await assert.rejects(voiceRef(ttsConfig({ tts: { ref: "none.wav" } }), { root: dir, linesDir: dir }, null), /no file/);
+});

@@ -12,6 +12,7 @@
 | `camera.mjs` | 镜头轨：`viewAt`（含不出画钳制）、`cameraMoving`、`seenSpan` / `seenBox`（整段窗口里一直在画面内的部分）、`captionBand`、`viewTransform` `viewVelocity` `cutBetween` `farther` | 模板 `engine/camera.ts`、字幕带、layout / rhythm 门控 |
 | `boxes.mjs` | 矩形：`meets` `area` `overlap` `shift` | 模板探针、`review/probe` `gates-layout` |
 | `labels.mjs` | 地图标签排布：`textEms` `labelWidth` `inFrame` `clearOf` `placePinLabels` `visibleOnGlobe` `mapViewAt` | 模板 `scenes/Map.tsx`、`review/map-model` |
+| `tableau.mjs` | 插画场景模型：`KINDS`（元素种类、默认值、景深）`elementAt`（关键帧插值、调色板交叉淡化、入场）`settledElement`（inherit 终态）`PALETTES` `paletteAt` `cameraAt` `layerView`（按景深分摊镜头的视差）`cameraMoving` `waveY` `bandFor`（海面分层、船骑哪层浪）`flashAt` `boltPath` `lampLevel` `hash` `noise` | 模板 `scenes/Tableau.tsx`、`timeline/props` `compile`（inherit） |
 | `reveal.mjs` | 出现时刻：`PACE` `paceOf` `revealAt`（具名 cue 优先，否则在前 55% 错开）`cueOr` | 模板 `engine/context` `motion`、`review/map-model` `gates-layout` |
 
 改这里的任何公式，渲染和门控同时变；`tests/shared.test.mjs` 是它们的单测。

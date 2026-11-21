@@ -253,6 +253,7 @@
             "footage",
             "parallax",
             "canvas",
+            "tableau",
             "device",
             "match-cut"
           ]
@@ -2936,6 +2937,439 @@
               "offset": {
                 "type": "number",
                 "description": "seconds added to a cue"
+              }
+            }
+          }
+        }
+      }
+    },
+    "tableau": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inherit": {
+          "type": "boolean",
+          "description": "continue the previous tableau: its elements in their final state, the camera where it stopped"
+        },
+        "elements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false,
+            "description": "one piece of the picture; an inheriting scene continues an earlier element by id (no type)",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "enum": [
+                  "sky",
+                  "stars",
+                  "moon",
+                  "sun",
+                  "clouds",
+                  "sea",
+                  "cliff",
+                  "lighthouse",
+                  "hut",
+                  "boat",
+                  "shore",
+                  "figure",
+                  "fire",
+                  "rain",
+                  "lightning",
+                  "title"
+                ]
+              },
+              "at": {
+                "$ref": "#/$defs/when"
+              },
+              "cue": {
+                "type": "string",
+                "minLength": 1
+              },
+              "fade": {
+                "type": "number",
+                "minimum": 0,
+                "description": "entrance fade seconds"
+              },
+              "depth": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "0 = sky at infinity, 1 = nearest layer (parallax share of the camera)"
+              },
+              "tone": {
+                "enum": [
+                  "night",
+                  "storm",
+                  "dusk",
+                  "dawn",
+                  "day"
+                ],
+                "description": "sky: palette (night, storm, dusk, dawn, day); a keyframe cross-fades it"
+              },
+              "x": {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 2,
+                "description": "frame fraction"
+              },
+              "y": {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 2,
+                "description": "frame fraction"
+              },
+              "r": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "radius, fraction of the short edge"
+              },
+              "h": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 2,
+                "description": "height, fraction of the frame height"
+              },
+              "size": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 2,
+                "description": "fraction of the short edge"
+              },
+              "opacity": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "density": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 2,
+                "description": "stars"
+              },
+              "cover": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "clouds: 0 clear … 1 overcast"
+              },
+              "speed": {
+                "type": "number",
+                "description": "clouds: drift per second"
+              },
+              "seed": {
+                "type": "integer"
+              },
+              "swell": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1.5,
+                "description": "sea: 0 glass … 1 storm"
+              },
+              "reflect": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "sea: moon/sun glint"
+              },
+              "side": {
+                "enum": [
+                  "left",
+                  "right"
+                ]
+              },
+              "lit": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "lighthouse lamp 0..1 (in between it flickers)"
+              },
+              "beam": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "sweep": {
+                "type": "number",
+                "description": "lighthouse: beam degrees per second"
+              },
+              "window": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "hut: window light"
+              },
+              "rock": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3,
+                "description": "boat: roll on the swell"
+              },
+              "lantern": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "facing": {
+                "enum": [
+                  -1,
+                  1
+                ]
+              },
+              "intensity": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1.5,
+                "description": "fire / rain"
+              },
+              "wind": {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 1,
+                "description": "rain slant"
+              },
+              "text": {
+                "type": "string"
+              },
+              "to": {
+                "type": "array",
+                "description": "keyframes: blend to these fields over dur seconds",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "at": {
+                      "$ref": "#/$defs/when"
+                    },
+                    "cue": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "dur": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "depth": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "0 = sky at infinity, 1 = nearest layer (parallax share of the camera)"
+                    },
+                    "tone": {
+                      "enum": [
+                        "night",
+                        "storm",
+                        "dusk",
+                        "dawn",
+                        "day"
+                      ],
+                      "description": "sky: palette (night, storm, dusk, dawn, day); a keyframe cross-fades it"
+                    },
+                    "x": {
+                      "type": "number",
+                      "minimum": -1,
+                      "maximum": 2,
+                      "description": "frame fraction"
+                    },
+                    "y": {
+                      "type": "number",
+                      "minimum": -1,
+                      "maximum": 2,
+                      "description": "frame fraction"
+                    },
+                    "r": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "radius, fraction of the short edge"
+                    },
+                    "h": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 2,
+                      "description": "height, fraction of the frame height"
+                    },
+                    "size": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 2,
+                      "description": "fraction of the short edge"
+                    },
+                    "opacity": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "density": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 2,
+                      "description": "stars"
+                    },
+                    "cover": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "clouds: 0 clear … 1 overcast"
+                    },
+                    "speed": {
+                      "type": "number",
+                      "description": "clouds: drift per second"
+                    },
+                    "seed": {
+                      "type": "integer"
+                    },
+                    "swell": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1.5,
+                      "description": "sea: 0 glass … 1 storm"
+                    },
+                    "reflect": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "sea: moon/sun glint"
+                    },
+                    "side": {
+                      "enum": [
+                        "left",
+                        "right"
+                      ]
+                    },
+                    "lit": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "lighthouse lamp 0..1 (in between it flickers)"
+                    },
+                    "beam": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "sweep": {
+                      "type": "number",
+                      "description": "lighthouse: beam degrees per second"
+                    },
+                    "window": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "hut: window light"
+                    },
+                    "rock": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 3,
+                      "description": "boat: roll on the swell"
+                    },
+                    "lantern": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "facing": {
+                      "enum": [
+                        -1,
+                        1
+                      ]
+                    },
+                    "intensity": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1.5,
+                      "description": "fire / rain"
+                    },
+                    "wind": {
+                      "type": "number",
+                      "minimum": -1,
+                      "maximum": 1,
+                      "description": "rain slant"
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "strikes": {
+                "type": "array",
+                "description": "lightning: strike moments",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "at": {
+                      "$ref": "#/$defs/when"
+                    },
+                    "cue": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "x": {
+                      "type": "number",
+                      "minimum": -1,
+                      "maximum": 2
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "camera": {
+          "type": "array",
+          "description": "camera keyframes: focus point (frame fractions) and zoom; the first is the opening framing",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "at": {
+                "$ref": "#/$defs/when"
+              },
+              "cue": {
+                "type": "string",
+                "minLength": 1
+              },
+              "x": {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 2
+              },
+              "y": {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 2
+              },
+              "zoom": {
+                "type": "number",
+                "minimum": 0.2,
+                "maximum": 8
+              },
+              "dur": {
+                "type": "number",
+                "minimum": 0,
+                "description": "flight seconds (default 2)"
+              },
+              "cut": {
+                "type": "boolean"
+              },
+              "sway": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3,
+                "description": "handheld drift (storm)"
+              },
+              "snap": {
+                "type": "boolean"
               }
             }
           }

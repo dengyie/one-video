@@ -146,6 +146,26 @@
             "line"
           ]
         },
+        "design": {
+          "description": "describe the speaker (age, voice, manner — e.g. 六十多岁的老渔夫，嗓音低沉沙哑，不紧不慢): the voicedesign model makes a reference clip once (cached by this text) and the voiceclone model speaks every scene in that voice",
+          "type": "string",
+          "minLength": 4
+        },
+        "designText": {
+          "description": "what the designed speaker reads for the reference clip",
+          "type": "string",
+          "minLength": 4
+        },
+        "designModel": {
+          "type": "string"
+        },
+        "cloneModel": {
+          "type": "string"
+        },
+        "ref": {
+          "description": "project-relative WAV recording (5–30 s) of the voice to clone; rename the file to re-synthesize after replacing it",
+          "type": "string"
+        },
         "style": {
           "description": "Delivery direction for the voice (tone, pace, emphasis). Sent as the chat user turn, or as instructions with protocol speech.",
           "type": "string"

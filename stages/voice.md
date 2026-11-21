@@ -5,7 +5,7 @@
 ## 步骤
 
 1. `onevideo tts --dry`：打印每行的切分、停顿类型和实际读法（lexicon 替换后）。检查英文缩写、数字读法。
-2. `onevideo tts --sample`：只合成第一句，给用户试听，确认音色和语速。
+2. `onevideo tts --sample`：只合成第一句，给用户试听，确认音色和语速。声音只有用户能判断：拿不准时用几个 `design` 描述各出一段，让用户挑。
 3. `onevideo tts`：逐句合成。按内容哈希缓存，只改一句就只重合成那一句。
 4. `onevideo validate`：rate 门检查每场景语速（3.5–6.2 音节/秒）。
 
@@ -14,9 +14,12 @@
 | 字段 | 默认 | 说明 |
 |---|---|---|
 | `model` | `mimo-v2.5-tts` | OpenAI 兼容 `/audio/speech` |
-| `voice` | `mimo_default` | |
+| `voice` | `mimo_default` | 预置音色；默认音色播音腔重，讲故事、纪录片优先用下面的 `design` |
+| `design` | — | 描述说话人（年龄、嗓音、说话方式，写明“不是播音腔”），voicedesign 模型据此生成一段参考音（按描述缓存在 `public/audio/lines/voice-*.wav`），之后每个场景由 voiceclone 模型用这个声音朗读；改描述即全片重合成 |
+| `ref` | — | 项目内一段 5–30 秒的 WAV 录音，直接克隆这个声音（与 `design` 二选一；换录音时改文件名） |
+| `style` | — | 语气指示（chat 协议的 user 轮），如“讲故事，自然口语，紧张处压低” |
 | `baseUrl` | `https://api.mangoqwq.com/v1` | |
-| `keyEnv` | `MANGO_API_KEY` | 未设置时回落到 `~/.zcode/v2/provider_config.json` 中的 key；key 不会打印 |
+| `keyEnv` | `MANGO_API_KEY` | key 只从环境变量读取、不打印；`~/.zcode` 的 provider 配置仅在显式 `ONEVIDEO_ZCODE_PROVIDER=1` 时读取 |
 | `speed` / `instructions` | — | 透传给模型 |
 | `pause` | `{sentence: 0.32, clause: 0.16}` | 句间/逗号停顿秒数 |
 | `syllablesPerSecond` | 4.8 | budget 门的估算语速 |
