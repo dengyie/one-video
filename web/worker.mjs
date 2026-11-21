@@ -23,7 +23,7 @@ export default {
       }
       try {
         link ??= new DriveLink({ url: env.DRIVE_URL, user: env.DRIVE_USER, pass: env.DRIVE_PASS });
-        return await proxyVideo(req, { link, path: driveVideoPath(env.DRIVE_ROOT ?? "/onevideo", m[1]), cache: caches.default, defer: (p) => ctx.waitUntil(p), filling });
+        return await proxyVideo(req, { link, path: driveVideoPath(env.DRIVE_ROOT ?? "/onevideo", m[1]), cache: caches.default, defer: (p) => ctx.waitUntil(p), filling, log: (m) => console.log(m) });
       } catch (e) {
         link = null; // drop a client built from bad secrets or holding a dead token
         console.error(`drive ${m[1]}: ${e.message}`);

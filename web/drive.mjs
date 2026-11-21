@@ -51,7 +51,7 @@ export class DriveLink {
 
 // Stream the Drive file for `req` (GET/HEAD, Range passed through). Returns the response, and on a
 // GET schedules a whole-file edge-cache fill under `key` (the request URL without Range) via `defer`.
-export async function proxyVideo(req, { link, path, fetchFn = fetch, cache, defer = () => {}, filling = new Set(), fillMax = FILL_MAX }) {
+export async function proxyVideo(req, { link, path, fetchFn = fetch, cache, defer = () => {}, filling = new Set(), fillMax = FILL_MAX, log = () => {} }) {
   const range = req.headers.get("Range");
   const upstream = async (fresh, method, withRange) => {
     const headers = { "User-Agent": UA };
@@ -70,21 +70,22 @@ export async function proxyVideo(req, { link, path, fetchFn = fetch, cache, defe
   const total = totalSize(up);
   if (req.method === "GET" && cache && total != null && total <= fillMax && !filling.has(req.url)) {
     filling.add(req.url);
-    defer(fill(req.url, { upstream, cache, size: total }).finally(() => filling.delete(req.url)));
+    defer(fill(req.url, { upstream, cache, size: total, log }).finally(() => filling.delete(req.url)));
   }
   return new Response(req.method === "HEAD" ? null : up.body, { status: up.status, headers });
 }
 
 // Whole file into the edge cache, so the cache answers later Range requests with 206 itself.
-async function fill(url, { upstream, cache, size }) {
+async function fill(url, { upstream, cache, size, log }) {
   try {
     const up = await upstream(false, "GET", false);
-    if (up.status !== 200) { up.body?.cancel?.(); return; }
+    if (up.status !== 200) { up.body?.cancel?.(); log(`cache fill ${url}: drive HTTP ${up.status}`); return; }
     const headers = pick(up.headers, ["ETag", "Last-Modified"], baseHeaders());
     headers.set("Content-Length", up.headers.get("Content-Length") ?? String(size));
     await cache.put(new Request(url), new Response(up.body, { status: 200, headers }));
-  } catch {
-    // Best effort: the next play tries again.
+    log(`cache fill ${url}: ${size} bytes`);
+  } catch (e) {
+    log(`cache fill ${url}: ${e.message}`); // best effort: the next play tries again
   }
 }
 

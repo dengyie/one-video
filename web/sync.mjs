@@ -84,7 +84,7 @@ for (const p of remote) {
     }
     scp(`${src}/out/publish/captions.vtt`, join(dst, "captions.vtt"));
     scp(`${src}/out/publish/description.txt`, join(dst, "description.txt"));
-    writeFileSync(stamp, String(p.mtime));
+    writeFileSync(stamp, want);
     console.log(`↓ ${p.slug} (${(p.size / 2 ** 20).toFixed(1)} MiB${source === "drive" ? " → drive" : ""})`);
   } else console.log(`= ${p.slug}`);
   const v = Math.round(p.mtime).toString(36);
@@ -120,8 +120,8 @@ if (tooBig.length) {
 // Upload, then read the file back and compare sha256: a short or corrupt copy would play as a
 // truncated video with no error anywhere.
 async function upload(file, remote) {
-  const want = await sha256File(file);
+  const local = await sha256File(file);
   await drive.put(remote, file);
   const got = await drive.download(remote);
-  if (got.sha256 !== want.sha256 || got.size !== want.size) throw new Error(`drive copy of ${remote} does not match the local file (${got.size} vs ${want.size} bytes)`);
+  if (got.sha256 !== local.sha256 || got.size !== local.size) throw new Error(`drive copy of ${remote} does not match the local file (${got.size} vs ${local.size} bytes)`);
 }
