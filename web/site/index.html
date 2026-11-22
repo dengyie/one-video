@@ -268,7 +268,9 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
       if (end >= dur - 0.5) { samples = []; return; } // all loaded: nothing left to measure
       samples.push({ at: now, end, ahead: end - t });
       if (samples.length > 20) samples.shift();
-      const est = abr.estimate(samples, tiers[i].kbps);
+      // Buffered seconds × the file's average bitrate = bytes fetched (the tier's kbps is its peak).
+      const avg = tiers[i].size && dur > 0 ? (tiers[i].size * 8) / 1000 / dur : tiers[i].kbps;
+      const est = abr.estimate(samples, avg);
       if (est && est.rate > 0) { lastKbps = est.kbps; store(BWKEY, { kbps: Math.round(est.kbps), at: Date.now() }); }
       if (manual || now < cool) return;
       const k = abr.nextTier(tiers, i, est, { ahead: end - t, stalled: waitAt != null && now - waitAt > 3000 });
