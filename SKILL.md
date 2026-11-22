@@ -14,7 +14,7 @@ OneVideo 把“做一条视频”拆成 11 个阶段。每个阶段都有一份�
    - **素材先于分镜**：script 通过后先 `onevideo assets suggest`（按场景找授权候选）→ 挑选 → `assets fetch`，把下载好的素材给用户过目，通过后 `approve assets`，再按手里的素材写分镜。素材少，片子一定单薄：density 门控按“素材/分钟”卡（<4 报错、<8 警告，AI 生成的也计入）。
    - **纯代码流水线 `graphics`**：没有 assets 阶段，`onevideo.json` 里 `drawn: true`。每一帧由代码绘制（kinetic、canvas、`tableau` 插画场景（天空海面灯塔船人物火雨闪电，分层视差镜头，适合讲故事）、图表、unit-grid、scale-compare、map、图标叠层，背景用 `aurora` / `particles` / `waves` / `grid` / `stars`），配程序化音乐和音效；drawn 门控把任何 `asset` 引用（场景、backdrop、叠层、canvas 图片）和 `background: "media"` 判为错误，density 门控不适用，`assets suggest/fetch` 直接拒绝。示例 `examples/graphics-demo`。
    - **整片渲染前先过预览**：timeline 之后 `onevideo preview` 把每个场景的静帧铺成 `out/qc/preview-*.jpg`，给用户看，通过后 `approve preview`；未通过时 `render` 只允许 `--draft` / `--scenes`，`build` 停在 preview。layout 门控在这一步之前就会报出贴纸压字幕、出画、重叠、贴纸过小、大字或贴纸压住地图钉、钉标签、国名和航线标签（平面与地球仪）、推镜把字推出画面（图表、数字卡推过 1.1）。
-3. 非创作阶段由 CLI 执行：`tts`、`music`、`depth`、`timeline`、`preview`、`render`、`qc`，也可以用 `build` 一次跑到 qc（缺的素材自动下载，有 depth 工具时自动做深度图和亮度网格；preview 未审批时停在 preview）。`publish` 要求 review 已审批；配了 `ONEVIDEO_DRIVE_URL` 时 publish 结束后自动 `archive` 到 MangoDrive。
+3. 非创作阶段由 CLI 执行：`tts`、`music`、`depth`、`timeline`、`preview`、`render`、`qc`，也可以用 `build` 一次跑到 qc（缺的素材自动下载，有 depth 工具时自动做深度图和亮度网格；preview 未审批时停在 preview）。`publish` 要求 review 已审批；配了 `ONEVIDEO_DRIVE_URL` 时 publish 结束后自动 `archive` 到 MangoDrive，播放站 vedio.mangoqwq.com 从 Drive 读发布记录（`publish.json` 的 `video` 指向版本文件、`out/publish/poster.jpg` 海报），定时同步上线。
 4. 结构按观众的问题排（proposal 写问题链，script 每个场景写 `question`）；画面按三条线分工：旁白解释、屏幕文字只放关键词、画面给证据（storyboard.md）。
 5. 分镜按动效引擎写，不要做成一页一张卡：先读 `references/motion-rules.md`，参考 `examples/spacex-motion`。实拍做主角（`footage` 变速、标题压在主体后），数字进 `canvas` 连续飞行，每个场景都有 `shots`，钩子和结论每句一个 `word` 关键词，有音乐时写 `music.offset: "auto"`。`onevideo timeline` 报出的 rhythm 警告（画面超过 4.5s 没有新东西、连续相同转场）要处理掉，或者向用户说明为什么保留。
 6. 渲染后必须执行 `onevideo qc`，并**逐张看** `out/qc/frames/`，确认画面没问题后再 `approve review`。
@@ -61,7 +61,7 @@ onevideo lib list|search|recipe <name> --id x --set k=v   # 音效 / Lottie / �
 onevideo sheet [--fps 1] [--from s] [--to s] [--video v3] [--vs prev]   # 联系表 → out/qc/sheet-NN.jpg；--vs 新旧对比
 onevideo look [--focus "字幕可读性"] [--models a,b]   # 视觉模型看片 → out/qc/look.json
 onevideo qc | publish [--stems] [--formats 9:16,1:1] [--no-archive] | build [--draft] | doctor | decide <category> <subject> --selected X
-onevideo archive [--dry] [--prune] [--keep 2]       # 上传到 MangoDrive，逐个回读 sha256 校验 → plan/archive.json；--prune 本地只留最近 2 版
+onevideo archive [--dry] [--prune] [--keep 2] [--takeover]   # 上传到 MangoDrive，逐个回读 sha256 校验 → plan/archive.json；--prune 本地只留最近 2 版；Drive 上每个项目只归一台机器（记录 host），别处的副本不会覆盖，--takeover 改归本机
 onevideo archive --all [--in dir] [--prune]         # 目录下全部项目（跳过 10 分钟内刚写的文件）；VM 每晚由 systemd timer 跑
 onevideo restore [paths…] | restore <name> [--into dir]   # 从 MangoDrive 取回（校验 sha256）
 ```

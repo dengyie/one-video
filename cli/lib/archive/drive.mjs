@@ -99,6 +99,16 @@ export class Drive {
     return d.raw_url;
   }
 
+  // A small JSON file on the drive, parsed; null when it is not there.
+  async readJson(remote) {
+    let url;
+    try { url = await this.rawUrl(remote); }
+    catch (e) { if (/not found|failed get obj|object not found/i.test(e.message)) return null; throw e; }
+    const r = await this.fetch(url, { headers: { "User-Agent": UA } });
+    if (!r.ok) throw new Error(`drive read ${remote}: HTTP ${r.status}`);
+    return JSON.parse(await r.text());
+  }
+
   // The remote file as a byte stream, hashed on the way: { sha256, size } when it ends.
   // `sink` (a writable) receives the bytes; without one they are only hashed (read-back check).
   async download(remote, sink) {

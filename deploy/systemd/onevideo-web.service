@@ -1,0 +1,16 @@
+# Player site: sync the catalogue from MangoDrive and deploy the Worker when it changed
+# (web/deploy.mjs). Drive settings from /etc/onevideo/env, Cloudflare token from /etc/onevideo/cf.env
+# (both 600, never printed).
+[Unit]
+Description=OneVideo: sync the player site from MangoDrive and deploy
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/onevideo
+EnvironmentFile=/etc/onevideo/env
+EnvironmentFile=/etc/onevideo/cf.env
+ExecStart=/usr/bin/node /opt/onevideo/web/deploy.mjs
+TimeoutStartSec=15min
+Nice=10

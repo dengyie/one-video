@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chapterTime, chapterList, creditsText, buildPublishKit } from "../cli/lib/publish/kit.mjs";
+import { chapterTime, chapterList, creditsText, buildPublishKit, posterTime } from "../cli/lib/publish/kit.mjs";
+import { mkdtempSync, mkdirSync, writeFileSync, linkSync, copyFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { mainVersion } from "../cli/lib/publish/renders.mjs";
 import { srtTime, toSrt, toVtt } from "../cli/lib/captions/index.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { example } from "./helpers.mjs";
@@ -48,4 +52,29 @@ test("buildPublishKit on the SpaceX example", () => {
   assert.match(d, /Reuters · SpaceX IPO 定价报道 · 2026-06-11/);
   assert.match(d, /https:\/\/www\.nasdaq\.com\//);
   assert.equal(kit.files["captions.srt"].split("-->").length - 1, timeline.captions.items.length);
+});
+
+test("the poster frame: into the second chapter, else a fifth of the way, never past the end", () => {
+  assert.equal(posterTime({ chapters: [{ start: 0 }, { start: 40.967 }], duration: 70 }), 44.967);
+  assert.equal(posterTime({ chapters: [{ start: 0 }], duration: 50 }), 10);
+  assert.equal(posterTime({ chapters: [{ start: 0 }, { start: 9 }], duration: 11 }), 10.5);
+});
+
+test("mainVersion names the version file the main cut is, linked or copied", () => {
+  const root = mkdtempSync(join(tmpdir(), "ov-main-"));
+  mkdirSync(join(root, "out/versions"), { recursive: true });
+  for (const v of [1, 2]) writeFileSync(join(root, `out/versions/v${v}.mp4`), `video ${v}`.repeat(v));
+  const renders = [1, 2].map((v) => ({ v, file: `out/versions/v${v}.mp4`, alias: "out/demo.mp4" }));
+  writeFileSync(join(root, "out/renders.json"), JSON.stringify({ renders }));
+  const project = { root, paths: { out: join(root, "out") }, config: { name: "demo" } };
+  const main = join(root, "out/demo.mp4");
+  assert.equal(mainVersion(project, main), null);
+  linkSync(join(root, "out/versions/v1.mp4"), main);
+  assert.equal(mainVersion(project, main), "out/versions/v1.mp4");
+  copyFileSync(join(root, "out/versions/v2.mp4"), join(root, "copy.mp4"));
+  writeFileSync(join(root, "out/renders.json"), JSON.stringify({ renders }));
+  const m2 = join(root, "out/demo2.mp4");
+  copyFileSync(join(root, "out/versions/v2.mp4"), m2);
+  writeFileSync(join(root, "out/renders.json"), JSON.stringify({ renders: renders.map((r) => ({ ...r, alias: "out/demo2.mp4" })) }));
+  assert.equal(mainVersion(project, m2), "out/versions/v2.mp4");
 });

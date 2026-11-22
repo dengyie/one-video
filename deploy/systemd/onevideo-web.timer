@@ -1,0 +1,10 @@
+[Unit]
+Description=OneVideo: player site sync every 10 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=10min
+RandomizedDelaySec=1min
+
+[Install]
+WantedBy=timers.target

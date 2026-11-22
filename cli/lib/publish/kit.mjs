@@ -73,6 +73,13 @@ export function buildPublishKit({ timeline, research, config, script }) {
   };
 }
 
+// Where the poster frame is taken: a few seconds into the second chapter (past its title card),
+// else a fifth of the way in.
+export function posterTime({ chapters = [], duration }) {
+  const t = chapters[1] ? chapters[1].start + 4 : duration * 0.2;
+  return Math.max(0, Math.min(t, duration - 0.5));
+}
+
 // Sound groups a timeline actually plays, each rendered alone as a stem for a later remix.
 export function stemGroups(timeline) {
   return [

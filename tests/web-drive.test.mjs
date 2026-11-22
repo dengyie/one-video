@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DriveLink, driveVideoPath, proxyVideo, UA } from "../web/drive.mjs";
+import { DriveLink, proxyVideo, UA } from "../web/drive.mjs";
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const BYTES = new Uint8Array(1000).map((_, i) => i % 251);
@@ -42,18 +42,12 @@ const fakeCache = () => {
 
 const req = (headers = {}, method = "GET") => new Request("https://vedio.example/v/keeper/video.mp4?v=abc", { method, headers });
 
-test("the Drive path for a slug sits under the configured root", () => {
-  assert.equal(driveVideoPath("/onevideo", "keeper"), "/onevideo/keeper/web/video.mp4");
-  assert.equal(driveVideoPath("", "keeper"), "/keeper/web/video.mp4");
-  assert.equal(driveVideoPath("/a/b/", "x"), "/a/b/x/web/video.mp4");
-});
-
 test("a Range request is proxied as a 206 with the Drive's Content-Range, and fills the cache whole", async () => {
   const d = fakeDrive();
   const link = new DriveLink({ url: "https://drive.example/api/", user: "u", pass: "p" }, d.fetchFn);
   const cache = fakeCache();
   const deferred = [];
-  const res = await proxyVideo(req({ Range: "bytes=100-199" }), { link, path: "/onevideo/keeper/web/video.mp4", fetchFn: d.fetchFn, cache, defer: (p) => deferred.push(p) });
+  const res = await proxyVideo(req({ Range: "bytes=100-199" }), { link, path: "/keeper/out/versions/v4.mp4", fetchFn: d.fetchFn, cache, defer: (p) => deferred.push(p) });
   assert.equal(res.status, 206);
   assert.equal(res.headers.get("Content-Range"), "bytes 100-199/1000");
   assert.equal(res.headers.get("Content-Type"), "video/mp4");

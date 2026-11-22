@@ -3,7 +3,8 @@
 // dropped here (--prune) and brought back with restore.
 import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, renameSync, rmSync, statSync, createWriteStream } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
-import { readJson, writeJson } from "../core/project.mjs";
+import { hostname } from "node:os";
+import { UserError, readJson, writeJson } from "../core/project.mjs";
 import { Drive, driveConfig, joinRemote, sha256File } from "./drive.mjs";
 
 export { Drive, driveConfig, joinRemote, sha256File };
@@ -66,7 +67,10 @@ export function prunable(files, keep = 2) {
 // Upload what changed, verify each by reading it back, record it; then optionally prune old renders.
 // `settle` (seconds): files written more recently than this are left for the next run, so a render
 // or sync still in flight is not uploaded half-written (the nightly run uses it).
-export async function archiveProject(project, { dry = false, prune = false, keep = 2, settle = 0, drive, log = () => {}, warn = () => {} } = {}) {
+// One machine owns a project's folder on the drive (`host` in the remote record): a copy of the
+// project elsewhere (synced for publishing, restored to look at) is not uploaded over it, since its
+// record would replace the owner's. `takeover` moves ownership to this machine.
+export async function archiveProject(project, { dry = false, prune = false, keep = 2, settle = 0, takeover = false, host = hostname(), drive, log = () => {}, warn = () => {} } = {}) {
   const cfg = drive?.cfg ?? driveConfig();
   if (!cfg) throw new Error("no archive configured: set ONEVIDEO_DRIVE_URL, ONEVIDEO_DRIVE_USER, ONEVIDEO_DRIVE_PASS (in /etc/onevideo/env)");
   const d = drive ?? new Drive(cfg);
@@ -74,7 +78,13 @@ export async function archiveProject(project, { dry = false, prune = false, keep
   const remote = joinRemote(cfg.root, project.config.name);
   const record = loadArchive(root);
   if (record.remote && record.remote !== remote) warn(`plan/archive.json was written for ${record.remote}; now archiving to ${remote}`);
+  const there = d.readJson ? await d.readJson(joinRemote(remote, ARCHIVE)) : null;
+  if (there?.host && there.host !== host) {
+    if (!takeover) throw Object.assign(new UserError(`${remote} is archived from ${there.host}, not this machine (${host}); this copy is not uploaded over it (archive --takeover moves the project here)`), { owner: there.host });
+    warn(`${remote}: taking over from ${there.host}`);
+  }
   record.remote = remote;
+  record.host = host;
   const files = archiveFiles(root, { name: project.config.name });
   const fresh = settle > 0 ? files.filter((f) => Date.now() - statSync(join(root, f)).mtimeMs < settle * 1000) : [];
   if (fresh.length) warn(`${fresh.length} file(s) written in the last ${settle}s left for the next run (${fresh.slice(0, 3).join(", ")}${fresh.length > 3 ? ", …" : ""})`);

@@ -3,7 +3,7 @@
 // usual names (out/<name>.mp4, .draft.mp4, .part.mp4) point at the newest of each kind.
 import { copyFileSync, existsSync, linkSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { UserError, readJson, writeJson } from "../core/project.mjs";
 
 export const KEEP_VERSIONS = 8;
@@ -113,6 +113,17 @@ export function resolveVideo(project, arg, fallback) {
   const file = resolve(s);
   const r = renders.find((x) => resolve(project.root, x.file) === file || (x.alias && resolve(project.root, x.alias) === file && sameFile(file, join(project.root, x.file))));
   return r ? hit(r) : { file, offset: 0, entry: null };
+}
+
+// The version file the main cut is (out/<name>.mp4 is a hard link to it, or a copy of it where
+// links are not possible), relative to the project: what the archive holds the published cut as.
+export function mainVersion(project, main) {
+  if (!existsSync(main)) return null;
+  const rel = relative(project.root, main), size = statSync(main).size;
+  const live = readRenders(project).filter((r) => !r.pruned && existsSync(join(project.root, r.file))).reverse();
+  const r = live.find((x) => sameFile(main, join(project.root, x.file)))
+    ?? live.find((x) => x.alias === rel && statSync(join(project.root, x.file)).size === size);
+  return r ? r.file.split(sep).join("/") : null;
 }
 
 export function sameFile(a, b) {

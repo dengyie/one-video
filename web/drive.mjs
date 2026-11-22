@@ -1,16 +1,13 @@
-// Video bytes for the player come from MangoDrive (OpenList): web/sync.mjs uploads each published
-// render to <root>/<slug>/web/video.mp4, and the Worker streams it back at play time. The Drive has
+// Video bytes for the player come from MangoDrive (OpenList): `onevideo publish` archives the cut,
+// web/sync.mjs lists its drive path in videos.json, and the Worker streams it at play time. The Drive has
 // no CORS and its direct links are signed and expire, so the Worker logs in, asks for a fresh link
 // and proxies the viewer's Range request; the first hit also fills the edge cache in the background
 // so later seeks are answered by the colo. Pure fetch code: runs in the Worker and under node --test.
 
 // The edge in front of the public Drive API turns away non-browser agents on direct links.
 export const UA = "Mozilla/5.0 (MangoDrive-consumer; OneVideo)";
-export const DRIVE_FILE = "web/video.mp4";
 const LINK_TTL = 5 * 60_000; // reuse a signed link this long; a 401/403 from it refreshes early
 export const FILL_MAX = 200 * 2 ** 20; // larger files are only proxied, never cached whole
-
-export const driveVideoPath = (root, slug) => `/${[root, slug, DRIVE_FILE].join("/").split("/").filter(Boolean).join("/")}`;
 
 export class DriveLink {
   // The default wraps fetch: called as this.fetch(...) the Workers runtime throws "Illegal invocation".

@@ -12,7 +12,7 @@
     "setup": "npm ci --prefix template",
     "typecheck": "cd template && npx tsc -p . --noEmit",
     "web:sync": "node web/sync.mjs",
-    "web:deploy": "node web/sync.mjs && cd web && npx --yes wrangler@4.158.0 deploy"
+    "web:deploy": "node web/deploy.mjs"
   },
   "repository": { "type": "git", "url": "https://github.com/dengyie/one-video.git" },
   "keywords": ["video", "remotion", "tts", "claude-code", "skill", "data-visualization"]

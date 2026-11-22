@@ -6,19 +6,23 @@ import { archiveProject, driveConfig, restoreProject } from "../lib/archive/inde
 
 export async function archive(args = {}) {
   if (!driveConfig()) throw new UserError("no archive configured: set ONEVIDEO_DRIVE_URL, ONEVIDEO_DRIVE_USER and ONEVIDEO_DRIVE_PASS (VM: /etc/onevideo/env)");
-  const opts = { dry: Boolean(args.dry), prune: Boolean(args.prune), keep: Number(args.keep ?? 2), log, warn };
+  const opts = { dry: Boolean(args.dry), prune: Boolean(args.prune), keep: Number(args.keep ?? 2), takeover: Boolean(args.takeover), log, warn };
   if (!args.all) return report(await archiveProject(loadProject(), { ...opts, settle: Number(args.settle ?? 0) }), opts);
   // --all: every project directly under --in (default: here); one failing does not stop the rest.
   const base = resolve(args.in ?? ".");
   const dirs = readdirSync(base, { withFileTypes: true }).filter((e) => e.isDirectory() && !e.name.startsWith(".") && existsSync(join(base, e.name, "onevideo.json"))).map((e) => e.name).sort();
-  const failed = [];
+  const failed = [], elsewhere = [];
   for (const d of dirs) {
     log(`── ${d}`);
     try { report(await archiveProject(loadProject(join(base, d)), { ...opts, settle: Number(args.settle ?? 600) }), opts); }
-    catch (e) { warn(`${d}: ${e.message}`); failed.push(d); }
+    catch (e) {
+      // A stale copy of a project another machine owns is skipped, not a failure.
+      if (e.owner) { log(`skipped: owned by ${e.owner}`); elsewhere.push(d); continue; }
+      warn(`${d}: ${e.message}`); failed.push(d);
+    }
   }
   if (failed.length) throw new UserError(`archive failed for ${failed.length} of ${dirs.length} project(s): ${failed.join(", ")}`);
-  log(`${dirs.length} project(s) archived from ${base}`);
+  log(`${dirs.length - elsewhere.length} project(s) archived from ${base}${elsewhere.length ? `; ${elsewhere.length} owned by another machine skipped (${elsewhere.join(", ")})` : ""}`);
 }
 
 function report(res, { dry }) {

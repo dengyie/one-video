@@ -36,7 +36,7 @@ const COMMANDS = {
   stems: [render.stems, "stems [--only voice,music,sfx]  each sound group alone as WAV → out/publish/stems/"],
   build: [render.build, "build [--draft] [--concurrency N]   tts → music → media/depth → timeline → render → qc (then approve review, publish)"],
   lib: [library.lib, "lib list [--kind sfx|lottie] [--category c] | search <words> | import <candidates.json> | merge <catalog.json> | verify | recipe [<name> --id x --set k=v]"],
-  archive: [archive.archive, "archive [--dry] [--prune [--keep 2]] [--settle s] | archive --all [--in dir]   renders, publish kit, plan, voice, source media → MangoDrive (sha256 read-back) + plan/archive.json; --prune drops older renders here; --all: every project under dir (skips files written in the last 600s)"],
+  archive: [archive.archive, "archive [--dry] [--prune [--keep 2]] [--settle s] [--takeover] | archive --all [--in dir]   renders, publish kit, plan, voice, source media → MangoDrive (sha256 read-back) + plan/archive.json; --prune drops older renders here; --all: every project under dir (skips files written in the last 600s); a project archived from another machine is skipped unless --takeover"],
   restore: [archive.restore, "restore [paths…] [--force] | restore <project> [--into dir]   bring archived files back from MangoDrive"],
   handoff: [director.handoff, "handoff [--lock …] [--next …]   where the project stands → plan/handoff.md (read it when taking over)"],
   doctor: [render.doctor, "doctor                       environment check"],

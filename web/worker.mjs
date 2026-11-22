@@ -1,29 +1,30 @@
-import { DriveLink, driveVideoPath, proxyVideo } from "./drive.mjs";
+import { DriveLink, proxyVideo } from "./drive.mjs";
 
 // /v/* runs through here (run_worker_first).
-// - Videos synced with a Drive backend (videos.json entry `source: "drive"`) are streamed from
-//   MangoDrive at play time: see drive.mjs. Secrets: DRIVE_URL (public API base), DRIVE_USER,
-//   DRIVE_PASS, DRIVE_ROOT — set by `node web/secrets.mjs`.
+// - Videos whose videos.json entry has `source: "drive"` are streamed from MangoDrive at play time,
+//   from the drive path that entry names (only those paths: the Worker is no open proxy into the
+//   drive). See drive.mjs. Secrets DRIVE_URL (public API base), DRIVE_USER, DRIVE_PASS: web/secrets.mjs.
 // - Everything else is a static asset. Workers static assets answer Range requests with a full 200,
 //   which iOS Safari refuses to play and which makes every seek re-download the file, so the first
 //   hit loads the asset into the colo's edge cache, and the cache answers Range with proper 206s.
 const VIDEO = /^\/v\/([a-z0-9][a-z0-9-]*)\/video\.mp4$/;
 const INDEX_TTL = 60_000;
-let index = null; // { at, drive: Set<slug> }
+let index = null; // { at, drive: Map<slug, drive path> }
 let link = null;
 const filling = new Set();
 
 export default {
   async fetch(req, env, ctx) {
     const m = VIDEO.exec(new URL(req.url).pathname);
-    if (m && (req.method === "GET" || req.method === "HEAD") && (await driveSlugs(env)).has(m[1])) {
+    const path = m && (req.method === "GET" || req.method === "HEAD") ? (await drivePaths(env)).get(m[1]) : null;
+    if (path) {
       if (req.method === "GET") {
         const hit = await caches.default.match(req);
         if (hit) return hit;
       }
       try {
         link ??= new DriveLink({ url: env.DRIVE_URL, user: env.DRIVE_USER, pass: env.DRIVE_PASS });
-        return await proxyVideo(req, { link, path: driveVideoPath(env.DRIVE_ROOT ?? "/onevideo", m[1]), cache: caches.default, defer: (p) => ctx.waitUntil(p), filling, log: (m) => console.log(m) });
+        return await proxyVideo(req, { link, path, cache: caches.default, defer: (p) => ctx.waitUntil(p), filling, log: (m) => console.log(m) });
       } catch (e) {
         link = null; // drop a client built from bad secrets or holding a dead token
         console.error(`drive ${m[1]}: ${e.message}`);
@@ -34,13 +35,13 @@ export default {
   },
 };
 
-// Slugs whose video lives on the Drive, from the deployed videos.json (only these are proxied).
-async function driveSlugs(env) {
+// slug → drive path of the videos that live on the drive, from the deployed videos.json.
+async function drivePaths(env) {
   if (index && Date.now() - index.at < INDEX_TTL) return index.drive;
-  let drive = new Set();
+  let drive = new Map();
   try {
     const res = await env.ASSETS.fetch(new Request("https://assets.local/videos.json"));
-    if (res.ok) drive = new Set(((await res.json()).videos ?? []).filter((v) => v.source === "drive").map((v) => v.slug));
+    if (res.ok) drive = new Map(((await res.json()).videos ?? []).filter((v) => v.source === "drive" && typeof v.drive === "string" && v.drive.startsWith("/")).map((v) => [v.slug, v.drive]));
   } catch {}
   index = { at: Date.now(), drive };
   return drive;

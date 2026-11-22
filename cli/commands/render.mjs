@@ -10,7 +10,7 @@ import { checkProject, printIssues } from "../lib/review/check.mjs";
 import { REMOTION_BIN, TEMPLATE_DIR, requireRemotion, run, ffmpeg } from "../lib/core/ffmpeg.mjs";
 import { runQc } from "../lib/vision/qc.mjs";
 import { aspectTag, DIMENSIONS, withAspect } from "../lib/timeline/index.mjs";
-import { buildPublishKit, stemGroups } from "../lib/publish/kit.mjs";
+import { buildPublishKit, posterTime, stemGroups } from "../lib/publish/kit.mjs";
 import { toSrt, toVtt } from "../lib/captions/index.mjs";
 import { resolveApiKey, trustedKeyHost } from "../lib/core/http.mjs";
 import { ttsConfig } from "../lib/voice/tts.mjs";
@@ -23,7 +23,7 @@ import { llmConfig } from "../lib/llm/client.mjs";
 import { ensureBeats } from "../lib/audio/beats.mjs";
 import { writeImageSheets } from "../lib/vision/sheet.mjs";
 import { workerHosts } from "../lib/core/worker.mjs";
-import { adoptLegacy, frameRange, localStamp, readRenders, recordRender, resolveVideo, sameFile, timelineHash, versionFile } from "../lib/publish/renders.mjs";
+import { adoptLegacy, frameRange, localStamp, mainVersion, readRenders, recordRender, resolveVideo, sameFile, timelineHash, versionFile } from "../lib/publish/renders.mjs";
 
 const ENTRY = "src/index.ts";
 const COMPOSITION = "OneVideo";
@@ -263,9 +263,21 @@ export async function publish(args = {}) {
   mkdirSync(dir, { recursive: true });
   for (const [name, content] of Object.entries(kit.files)) writeFileSync(join(dir, name), content);
   kit.publish.formats = await publishFormats(project, dir, args.formats);
+  // The cut being published (as the version file the archive holds) and a poster frame from it:
+  // the player site reads both from the drive.
+  const main = videoPath(project);
+  if (!existsSync(main)) throw new UserError(`no video at ${relative(project.root, main)}; run: onevideo render`);
+  kit.publish.video = mainVersion(project, main);
+  if (!kit.publish.video) warn(`${relative(project.root, main)} is not a logged render version; the player site cannot find it on the drive (render again)`);
+  try {
+    await ffmpeg(["-v", "error", "-y", "-ss", posterTime(kit.publish).toFixed(2), "-i", main, "-frames:v", "1", "-vf", "scale=1280:-2", "-q:v", "3", join(dir, "poster.jpg")]);
+    kit.publish.poster = "out/publish/poster.jpg";
+  } catch (e) {
+    warn(`no poster frame (${String(e.message).split("\n")[0]}); the player site skips this video until publish makes one`);
+  }
   writeJson(project.paths.publish, kit.publish);
   for (const w of kit.publish.warnings) warn(w);
-  log(`publish kit → ${dir} (${Object.keys(kit.files).join(", ")})`);
+  log(`publish kit → ${dir} (${[...Object.keys(kit.files), ...(kit.publish.poster ? ["poster.jpg"] : [])].join(", ")})${kit.publish.video ? ` · cut ${kit.publish.video}` : ""}`);
   if (args.stems) await stems({ _: [] });
   // The published cut and everything behind it go to the archive when one is configured.
   if (driveConfig() && !args.noArchive) {

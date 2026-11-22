@@ -15,6 +15,7 @@ function fakeDrive({ corrupt = new Set() } = {}) {
     cfg: { root: "/onevideo" },
     store,
     async put(remote, file) { store.set(remote, readFileSync(file)); },
+    async readJson(remote) { return store.has(remote) ? JSON.parse(store.get(remote)) : null; },
     async download(remote, sink) {
       if (!store.has(remote)) throw new Error(`drive /fs/get: object not found ${remote}`);
       let buf = store.get(remote);
@@ -129,4 +130,23 @@ test("driveConfig reads only the environment; Drive logs in again once on a 401"
   const capped = new Drive({ url: "https://d/api", user: "u", pass: "p", root: "" }, async (url) =>
     url.endsWith("/auth/login") ? { status: 200, ok: true, json: async () => ({ code: 200, data: { token: "t" } }) } : { status: 413, ok: false, json: async () => { throw new Error("html"); } });
   await assert.rejects(capped.put("/demo/out/versions/v1.mp4", new Blob([new Uint8Array(10)])), /request size cap; point ONEVIDEO_DRIVE_URL at the private-network gateway/);
+});
+
+test("one machine owns a project on the drive: a copy elsewhere is not uploaded over it", async () => {
+  const p = project();
+  const d = fakeDrive();
+  await archiveProject(p, { drive: d, host: "render-a" });
+  assert.equal(JSON.parse(d.store.get(`/onevideo/demo/${ARCHIVE}`)).host, "render-a");
+  assert.deepEqual((await archiveProject(p, { drive: d, host: "render-a" })).uploaded, []);
+
+  const copy = project();
+  copy.w("plan/script.json", '{"stale":true}');
+  await assert.rejects(archiveProject(copy, { drive: d, host: "web-b" }), (e) => /archived from render-a, not this machine \(web-b\).*--takeover/.test(e.message) && e.owner === "render-a");
+  assert.equal(d.store.get("/onevideo/demo/plan/script.json").toString(), "{}");
+
+  const warns = [];
+  const r = await archiveProject(copy, { drive: d, host: "web-b", takeover: true, warn: (m) => warns.push(m) });
+  assert.ok(r.uploaded.includes("plan/script.json"));
+  assert.match(warns.join(), /taking over from render-a/);
+  assert.equal(JSON.parse(d.store.get(`/onevideo/demo/${ARCHIVE}`)).host, "web-b");
 });

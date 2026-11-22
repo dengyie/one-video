@@ -78,13 +78,16 @@ commands                     → 以上任意
 
 ## 播放站（`web/`）
 
-`npm run web:deploy` = `web/sync.mjs`（拉已发布项目 → `web/site/`）+ `wrangler deploy`（Worker `onevideo-web`，静态资源 `web/site/`，`/v/*` 先过 `worker.mjs`）。
+`npm run web:deploy` = `web/deploy.mjs`：先跑 `web/sync.mjs` 生成目录，再对站点文件和 Worker 代码求哈希，与上次部署（`web/.wrangler/deployed.sha256`）相同就跳过，不同才 `wrangler deploy`（Worker `onevideo-web`，静态资源 `web/site/`，`/v/*` 先过 `worker.mjs`）；`--force` 强制部署。发布节点上 `onevideo-web.timer` 每 10 分钟跑一次，`onevideo publish` 之后几分钟上站，节点之间不用手工搬文件。
 
 | 文件 | 内容 |
 |---|---|
-| `sync.mjs` | 列出渲染节点上 `plan/publish.json` 存在的项目；海报、字幕、简介进静态资源。配了 `ONEVIDEO_DRIVE_*` 时成片上传到 MangoDrive `<root>/<slug>/web/video.mp4`（回读 sha256 校验），`videos.json` 条目写 `source: "drive"`，不受 Workers 静态资源 25 MiB 单文件限制；没配时成片走静态资源，超 25 MiB 直接让同步失败（不再静默跳过） |
+| `sync.mjs` | 两种来源。**drive**（配了 `ONEVIDEO_DRIVE_*` 时默认）：列出 MangoDrive 根目录下的项目，读 `plan/archive.json`，记录里有 `plan/publish.json` 的才上站；`publish.json` 的 `video`（成片对应的版本文件，如 `out/versions/v4.mp4`）留在 Drive 上由 Worker 播放时拉取，海报 `poster`、字幕、简介下载进静态资源，全部按归档记录的 sha256 校验；单个项目出错（上传中途、网络）保留上次的条目。**host**（`ONEVIDEO_WEB_FROM=host`）：从本机或 `ONEVIDEO_HOST` 上的项目复制，成片走静态资源，超 25 MiB 让同步失败 |
+| `deploy.mjs` | sync + 变更检测 + 部署，可放进 timer |
 | `drive.mjs` | 纯 fetch：`DriveLink`（登录、签名直链缓存 5 分钟、token 过期重登）、`proxyVideo`（透传 Range → 206/416，签名失效换链重试一次，Drive 出错 502；GET 时后台把整片灌进边缘缓存，≤200 MiB）。Worker 与 `tests/web-drive.test.mjs` 共用 |
-| `worker.mjs` | `/v/<slug>/video.mp4` 且 slug 在已部署 `videos.json` 里标了 drive → 先查边缘缓存，否则 `proxyVideo`；其余走静态资源（边缘缓存补 206） |
-| `secrets.mjs` | 把 `ONEVIDEO_DRIVE_USER/PASS/ROOT` 和公网 API（`ONEVIDEO_WEB_DRIVE_URL`，默认 `https://api-drive.mangoqwq.com/api`）写成 Worker secret（`wrangler secret bulk`，经 stdin，不打印不落盘）；改密码后重跑 |
+| `worker.mjs` | `/v/<slug>/video.mp4` 且已部署 `videos.json` 里该 slug 是 `source: "drive"` → 先查边缘缓存，否则按条目的 `drive` 路径 `proxyVideo`；其余走静态资源（边缘缓存补 206） |
+| `secrets.mjs` | 把 `ONEVIDEO_DRIVE_USER/PASS` 和公网 API（`ONEVIDEO_WEB_DRIVE_URL`，默认 `https://api-drive.mangoqwq.com/api`）写成 Worker secret（`wrangler secret bulk`，经 stdin，不打印不落盘）；改密码后重跑 |
 
-Worker 只代理 `videos.json` 列出的 slug 的固定路径，不接受任意 Drive 路径。`web/site/.assetsignore` 排除点文件（同步戳 `.synced`、上传中转 `.upload.mp4`）和 `description.txt`（已内联进 `videos.json`）。
+Worker 只代理 `videos.json` 列出的路径，不接受任意 Drive 路径。`web/site/.assetsignore` 排除点文件（同步戳 `.synced`、`.publish.json`）和 `description.txt`（已内联进 `videos.json`）。
+
+**发布链路**：渲染节点 `onevideo publish` → 写 `plan/publish.json`（`video`、`poster`）和 `out/publish/poster.jpg` → 自动 `archive` 到 Drive → 发布节点的 timer 从 Drive 同步并部署。**一个项目只归一台机器**：归档记录写 `host`，别的机器上的副本 `archive` 时被拒（`archive --all` 跳过并报出），换机器用 `archive --takeover`。
