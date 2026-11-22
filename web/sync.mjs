@@ -5,20 +5,21 @@
 //        archive record lists plan/publish.json and the cut it names (`onevideo publish` on any
 //        render node puts them there). Nothing is copied between machines; the cut stays on the
 //        drive and the Worker streams it at play time (web/drive.mjs). Files are checked against
-//        the archive record's sha256; a project caught mid-upload keeps its previous entry.
+//        the archive record's sha256; a project caught mid-upload keeps its previous entry
+//        (web/catalog.mjs).
 //   host: projects under ONEVIDEO_PROJECTS (default /srv/onevideo) here, or on ONEVIDEO_HOST over
 //        ssh; the cut becomes a static asset, so each must be ≤ 25 MiB (over it fails the sync).
 //   ONEVIDEO_WEB_FROM=drive|host overrides the choice.
 import { execFileSync } from "node:child_process";
-import { copyFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Drive, driveConfig, joinRemote } from "../cli/lib/archive/index.mjs";
+import { Drive, driveConfig } from "../cli/lib/archive/index.mjs";
+import { SLUG, driveCatalogue, entry } from "./catalog.mjs";
 import { posterTime } from "../cli/lib/publish/kit.mjs";
 
 const SITE = join(dirname(fileURLToPath(import.meta.url)), "site");
 const VDIR = join(SITE, "v");
-const SLUG = /^[a-z0-9][a-z0-9-]*$/;
 const MAX_ASSET = 25 * 1024 * 1024; // Workers static assets per-file limit
 const KIT = { captions: "out/publish/captions.vtt", description: "out/publish/description.txt" };
 
@@ -38,66 +39,8 @@ writeFileSync(join(SITE, "videos.json"), JSON.stringify({ generatedAt: new Date(
 console.log(`videos.json: ${videos.length} video(s) from ${FROM === "drive" ? "MangoDrive" : "the projects on the render host"}`);
 
 // ── drive ────────────────────────────────────────────────────────────────────────────────────────
-async function fromDrive() {
-  const drive = new Drive(DRIVE);
-  const out = [];
-  for (const e of await drive.list(DRIVE.root || "/")) {
-    if (!e.is_dir || !SLUG.test(e.name)) continue;
-    try {
-      const v = await driveEntry(drive, e.name);
-      if (v) out.push(v);
-    } catch (err) {
-      // A transient failure (network, an archive run in flight) keeps what the site shows now.
-      const prev = previous.get(e.name);
-      console.warn(`! ${e.name}: ${err.message}${prev ? " — keeping the listed version" : ""}`);
-      if (prev && existsSync(join(VDIR, e.name, "poster.jpg"))) out.push(prev);
-    }
-  }
-  return out;
-}
-
-async function driveEntry(drive, slug) {
-  const base = joinRemote(DRIVE.root, slug);
-  const record = await drive.readJson(joinRemote(base, "plan/archive.json"));
-  const files = record?.files ?? {};
-  if (!files["plan/publish.json"]) return null; // archived but never published
-  const dst = join(VDIR, slug);
-  mkdirSync(dst, { recursive: true });
-  const pub = JSON.parse(await fetchChecked(drive, base, "plan/publish.json", files, join(dst, ".publish.json")));
-  if (!pub.video) throw new Error("plan/publish.json names no cut (published before the player read the drive): run onevideo publish again on its render node");
-  if (!pub.poster) throw new Error("plan/publish.json names no poster frame: run onevideo publish again on its render node");
-  const need = { video: pub.video, poster: pub.poster, ...KIT };
-  for (const [what, rel] of Object.entries(need)) if (!files[rel]?.sha256) throw new Error(`${rel} (${what}) is not in the archive record yet`);
-
-  const stamp = join(dst, ".synced");
-  const want = JSON.stringify(Object.values(need).map((rel) => files[rel].sha256).concat(files["plan/publish.json"].sha256));
-  const local = { poster: "poster.jpg", captions: "captions.vtt", description: "description.txt" };
-  const fresh = readText(stamp) === want && Object.values(local).every((f) => existsSync(join(dst, f)));
-  if (!fresh) {
-    for (const [what, file] of Object.entries(local)) await fetchChecked(drive, base, need[what], files, join(dst, file));
-    writeFileSync(stamp, want);
-    console.log(`↓ ${slug} (${pub.video}, ${(files[pub.video].size / 2 ** 20).toFixed(1)} MiB on the drive)`);
-  } else console.log(`= ${slug}`);
-  const v = files[pub.video].sha256.slice(0, 12);
-  return entry(slug, pub, {
-    size: files[pub.video].size,
-    date: (pub.rendered ?? files[pub.video].at ?? record.at ?? new Date().toISOString()).slice(0, 10),
-    v,
-    description: readFileSync(join(dst, "description.txt"), "utf8"),
-    drive: joinRemote(base, pub.video),
-  });
-}
-
-// One archived file to a local path, checked against the archive record; returns its text.
-async function fetchChecked(drive, base, rel, files, abs) {
-  const part = `${abs}.part`;
-  const got = await drive.download(joinRemote(base, rel), createWriteStream(part));
-  if (got.sha256 !== files[rel].sha256) {
-    rmSync(part, { force: true });
-    throw new Error(`${rel} on the drive does not match its archive record (an archive run in flight?)`);
-  }
-  renameSync(part, abs);
-  return readFileSync(abs, "utf8");
+function fromDrive() {
+  return driveCatalogue({ drive: new Drive(DRIVE), root: DRIVE.root, vdir: VDIR, previous, log: console.log, warn: console.warn });
 }
 
 // ── host ─────────────────────────────────────────────────────────────────────────────────────────
@@ -163,24 +106,6 @@ for (const slug of fs.readdirSync(root)) {
 }
 
 // ── shared ───────────────────────────────────────────────────────────────────────────────────────
-function entry(slug, pub, { size, date, v, description, drive }) {
-  return {
-    slug,
-    title: pub.title,
-    summary: pub.summary ?? "",
-    duration: pub.duration,
-    chapters: pub.chapters ?? [],
-    tags: pub.tags ?? [],
-    date,
-    size,
-    video: `v/${slug}/video.mp4?v=${v}`,
-    poster: `v/${slug}/poster.jpg?v=${v}`,
-    captions: `v/${slug}/captions.vtt?v=${v}`,
-    description,
-    ...(drive ? { source: "drive", drive } : { source: "static" }),
-  };
-}
-
 function readText(f) { try { return readFileSync(f, "utf8"); } catch { return null; } }
 function readJsonFile(f) { try { return JSON.parse(readFileSync(f, "utf8")); } catch { return null; } }
 function fail(msg) { console.error(msg); process.exit(1); }
