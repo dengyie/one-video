@@ -126,6 +126,22 @@ export function mainVersion(project, main) {
   return r ? r.file.split(sep).join("/") : null;
 }
 
+// mainVersion for publishing: a cut rendered before versioning (no log line has ever named it) is
+// adopted as the next version first, and main points back at it, so the archive holds the published
+// cut under out/versions/ like any other.
+export function publishedVersion(project, main) {
+  const known = mainVersion(project, main);
+  if (known || !existsSync(main)) return known;
+  const rel = relative(project.root, main);
+  if (readRenders(project).some((r) => r.alias === rel)) return null; // rendered since, or its version pruned
+  const { v, file } = versionFile(project, {});
+  mkdirSync(join(project.paths.out, "versions"), { recursive: true });
+  renameSync(main, file);
+  const at = statSync(file).mtime.toISOString();
+  const r = recordRender(project, { v, file, at, draft: false, part: false, offset: 0, timeline: null, legacy: true, note: "imported at publish: rendered before versioning" }, { alias: main });
+  return r.file.split(sep).join("/");
+}
+
 export function sameFile(a, b) {
   try { const x = statSync(a), y = statSync(b); return x.ino === y.ino && x.dev === y.dev; } catch { return false; }
 }

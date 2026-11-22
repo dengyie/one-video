@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { chapterTime, chapterList, creditsText, buildPublishKit, posterTime } from "../cli/lib/publish/kit.mjs";
-import { mkdtempSync, mkdirSync, writeFileSync, linkSync, copyFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, linkSync, copyFileSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { mainVersion } from "../cli/lib/publish/renders.mjs";
+import { mainVersion, publishedVersion } from "../cli/lib/publish/renders.mjs";
 import { srtTime, toSrt, toVtt } from "../cli/lib/captions/index.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { example } from "./helpers.mjs";
@@ -77,4 +77,20 @@ test("mainVersion names the version file the main cut is, linked or copied", () 
   copyFileSync(join(root, "out/versions/v2.mp4"), m2);
   writeFileSync(join(root, "out/renders.json"), JSON.stringify({ renders: renders.map((r) => ({ ...r, alias: "out/demo2.mp4" })) }));
   assert.equal(mainVersion(project, m2), "out/versions/v2.mp4");
+});
+
+test("publishing a cut rendered before versioning adopts it as a version the main file points at", () => {
+  const root = mkdtempSync(join(tmpdir(), "ov-legacy-"));
+  mkdirSync(join(root, "out"), { recursive: true });
+  const project = { root, paths: { out: join(root, "out") }, config: { name: "demo" } };
+  const main = join(root, "out/demo.mp4");
+  writeFileSync(main, "old cut");
+  assert.equal(publishedVersion(project, main), "out/versions/v1.mp4");
+  assert.equal(readFileSync(main, "utf8"), "old cut");
+  assert.equal(statSync(main).ino, statSync(join(root, "out/versions/v1.mp4")).ino);
+  assert.equal(publishedVersion(project, main), "out/versions/v1.mp4"); // nothing adopted twice
+  const log = JSON.parse(readFileSync(join(root, "out/renders.json"), "utf8")).renders;
+  assert.equal(log.length, 1);
+  assert.equal(log[0].alias, "out/demo.mp4");
+  assert.ok(log[0].legacy);
 });
