@@ -159,6 +159,17 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
         </a>`).join("")}</div></section>` : ""}`;
 
     const vid = $("#vid");
+    // Drive videos load straight from MangoDrive (the Worker redirects); if that fails, relay once
+    // through the site (?via=edge), keeping the position and play state.
+    const source = vid.querySelector("source");
+    if (cur.source === "drive") source.addEventListener("error", () => {
+      if (source.src.includes("via=edge")) return;
+      const at = vid.currentTime, playing = !vid.paused;
+      if (at) vid.addEventListener("loadedmetadata", () => { vid.currentTime = at; }, { once: true });
+      source.src = cur.video + (cur.video.includes("?") ? "&" : "?") + "via=edge";
+      vid.load();
+      if (playing) vid.play().catch(() => {});
+    }, { once: true });
     const btns = [...main.querySelectorAll(".chapters button")];
     const starts = cur.chapters.map((c) => c.start);
     const mark = () => {

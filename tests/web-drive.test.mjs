@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DriveLink, proxyVideo, UA } from "../web/drive.mjs";
+import { DIRECT_MAX_AGE, DriveLink, directVideo, proxyVideo, UA } from "../web/drive.mjs";
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const BYTES = new Uint8Array(1000).map((_, i) => i % 251);
@@ -41,6 +41,20 @@ const fakeCache = () => {
 };
 
 const req = (headers = {}, method = "GET") => new Request("https://vedio.example/v/keeper/video.mp4?v=abc", { method, headers });
+
+test("the direct path redirects to the signed link without touching the bytes", async () => {
+  const d = fakeDrive();
+  const link = new DriveLink({ url: "https://drive.example/api", user: "u", pass: "p" }, d.fetchFn);
+  const res = await directVideo(link, "/keeper/out/v4.mp4");
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("Location"), "https://raw.example/d/keeper/out/v4.mp4?sign=1");
+  assert.equal(res.headers.get("Cache-Control"), `private, max-age=${DIRECT_MAX_AGE}`);
+  assert.equal(res.body, null);
+  assert.ok(!d.calls.some((c) => c.url.startsWith("https://raw.example/")), "the Worker never fetches the file");
+  // The link is reused for the next viewer.
+  assert.equal((await directVideo(link, "/keeper/out/v4.mp4")).headers.get("Location"), "https://raw.example/d/keeper/out/v4.mp4?sign=1");
+  assert.equal(d.calls.filter((c) => c.url.endsWith("/fs/get")).length, 1);
+});
 
 test("a Range request is proxied as a 206 with the Drive's Content-Range, and fills the cache whole", async () => {
   const d = fakeDrive();

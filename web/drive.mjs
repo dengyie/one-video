@@ -1,8 +1,10 @@
-// Video bytes for the player come from MangoDrive (OpenList): `onevideo publish` archives the cut,
-// web/sync.mjs lists its drive path in videos.json, and the Worker streams it at play time. The Drive has
-// no CORS and its direct links are signed and expire, so the Worker logs in, asks for a fresh link
-// and proxies the viewer's Range request; the first hit also fills the edge cache in the background
-// so later seeks are answered by the colo. Pure fetch code: runs in the Worker and under node --test.
+// Video bytes for the player come from MangoDrive (OpenList): `onevideo publish` archives the cut and
+// web/sync.mjs lists its drive path in videos.json. The Drive's direct links are signed (per file, about
+// 30 h), answer Range with 206 and send `Access-Control-Allow-Origin: *`, so the Worker only logs in,
+// asks for a link and redirects the viewer to it (directVideo): the bytes go Drive → browser.
+// proxyVideo is the relay for `?via=edge` — the player falls back to it when the direct link fails
+// (a network that cannot reach the Drive, a revoked sign); it passes Range through and fills the edge
+// cache in the background. Pure fetch code: runs in the Worker and under node --test.
 
 // The edge in front of the public Drive API turns away non-browser agents on direct links.
 export const UA = "Mozilla/5.0 (MangoDrive-consumer; OneVideo)";
@@ -44,6 +46,13 @@ export class DriveLink {
     this.links.set(path, { url: j.data.raw_url, at: this.now() });
     return j.data.raw_url;
   }
+}
+
+// 302 to the signed direct link. Browsers re-send Range to the new location. `private`: the edge must
+// not share it; a viewer's cache may keep it a few minutes, well inside the sign's lifetime.
+export const DIRECT_MAX_AGE = 300;
+export async function directVideo(link, path) {
+  return new Response(null, { status: 302, headers: { Location: await link.rawUrl(path), "Cache-Control": `private, max-age=${DIRECT_MAX_AGE}`, "Referrer-Policy": "no-referrer" } });
 }
 
 // Stream the Drive file for `req` (GET/HEAD, Range passed through). Returns the response, and on a

@@ -1,13 +1,14 @@
-import { DriveLink, proxyVideo } from "./drive.mjs";
+import { DriveLink, directVideo, proxyVideo } from "./drive.mjs";
 import { FEEDS } from "./feed.mjs";
 import { SHARE, sharePage } from "./share.mjs";
 
 // /v/*, /w/* and the feeds run through here (run_worker_first).
 // - /w/<slug> is the player page with that video's share tags (share.mjs).
 // - /feed.xml, /sitemap.xml, /robots.txt are built from videos.json for the requested origin (feed.mjs).
-// - Videos whose videos.json entry has `source: "drive"` are streamed from MangoDrive at play time,
-//   from the drive path that entry names (only those paths: the Worker is no open proxy into the
-//   drive). See drive.mjs. Secrets DRIVE_URL (public API base), DRIVE_USER, DRIVE_PASS: web/secrets.mjs.
+// - Videos whose videos.json entry has `source: "drive"` are played straight from MangoDrive: the
+//   Worker answers with a 302 to a signed direct link for the drive path that entry names (only those
+//   paths: the Worker is no door into the drive). `?via=edge` relays the bytes through the Worker and
+//   the edge cache instead — the player's fallback when the direct link fails. See drive.mjs. Secrets DRIVE_URL (public API base), DRIVE_USER, DRIVE_PASS: web/secrets.mjs.
 // - Everything else is a static asset. Workers static assets answer Range requests with a full 200,
 //   which iOS Safari refuses to play and which makes every seek re-download the file, so the first
 //   hit loads the asset into the colo's edge cache, and the cache answers Range with proper 206s.
@@ -31,12 +32,14 @@ export default {
     const m = VIDEO.exec(url.pathname);
     const path = m && (req.method === "GET" || req.method === "HEAD") ? (await catalogue(env)).drive.get(m[1]) : null;
     if (path) {
-      if (req.method === "GET") {
+      const relay = url.searchParams.get("via") === "edge";
+      if (relay && req.method === "GET") {
         const hit = await caches.default.match(req);
         if (hit) return hit;
       }
       try {
         link ??= new DriveLink({ url: env.DRIVE_URL, user: env.DRIVE_USER, pass: env.DRIVE_PASS });
+        if (!relay) return await directVideo(link, path);
         return await proxyVideo(req, { link, path, cache: caches.default, defer: (p) => ctx.waitUntil(p), filling, log: (m) => console.log(m) });
       } catch (e) {
         link = null; // drop a client built from bad secrets or holding a dead token
