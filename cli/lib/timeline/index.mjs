@@ -9,3 +9,4 @@ export * from "./anchors.mjs";
 export * from "./credits.mjs";
 export * from "./events.mjs";
 export * from "./aspect.mjs";
+export * from "./tableau.mjs";

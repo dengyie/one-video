@@ -16,7 +16,7 @@ const COMMANDS = {
   validate: [plan.validate, "validate [--strict]          schemas + pre-compose gates"],
   fix: [plan.fix, "fix [--apply]                the gates' own fixes (sticker positions, a late opening cue), re-checked; --apply writes plan/storyboard.json"],
   approve: [plan.approve, "approve <stage> [--note …]   human sign-off (hash-locked)"],
-  tts: [media.tts, "tts [--sample] [--dry] [--force] [--only s1,s2]   sentence-level narration → plan/timings.json"],
+  tts: [media.tts, "tts [--sample] [--audition \"描述1|描述2\"] [--dry] [--force] [--only s1,s2]   sentence-level narration → plan/timings.json; --audition: several designed voices read the opening line → out/audition/"],
   music: [media.music, "music [--preset ambient|pulse|documentary|bright] [--force]   procedural BGM + SFX"],
   timeline: [media.timeline, "timeline [--force]           compile plan/timeline.json"],
   assets: [media.assets, "assets search <query> [--provider …] [--kind video] | assets suggest [--scene id,…] [--per 3] [--kind both|image|video] [--write [--no-generate]] [--no-llm] | assets fetch [--only id] [--force] [--jobs 3]   (suggest: licensed footage + photos per scene before the storyboard, an AI still where nothing fits; generate: AI image / video)"],

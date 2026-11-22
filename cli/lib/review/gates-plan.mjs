@@ -163,7 +163,16 @@ export function rateGate(script, timings, config) {
     const chars = t.lines.reduce((n, l) => n + spokenLength(l.text), 0);
     const speech = t.lines.reduce((n, l) => n + (l.end - l.start), 0);
     const rate = chars / Math.max(0.1, speech);
-    if (rate < g.syllablesPerSec[0] || rate > g.syllablesPerSec[1]) out.push(issue("warn", "rate", `scene "${s.id}" speaks ${rate.toFixed(1)} syllables/s (expected ${g.syllablesPerSec.join("–")})`));
+    if (rate >= g.syllablesPerSec[0] && rate <= g.syllablesPerSec[1]) continue;
+    // Name the line furthest out, and the lever: a designed or chat voice takes its pace from the
+    // style text (speed only reaches the speech protocol); ellipses and dashes stretch a line.
+    const lineRate = (l) => spokenLength(l.text) / Math.max(0.1, l.end - l.start);
+    const slow = rate < g.syllablesPerSec[0];
+    const worst = t.lines.reduce((a, l) => ((slow ? lineRate(l) < lineRate(a) : lineRate(l) > lineRate(a)) ? l : a));
+    const lever = slow
+      ? `the voice drags — ask for pace in tts.style (e.g. "自然口语，语速偏快，不拖音"), drop ……/—— that stretch pauses, then onevideo tts --sample`
+      : "too crowded to follow — cut words or split the scene, or ask for a calmer pace in tts.style";
+    out.push(issue("warn", "rate", `scene "${s.id}" speaks ${rate.toFixed(1)} syllables/s (expected ${g.syllablesPerSec.join("–")}; "${worst.text}" ${lineRate(worst).toFixed(1)}/s): ${lever}`));
   }
   return out;
 }

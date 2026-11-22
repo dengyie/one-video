@@ -4,6 +4,7 @@
 //   gates-plan.mjs    on the written plan: schema, numbers, storyboard, timings, rate, assets, budget, drawn
 //   gates-pacing.mjs  on the compiled timeline: opening, rhythm, device holds, question, echo
 //   gates-layout.mjs  on the compiled timeline: layout (map-model.mjs for maps), fitOverlays, density
+//   gates-tableau.mjs on the compiled timeline: tableau framing (solid elements cut by the frame at rest)
 export { normalizeLicense } from "../core/license.mjs";
 export { captionGate } from "../captions/gate.mjs";
 export { screenEvents } from "../timeline/index.mjs";
@@ -12,3 +13,4 @@ export { schemaGate, numbersGate, storyboardGate, timingsGate, rateGate, assetsG
 export { openingGate, rhythmGate, DEVICE_HOLD, deviceGate, questionGate, echoGate } from "./gates-pacing.mjs";
 export { LAYOUT_DEFAULTS, layoutGate, fitOverlays, DENSITY_DEFAULTS, densityGate } from "./gates-layout.mjs";
 export { mapBoxes } from "./map-model.mjs";
+export { FRAMING_DEFAULTS, framingGate } from "./gates-tableau.mjs";

@@ -1,0 +1,790 @@
+{
+  "scenes": [
+    {
+      "id": "hook",
+      "type": "tableau",
+      "enter": "cut",
+      "exit": {
+        "type": "fade",
+        "duration": 0.6
+      },
+      "intent": "开场：镜头从星空慢慢落到海面，悬崖上的灯塔亮着唯一一盏灯，光束扫过海面；片名在星空里浮现又隐去",
+      "cues": {
+        "tower": "一座灯塔",
+        "night": "每天夜里",
+        "one": "只亮一盏灯"
+      },
+      "props": {
+        "elements": [
+          {
+            "id": "sky",
+            "type": "sky",
+            "tone": "night"
+          },
+          {
+            "id": "stars",
+            "type": "stars",
+            "density": 1.2
+          },
+          {
+            "id": "moon",
+            "type": "moon",
+            "x": 0.76,
+            "y": 0.18,
+            "r": 0.045
+          },
+          {
+            "id": "clouds",
+            "type": "clouds",
+            "cover": 0.22,
+            "y": 0.3
+          },
+          {
+            "id": "sea",
+            "type": "sea",
+            "swell": 0.18
+          },
+          {
+            "id": "cliff",
+            "type": "cliff",
+            "side": "left",
+            "x": 0.27,
+            "y": 0.6
+          },
+          {
+            "id": "lh",
+            "type": "lighthouse",
+            "x": 0.18,
+            "y": 0.6,
+            "h": 0.36,
+            "lit": 0,
+            "beam": 0,
+            "sweep": 26,
+            "to": [
+              {
+                "cue": "one",
+                "dur": 0.6,
+                "lit": 1
+              },
+              {
+                "cue": "one",
+                "dur": 2.4,
+                "beam": 1
+              }
+            ]
+          },
+          {
+            "id": "hut",
+            "type": "hut",
+            "x": 0.31,
+            "y": 0.6,
+            "size": 0.06,
+            "window": 1
+          },
+          {
+            "id": "title",
+            "type": "title",
+            "text": "守 灯 人",
+            "depth": 0.02,
+            "y": 0.3,
+            "size": 0.1,
+            "at": 0.3,
+            "fade": 1.6,
+            "to": [
+              {
+                "cue": "night",
+                "dur": 1.2,
+                "opacity": 0
+              }
+            ]
+          }
+        ],
+        "camera": [
+          {
+            "at": 0,
+            "x": 0.5,
+            "y": 0.08,
+            "zoom": 1.12
+          },
+          {
+            "cue": "tower",
+            "x": 0.46,
+            "y": 0.5,
+            "zoom": 1.04,
+            "dur": 3.2
+          },
+          {
+            "cue": "one",
+            "zoom": 1.35,
+            "dur": 3,
+            "on": "lh",
+            "anchor": "lamp"
+          }
+        ]
+      },
+      "hold": 0.6
+    },
+    {
+      "id": "keeper",
+      "type": "tableau",
+      "enter": {
+        "type": "fade",
+        "duration": 0.6
+      },
+      "intent": "老人提着马灯从小屋走到岸边，望向海面；远处一只迷路的小船亮起，灯塔的光扫过去",
+      "cues": {
+        "old": "守塔的老人",
+        "lit": "灯亮着",
+        "lost": "迷路的船",
+        "home": "就能找到回家的路"
+      },
+      "props": {
+        "inherit": true,
+        "elements": [
+          {
+            "id": "title",
+            "opacity": 0
+          },
+          {
+            "id": "shore",
+            "type": "shore",
+            "y": 0.9
+          },
+          {
+            "id": "keeper",
+            "type": "figure",
+            "x": 0.22,
+            "y": 0.9,
+            "size": 0.3,
+            "lantern": 1,
+            "facing": 1,
+            "to": [
+              {
+                "at": 0.2,
+                "dur": 3.4,
+                "x": 0.36
+              }
+            ]
+          },
+          {
+            "id": "far",
+            "type": "boat",
+            "x": 0.8,
+            "size": 0.045,
+            "depth": 0.5,
+            "lantern": 1,
+            "cue": "lost",
+            "fade": 1.2,
+            "to": [
+              {
+                "cue": "home",
+                "dur": 1.6,
+                "facing": -1,
+                "x": 0.76
+              }
+            ]
+          }
+        ],
+        "camera": [
+          {
+            "at": 0,
+            "x": 0.3,
+            "y": 0.7,
+            "zoom": 1.35
+          },
+          {
+            "cue": "old",
+            "x": 0.36,
+            "y": 0.66,
+            "zoom": 1.25,
+            "dur": 2.2
+          },
+          {
+            "cue": "lit",
+            "x": 0.42,
+            "y": 0.58,
+            "zoom": 1.12,
+            "dur": 2.4
+          },
+          {
+            "cue": "lost",
+            "x": 0.62,
+            "y": 0.56,
+            "zoom": 1.2,
+            "dur": 2.6
+          },
+          {
+            "cue": "home",
+            "x": 0.5,
+            "y": 0.52,
+            "zoom": 1.02,
+            "dur": 3
+          }
+        ]
+      },
+      "hold": 0.6
+    },
+    {
+      "id": "voyage",
+      "type": "tableau",
+      "enter": {
+        "type": "fade",
+        "duration": 0.7
+      },
+      "intent": "海面视角：小船扬帆驶离灯塔，镜头跟着船向右，再抬头看向满天星——最远的那颗星",
+      "cues": {
+        "winter": "那年冬天",
+        "sail": "出了海",
+        "star": "最远的那颗星"
+      },
+      "props": {
+        "inherit": true,
+        "elements": [
+          {
+            "id": "keeper",
+            "opacity": 0
+          },
+          {
+            "id": "shore",
+            "opacity": 0
+          },
+          {
+            "id": "far",
+            "opacity": 0
+          },
+          {
+            "id": "clouds",
+            "to": [
+              {
+                "cue": "winter",
+                "dur": 4,
+                "cover": 0.12
+              }
+            ]
+          },
+          {
+            "id": "stars",
+            "to": [
+              {
+                "cue": "star",
+                "dur": 2,
+                "density": 1.6
+              }
+            ]
+          },
+          {
+            "id": "boat",
+            "type": "boat",
+            "x": 0.34,
+            "size": 0.13,
+            "lantern": 1,
+            "facing": 1,
+            "to": [
+              {
+                "cue": "sail",
+                "dur": 5,
+                "x": 0.66
+              }
+            ]
+          }
+        ],
+        "camera": [
+          {
+            "at": 0,
+            "x": 0.34,
+            "y": 0.62,
+            "zoom": 1.4,
+            "cut": true
+          },
+          {
+            "cue": "sail",
+            "x": 0.62,
+            "y": 0.6,
+            "zoom": 1.3,
+            "dur": 4.6
+          },
+          {
+            "cue": "star",
+            "x": 0.72,
+            "y": 0.16,
+            "zoom": 1.15,
+            "dur": 2.6
+          }
+        ]
+      },
+      "hold": 0.6
+    },
+    {
+      "id": "storm",
+      "type": "tableau",
+      "enter": {
+        "type": "dip",
+        "duration": 0.5
+      },
+      "exit": {
+        "type": "dip",
+        "duration": 0.6
+      },
+      "intent": "转折：云压下来、浪涨起来、大雨和闪电，小船在浪里颠簸、马灯被浪打灭；镜头切回灯塔，灯闪了几下，灭了",
+      "cues": {
+        "storm": "风暴来了",
+        "stars": "浪吞掉了星星",
+        "dir": "也吞掉了方向",
+        "night": "就在那天夜里",
+        "dark": "灭了"
+      },
+      "props": {
+        "inherit": true,
+        "elements": [
+          {
+            "id": "sky",
+            "to": [
+              {
+                "at": 0,
+                "dur": 2.2,
+                "tone": "storm"
+              }
+            ]
+          },
+          {
+            "id": "stars",
+            "to": [
+              {
+                "at": 0,
+                "dur": 1.6,
+                "opacity": 0
+              }
+            ]
+          },
+          {
+            "id": "moon",
+            "to": [
+              {
+                "at": 0,
+                "dur": 1.4,
+                "opacity": 0
+              }
+            ]
+          },
+          {
+            "id": "clouds",
+            "to": [
+              {
+                "at": 0,
+                "dur": 2.4,
+                "cover": 0.98,
+                "speed": 0.06
+              }
+            ]
+          },
+          {
+            "id": "sea",
+            "to": [
+              {
+                "at": 0.2,
+                "dur": 3,
+                "swell": 1
+              }
+            ]
+          },
+          {
+            "id": "rain",
+            "type": "rain",
+            "intensity": 0,
+            "wind": 0.45,
+            "to": [
+              {
+                "cue": "storm",
+                "dur": 1.4,
+                "intensity": 1
+              }
+            ]
+          },
+          {
+            "id": "bolt",
+            "type": "lightning",
+            "x": 0.78,
+            "strikes": [
+              {
+                "cue": "storm"
+              },
+              {
+                "cue": "dir",
+                "x": 0.9
+              },
+              {
+                "cue": "dark",
+                "x": 0.62
+              }
+            ]
+          },
+          {
+            "id": "boat",
+            "to": [
+              {
+                "cue": "stars",
+                "dur": 3,
+                "x": 0.72,
+                "rock": 1.8
+              },
+              {
+                "cue": "dir",
+                "dur": 0.8,
+                "lantern": 0
+              }
+            ]
+          },
+          {
+            "id": "hut",
+            "to": [
+              {
+                "cue": "night",
+                "dur": 0.5,
+                "window": 0
+              }
+            ]
+          },
+          {
+            "id": "lh",
+            "to": [
+              {
+                "cue": "night",
+                "dur": 0.01,
+                "lit": 0.9
+              },
+              {
+                "cue": "dark",
+                "dur": 1.2,
+                "lit": 0
+              }
+            ]
+          }
+        ],
+        "camera": [
+          {
+            "at": 0,
+            "x": 0.66,
+            "y": 0.58,
+            "zoom": 1.35,
+            "sway": 0.6,
+            "cut": true
+          },
+          {
+            "cue": "storm",
+            "x": 0.7,
+            "y": 0.6,
+            "zoom": 1.5,
+            "dur": 3,
+            "sway": 1
+          },
+          {
+            "cue": "night",
+            "zoom": 1.45,
+            "cut": true,
+            "sway": 0.4,
+            "on": "lh",
+            "anchor": "gallery"
+          },
+          {
+            "cue": "dark",
+            "zoom": 1.6,
+            "dur": 2,
+            "on": "lh",
+            "anchor": "lamp"
+          }
+        ]
+      },
+      "hold": 0.9
+    },
+    {
+      "id": "fire",
+      "type": "tableau",
+      "enter": {
+        "type": "fade",
+        "duration": 0.4
+      },
+      "intent": "高潮：老人爬上塔顶，点燃外套，一团火在塔顶烧起来；镜头拉开，火光穿过大雨照到海上，远处小船重新亮起马灯、掉头",
+      "cues": {
+        "climb": "爬上塔顶",
+        "burn": "点燃了",
+        "beam": "火光穿过大雨",
+        "sea": "照到了海上",
+        "see": "小船，看见了"
+      },
+      "props": {
+        "inherit": true,
+        "elements": [
+          {
+            "id": "keeper",
+            "type": "figure",
+            "size": 0.07,
+            "lantern": 0,
+            "facing": -1,
+            "opacity": 1,
+            "at": 0.3,
+            "fade": 0.6,
+            "on": "lh",
+            "anchor": "gallery",
+            "dx": 0.025
+          },
+          {
+            "id": "blaze",
+            "type": "fire",
+            "r": 0.012,
+            "intensity": 0,
+            "to": [
+              {
+                "cue": "burn",
+                "dur": 1.6,
+                "intensity": 1,
+                "r": 0.024
+              }
+            ],
+            "on": "lh",
+            "anchor": "gallery",
+            "dx": -0.005
+          },
+          {
+            "id": "rain",
+            "to": [
+              {
+                "cue": "sea",
+                "dur": 2,
+                "intensity": 0.7
+              }
+            ]
+          },
+          {
+            "id": "bolt",
+            "type": "lightning",
+            "x": 0.7,
+            "strikes": [
+              {
+                "cue": "climb",
+                "x": 0.86
+              }
+            ]
+          },
+          {
+            "id": "lh",
+            "to": [
+              {
+                "cue": "climb",
+                "dur": 0.01,
+                "sweep": 0
+              },
+              {
+                "cue": "beam",
+                "dur": 1.2,
+                "lit": 0.75,
+                "beam": 1
+              }
+            ]
+          },
+          {
+            "id": "boat",
+            "x": 0.78,
+            "size": 0.09,
+            "to": [
+              {
+                "cue": "see",
+                "dur": 0.5,
+                "lantern": 1
+              },
+              {
+                "cue": "see",
+                "dur": 2.2,
+                "facing": -1,
+                "x": 0.7
+              }
+            ]
+          }
+        ],
+        "camera": [
+          {
+            "at": 0,
+            "zoom": 2.1,
+            "sway": 0.4,
+            "on": "keeper",
+            "anchor": "head"
+          },
+          {
+            "cue": "burn",
+            "zoom": 2.6,
+            "dur": 1.6,
+            "sway": 0.3,
+            "on": "blaze"
+          },
+          {
+            "cue": "beam",
+            "x": 0.5,
+            "y": 0.5,
+            "zoom": 1,
+            "dur": 3.4,
+            "sway": 0.5
+          },
+          {
+            "cue": "see",
+            "zoom": 1.45,
+            "dur": 2.2,
+            "sway": 0.4,
+            "on": "boat"
+          }
+        ]
+      },
+      "hold": 1
+    },
+    {
+      "id": "home",
+      "type": "tableau",
+      "enter": {
+        "type": "dip",
+        "duration": 1
+      },
+      "intent": "收束：天亮，雨停浪平，太阳从海平线升起；小船靠岸，镜头慢慢拉开，塔顶多了一盏小灯",
+      "cues": {
+        "dawn": "天亮的时候",
+        "shore": "靠了岸",
+        "after": "从那以后",
+        "more": "多了一盏灯",
+        "hung": "是船上的人"
+      },
+      "props": {
+        "inherit": true,
+        "elements": [
+          {
+            "id": "sky",
+            "to": [
+              {
+                "at": 0,
+                "dur": 0.01,
+                "tone": "dawn"
+              }
+            ]
+          },
+          {
+            "id": "clouds",
+            "cover": 0.35,
+            "speed": 0.01,
+            "y": 0.22
+          },
+          {
+            "id": "sea",
+            "swell": 0.2
+          },
+          {
+            "id": "rain",
+            "intensity": 0
+          },
+          {
+            "id": "blaze",
+            "intensity": 0
+          },
+          {
+            "id": "keeper",
+            "opacity": 0
+          },
+          {
+            "id": "sun",
+            "type": "sun",
+            "x": 0.62,
+            "y": 0.7,
+            "r": 0.06,
+            "to": [
+              {
+                "at": 0,
+                "dur": 9,
+                "y": 0.6
+              }
+            ]
+          },
+          {
+            "id": "lh",
+            "lit": 1,
+            "beam": 0.25,
+            "sweep": 18
+          },
+          {
+            "id": "boat",
+            "x": 0.6,
+            "size": 0.11,
+            "lantern": 0.6,
+            "facing": -1,
+            "rock": 0.6,
+            "to": [
+              {
+                "cue": "shore",
+                "dur": 3,
+                "x": 0.38
+              }
+            ]
+          },
+          {
+            "id": "lamp2",
+            "type": "fire",
+            "r": 0.012,
+            "cue": "more",
+            "fade": 1,
+            "intensity": 0.7,
+            "on": "lh",
+            "anchor": "gallery",
+            "dx": 0.025
+          }
+        ],
+        "camera": [
+          {
+            "at": 0,
+            "x": 0.58,
+            "y": 0.6,
+            "zoom": 1.3
+          },
+          {
+            "cue": "shore",
+            "x": 0.42,
+            "y": 0.55,
+            "zoom": 1.15,
+            "dur": 3.2
+          },
+          {
+            "cue": "more",
+            "zoom": 1.9,
+            "dur": 2.4,
+            "on": "lh",
+            "anchor": "gallery"
+          },
+          {
+            "cue": "hung",
+            "x": 0.48,
+            "y": 0.46,
+            "zoom": 1,
+            "dur": 4.5
+          },
+          {
+            "cue": "after",
+            "x": 0.44,
+            "y": 0.42,
+            "zoom": 1.08,
+            "dur": 3
+          }
+        ]
+      },
+      "hold": 1.6
+    },
+    {
+      "id": "credits",
+      "type": "title",
+      "background": "stars",
+      "enter": {
+        "type": "dip",
+        "duration": 1.2
+      },
+      "duration": 4.5,
+      "intent": "片尾：故事名和制作说明，音乐在主和弦上收尾",
+      "props": {
+        "kicker": "一个关于光的小故事",
+        "title": "守灯人",
+        "subtitle": "OneVideo · 纯代码绘制 · 程序化叙事配乐"
+      }
+    }
+  ]
+}

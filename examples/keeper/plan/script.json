@@ -1,0 +1,52 @@
+{
+  "title": "守灯人",
+  "summary": "一座只亮一盏灯的灯塔，一只出海追星的小船，一夜风暴，一件被点燃的外套。",
+  "scenes": [
+    {
+      "id": "hook",
+      "beat": "hook",
+      "chapter": "灯塔",
+      "question": "这是一座什么样的灯塔？",
+      "narration": "海边有一座灯塔，每天夜里，它只亮一盏灯。"
+    },
+    {
+      "id": "keeper",
+      "beat": "setup",
+      "chapter": "灯塔",
+      "question": "灯为什么要亮着？",
+      "narration": "守塔的老人常说：灯亮着，迷路的船，就能找到回家的路。"
+    },
+    {
+      "id": "voyage",
+      "beat": "build",
+      "chapter": "出海",
+      "question": "小船要去哪里？",
+      "narration": "那年冬天，一只小船出了海。它想去追，最远的那颗星。"
+    },
+    {
+      "id": "storm",
+      "beat": "turn",
+      "chapter": "风暴",
+      "question": "然后发生了什么？",
+      "narration": "可是风暴来了。浪吞掉了星星，也吞掉了方向。就在那天夜里，灯塔的灯，灭了。"
+    },
+    {
+      "id": "fire",
+      "beat": "climax",
+      "chapter": "火光",
+      "question": "老人怎么办？",
+      "narration": "老人爬上塔顶，点燃了自己的外套。火光穿过大雨，照到了海上。小船，看见了。"
+    },
+    {
+      "id": "home",
+      "beat": "landing",
+      "chapter": "回家",
+      "question": "后来呢？",
+      "narration": "天亮的时候，小船靠了岸。从那以后，灯塔上多了一盏灯，是船上的人挂上去的。"
+    },
+    {
+      "id": "credits",
+      "beat": "credits"
+    }
+  ]
+}

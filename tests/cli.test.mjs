@@ -247,6 +247,24 @@ test("graphics pipeline: the drawn example compiles with no media, and asset sea
   assert.match(a.stderr, /drawn by code \(pipeline graphics\)/);
 });
 
+test("keeper example: tableau refs resolve, the world joins by fade or dip, nothing framed badly", async () => {
+  const dir = join(mkdtempSync(join(tmpdir(), "ov-cli-")), "keeper");
+  assert.equal(ov(ROOT, "init", dir, "--example", "keeper").status, 0);
+  const config = json(join(dir, "onevideo.json"));
+  writeFileSync(join(dir, "plan", "timings.json"), JSON.stringify(await estimatedTimings(json(join(dir, "plan", "script.json")), config)));
+  const r = ov(dir, "timeline", "--force");
+  const out = r.stdout + r.stderr;
+  assert.equal(r.status, 0, out);
+  assert.doesNotMatch(out, /\[(framing|drawn|schema:\w+)\]|continues one world/);
+  const tl = json(join(dir, "plan", "timeline.json"));
+  const fire = tl.scenes.find((s) => s.id === "fire");
+  assert.ok(!JSON.stringify(tl.scenes).includes('"on":'));
+  assert.ok(fire.props.camera.every((k) => typeof k.x === "number" && typeof k.y === "number"));
+  const keeper = fire.props.elements.find((e) => e.id === "keeper"), lh = fire.props.elements.find((e) => e.id === "lh");
+  assert.ok(Math.abs(keeper.x - (lh.x + 0.025)) < 1e-3);
+  for (const id of ["voyage", "storm", "fire", "home"]) assert.ok(["fade", "dip"].includes(tl.scenes.find((s) => s.id === id).transitionIn.type), id);
+});
+
 test("init --pipeline graphics carries the drawn defaults", () => {
   const dir = join(mkdtempSync(join(tmpdir(), "ov-cli-")), "g");
   assert.equal(ov(ROOT, "init", dir, "--pipeline", "graphics").status, 0);

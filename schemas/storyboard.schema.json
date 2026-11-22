@@ -3138,6 +3138,32 @@
               "text": {
                 "type": "string"
               },
+              "on": {
+                "type": "string",
+                "minLength": 1,
+                "description": "stand on another element (by id): x/y from its anchor point, depth from it unless set"
+              },
+              "anchor": {
+                "type": "string",
+                "minLength": 1,
+                "description": "anchor point: center, top, base; lighthouse gallery/lamp, hut window, boat deck/lantern, figure head/lantern"
+              },
+              "dx": {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 1,
+                "description": "offset from the anchor (frame fraction)"
+              },
+              "dy": {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 1,
+                "description": "offset from the anchor (frame fraction)"
+              },
+              "crop": {
+                "type": "boolean",
+                "description": "meant to be cut by the frame edge (framing gate stays quiet)"
+              },
               "to": {
                 "type": "array",
                 "description": "keyframes: blend to these fields over dur seconds",
@@ -3367,6 +3393,45 @@
                 "minimum": 0,
                 "maximum": 3,
                 "description": "handheld drift (storm)"
+              },
+              "on": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                ],
+                "description": "look at an element (or frame several): the compiler solves x/y through the parallax, and zoom to `fill` when not set"
+              },
+              "anchor": {
+                "type": "string",
+                "minLength": 1,
+                "description": "anchor point: center, top, base; lighthouse gallery/lamp, hut window, boat deck/lantern, figure head/lantern (one element)"
+              },
+              "place": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "where on screen the point lands, [x, y] frame fractions (default centre)"
+              },
+              "fill": {
+                "type": "number",
+                "minimum": 0.05,
+                "maximum": 1.5,
+                "description": "with on and no zoom: share of the frame height the element(s) fill (default 0.5)"
               },
               "snap": {
                 "type": "boolean"

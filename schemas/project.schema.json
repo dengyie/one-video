@@ -151,6 +151,22 @@
           "type": "string",
           "minLength": 4
         },
+        "auditions": {
+          "description": "candidate voices for onevideo tts --audition: each a speaker description (or { design, style }); every take reads the opening line into out/audition/voice-<k>.wav",
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "anyOf": [
+              { "type": "string", "minLength": 4 },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["design"],
+                "properties": { "design": { "type": "string", "minLength": 4 }, "style": { "type": "string" } }
+              }
+            ]
+          }
+        },
         "designText": {
           "description": "what the designed speaker reads for the reference clip",
           "type": "string",

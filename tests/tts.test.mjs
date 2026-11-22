@@ -79,3 +79,14 @@ test("designed voice: clone model, voice named by the description, reference cli
   assert.match(await voiceRef(r, { root: dir, linesDir: dir }, null), /^data:audio\/wav;base64,/);
   await assert.rejects(voiceRef(ttsConfig({ tts: { ref: "none.wav" } }), { root: dir, linesDir: dir }, null), /no file/);
 });
+
+test("tts --audition takes: a |-list wins over tts.auditions, objects keep their style, bounded", async () => {
+  const { auditionTakes } = await import("../cli/commands/media.mjs");
+  assert.deepEqual(auditionTakes("温暖低沉的男声| 清亮的年轻女声 |", {}), [{ design: "温暖低沉的男声" }, { design: "清亮的年轻女声" }]);
+  assert.deepEqual(auditionTakes(true, { tts: { auditions: ["沙哑的老渔夫嗓音", { design: "温柔女声，像睡前故事", style: "语速自然偏快" }] } }), [
+    { design: "沙哑的老渔夫嗓音" },
+    { design: "温柔女声，像睡前故事", style: "语速自然偏快" },
+  ]);
+  assert.throws(() => auditionTakes(true, {}), /give voice descriptions/);
+  assert.throws(() => auditionTakes("a1234|b1234|c1234|d1234|e1234|f1234|g1234", {}), /at most 6/);
+});

@@ -21,6 +21,7 @@ import { bestOffset, compileShots, hardCuts, laidOut, rampShots, stillShots } fr
 import { MAX_STILL, OVERLAY_EFFECTS, screenEvents } from "./events.mjs";
 import { anchorNames } from "./anchors.mjs";
 import { resolveDeviceRects, resolvePropTimes, settled, settledElement } from "./props.mjs";
+import { resolveTableauRefs } from "./tableau.mjs";
 import { collectAssetRefs, credit, libraryCredit, sourceList } from "./credits.mjs";
 import { clampT, r3 } from "./util.mjs";
 
@@ -208,6 +209,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     }
     for (const [i, el] of (props.elements ?? []).entries()) if (sb.type === "tableau" && !el.type) errors.push(`scene "${sb.id}" element ${el.id ?? i}: no type (only an inheriting scene may continue an element by id)`);
     resolvePropTimes(sb.type, props, ctx, errors, `scene "${sb.id}"`);
+    if (sb.type === "tableau") resolveTableauRefs(props, { width, height }, errors, `scene "${sb.id}"`);
     if (sb.type === "tableau") lastTableau = { elements: props.elements ?? [], camera: props.camera ?? [] };
     if (sb.type === "device") resolveDeviceRects(props, assetById, errors, `scene "${sb.id}"`);
     if (sb.type === "canvas") lastCanvas = { items: props.items ?? [], path: props.path ?? [] };

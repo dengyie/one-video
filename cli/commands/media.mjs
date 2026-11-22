@@ -21,19 +21,34 @@ import { findScreen, frameRgb } from "../lib/vision/screen.mjs";
 
 const list = (v) => (typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
 
+// The line a sample or an audition reads: the first narrated scene (its first line in line unit).
+function sampleScene(script, config) {
+  const first = script.scenes.find((s) => sceneLines(s, config).length);
+  if (!first) throw new UserError("script has no narration");
+  return ttsConfig(config).unit === "line" ? { id: "_sample", lines: [sceneLines(first, config)[0]] } : { ...first, id: "_sample" };
+}
+const measuredRate = (s) => s.lines.reduce((n, l) => n + spokenLength(l.text), 0) / Math.max(0.1, s.lines.reduce((n, l) => n + l.end - l.start, 0));
+
+// Candidate voices for an audition: --audition "描述1|描述2", else tts.auditions (strings, or
+// { design, style } when a take also tries another delivery).
+export function auditionTakes(arg, config) {
+  const raw = typeof arg === "string" ? arg.split("|") : config.tts?.auditions ?? [];
+  const takes = raw.map((a) => (typeof a === "string" ? { design: a.trim() } : { ...a, design: String(a.design ?? "").trim() })).filter((a) => a.design);
+  if (!takes.length) throw new UserError('tts --audition: give voice descriptions, e.g. --audition "温暖低沉的中年男声，讲故事般从容|清亮的年轻女声，语速自然偏快" (or list them in tts.auditions)');
+  if (takes.length > 6) throw new UserError(`tts --audition: ${takes.length} voices; audition at most 6 at a time`);
+  return takes;
+}
+
 export async function tts(args) {
   const project = loadProject();
   const script = readJson(project.paths.script);
+  if (args.audition) return audition(project, script, args);
   if (args.sample) {
     // Synthesize only the first scene (first line in line unit) so voice and pacing can be approved before the batch.
-    const first = script.scenes.find((s) => sceneLines(s, project.config).length);
-    if (!first) throw new UserError("script has no narration");
-    const sample = ttsConfig(project.config).unit === "line" ? { id: "_sample", lines: [sceneLines(first, project.config)[0]] } : { ...first, id: "_sample" };
-    const res = await runTts(project, { ...script, scenes: [sample] }, { force: Boolean(args.force) });
+    const res = await runTts(project, { ...script, scenes: [sampleScene(script, project.config)] }, { force: Boolean(args.force) });
     const s = res.scenes._sample;
     const text = s.lines.map((l) => l.text).join(" / ");
-    const rate = s.lines.reduce((n, l) => n + spokenLength(l.text), 0) / Math.max(0.1, s.lines.reduce((n, l) => n + l.end - l.start, 0));
-    log(`sample: public/${s.file} (${s.duration.toFixed(2)}s, ${rate.toFixed(1)} syllables/s) — "${text}"`);
+    log(`sample: public/${s.file} (${s.duration.toFixed(2)}s, ${measuredRate(s).toFixed(1)} syllables/s) — "${text}"`);
     log(`voice ${ttsConfig(project.config).voice}; listen, then run: onevideo tts`);
     return;
   }
@@ -42,6 +57,38 @@ export async function tts(args) {
   writeJson(project.paths.timings, res);
   const n = Object.values(res.scenes).reduce((k, s) => k + s.lines.length, 0);
   log(`timings: ${Object.keys(res.scenes).length} scenes, ${n} lines, narration ${res.totalNarration.toFixed(1)}s → plan/timings.json`);
+}
+
+// Several designed voices read the same opening line, side by side: pick by ear, then write the
+// winner into tts.design. Each take is designed and cloned like the real run (cached by its
+// description), so the chosen voice costs nothing more when the batch runs.
+async function audition(project, script, args) {
+  const { config, paths } = project;
+  const takes = auditionTakes(args.audition, config);
+  const dir = join(paths.out, "audition");
+  mkdirSync(dir, { recursive: true });
+  const sample = sampleScene(script, config);
+  const [lo, hi] = config.gates?.syllablesPerSec ?? [3.5, 6.2];
+  const report = [];
+  let line = "";
+  for (const [i, take] of takes.entries()) {
+    const k = i + 1;
+    const { ref: _ref, auditions: _a, ...base } = config.tts ?? {};
+    const tts = { ...base, protocol: "chat", design: take.design, ...(take.style !== undefined && { style: take.style }) };
+    log(`take ${k}/${takes.length}: ${take.design}`);
+    const res = await runTts({ ...project, config: { ...config, tts } }, { ...script, scenes: [sample] }, { force: Boolean(args.force) });
+    const s = res.scenes._sample;
+    const file = join(dir, `voice-${k}.wav`);
+    copyFileSync(join(paths.audioDir, "_sample.wav"), file);
+    rmSync(join(paths.audioDir, "_sample.wav"), { force: true });
+    const rate = measuredRate(s);
+    line ||= s.lines.map((l) => l.text).join(" / ");
+    report.push({ take: k, design: take.design, ...(tts.style && { style: tts.style }), file: `out/audition/voice-${k}.wav`, duration: s.duration, rate: Math.round(rate * 10) / 10 });
+    const pace = rate < lo ? " — slow: ask for pace in style" : rate > hi ? " — crowded" : "";
+    log(`  out/audition/voice-${k}.wav (${s.duration.toFixed(2)}s, ${rate.toFixed(1)} syllables/s${pace})`);
+  }
+  writeJson(join(dir, "auditions.json"), { line, takes: report });
+  log(`listen to out/audition/voice-*.wav, put the winner's description in tts.design, then run: onevideo tts`);
 }
 
 const SYNTH_NEAREST = [[/whoosh|swish|whip|page/, "whoosh"], [/impact|boom|rocket|glitch|error/, "impact"], [/riser|swell/, "riser"], [/pop|click|shutter|marker|cash/, "pop"], [/ding|sting|success|crowd/, "chime"], [/tick|type|keyboard/, "tick"]];

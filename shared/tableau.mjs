@@ -245,3 +245,86 @@ export function tableauTimes(props) {
   for (const [i, k] of (props?.camera ?? []).entries()) if (i > 0) out.push(k.t ?? 0);
   return out.sort((a, b) => a - b);
 }
+
+// Geometry of the solid pieces, as the renderer draws them (Tableau.tsx), on the element's own
+// layer before the camera: the box it fills and named points on it. Frame fractions; `W`/`H` the
+// frame in px (sizes are fractions of its short edge), `horizon` the sea line a boat floats on.
+// Camera keys (`on`) aim at these points, an element placed `on` another stands on one, and the
+// framing gate checks the box against the frame. Kinds without a body (sky, sea, rain…) give null.
+/** @typedef {{ box: [number, number, number, number], anchors: Record<string, [number, number]>, depth: number }} Geometry */
+export const SOLID = ["lighthouse", "hut", "boat", "figure", "fire", "moon", "sun"];
+/** @param {any} s an element state (elementAt) @param {{ W: number, H: number, horizon?: number }} frame @returns {Geometry | null} */
+export function elementGeometry(s, { W, H, horizon = 0.66 }) {
+  const S = Math.min(W, H), sx = S / W, sy = S / H;
+  const x = s.x ?? 0.5, f = s.facing ?? 1, depth = s.depth ?? KINDS[s.type]?.depth ?? 0.5;
+  /** @param {[number, number, number, number]} box @param {Record<string, [number, number]>} extra */
+  const geo = (box, extra) => /** @type {Geometry} */ ({ box, depth, anchors: { center: [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2], top: [(box[0] + box[2]) / 2, box[1]], ...extra } });
+  switch (s.type) {
+    case "lighthouse": {
+      const h = s.h, y = s.y, hw = (0.1 * h * H) / W;
+      return geo([x - hw, y - 1.07 * h, x + hw, y], { base: [x, y], gallery: [x, y - 0.78 * h], lamp: [x, y - 0.87 * h] });
+    }
+    case "hut": {
+      const z = s.size, y = s.y;
+      return geo([x - 0.62 * z * sx, y - 1.05 * z * sy, x + 0.62 * z * sx, y], { base: [x, y], window: [x + 0.13 * z * sx, y - 0.34 * z * sy] });
+    }
+    case "boat": {
+      const L = s.size, y = s.y ?? bandBase(bandFor(depth), horizon);
+      return geo([x - 0.58 * L * sx, y - 0.82 * L * sy, x + 0.58 * L * sx, y + 0.08 * L * sy], { base: [x, y], deck: [x, y - 0.12 * L * sy], lantern: [x - 0.18 * L * f * sx, y - 0.3 * L * sy] });
+    }
+    case "figure": {
+      const L = s.size, y = s.y;
+      return geo([x - 0.28 * L * sx, y - L * sy, x + 0.28 * L * sx, y], { base: [x, y], head: [x + 0.07 * L * f * sx, y - 0.87 * L * sy], lantern: [x + 0.24 * L * f * sx, y - 0.37 * L * sy] });
+    }
+    case "fire": {
+      const r = s.r, y = s.y;
+      return geo([x - 1.1 * r * sx, y - 2.6 * r * sy, x + 1.1 * r * sx, y + 0.1 * r * sy], { base: [x, y] });
+    }
+    case "moon": case "sun": {
+      const r = s.r, y = s.y;
+      return geo([x - r * sx, y - r * sy, x + r * sx, y + r * sy], { base: [x, y + r * sy] });
+    }
+    default: return null;
+  }
+}
+
+/** Where a layer point lands on screen under a camera. @param {Cam} cam @param {number} depth @param {[number, number]} p @returns {[number, number]} */
+export function onScreen(cam, depth, [px, py]) {
+  const v = layerView(cam, depth);
+  return [(px - v.cx) * v.scale + 0.5, (py - v.cy) * v.scale + 0.5];
+}
+/** A layer box on screen. @param {Cam} cam @param {number} depth @param {[number, number, number, number]} box */
+export function boxOnScreen(cam, depth, box) {
+  const [a, b] = onScreen(cam, depth, [box[0], box[1]]), [c, d] = onScreen(cam, depth, [box[2], box[3]]);
+  return /** @type {[number, number, number, number]} */ ([a, b, c, d]);
+}
+
+/**
+ * The camera (focus x/y) that puts layer point `p` at depth `depth` on screen at `place` with
+ * `zoom` — layerView solved backwards, so a key can name what it looks at instead of where.
+ * @param {[number, number]} p @param {number} depth @param {number} zoom @param {[number, number]} [place]
+ */
+export function cameraFor([px, py], depth, zoom, [sx, sy] = [0.5, 0.5]) {
+  const k = 0.25 + 0.75 * clamp01(depth), scale = 1 + (zoom - 1) * k;
+  const solve = (/** @type {number} */ p, /** @type {number} */ s) => 0.5 + (p - (s - 0.5) / scale - 0.5) / k;
+  return { x: solve(px, sx), y: solve(py, sy) };
+}
+/** The zoom at which a layer box `fill`s that share of the frame's height (and fits its width). @param {[number, number, number, number]} box @param {number} depth @param {number} fill */
+export function zoomToFit(box, depth, fill) {
+  const k = 0.25 + 0.75 * clamp01(depth);
+  const scale = Math.min(fill / Math.max(1e-3, box[3] - box[1]), 0.9 / Math.max(1e-3, box[2] - box[0]));
+  return Math.max(1, 1 + (scale - 1) / k);
+}
+
+/** How much of a screen box is inside the frame (0..1). @param {[number, number, number, number]} b */
+export function insideShare(b) {
+  const area = Math.max(1e-9, (b[2] - b[0]) * (b[3] - b[1]));
+  const w = Math.max(0, Math.min(1, b[2]) - Math.max(0, b[0])), h = Math.max(0, Math.min(1, b[3]) - Math.max(0, b[1]));
+  return (w * h) / area;
+}
+
+/** The sea line at t (where a boat with no y floats). @param {any[]} elements @param {number} t */
+export function horizonAt(elements, t) {
+  const sea = elements.find((e) => e.type === "sea");
+  return sea ? elementAt(sea, t).y ?? 0.66 : 0.66;
+}

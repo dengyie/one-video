@@ -39,15 +39,16 @@ test("every pipeline stage points at an existing director and every style parses
 test("every example passes the schemas and the pre-voice content gates", async () => {
   const { schemaGate, numbersGate, storyboardGate, captionGate, drawnGate } = await import("../cli/lib/review/gates.mjs");
   const dirs = readdirSync(join(ROOT, "examples"));
-  assert.ok(dirs.includes("spacex-motion") && dirs.includes("spacex-ipo") && dirs.includes("graphics-demo"));
+  assert.ok(dirs.includes("spacex-motion") && dirs.includes("spacex-ipo") && dirs.includes("graphics-demo") && dirs.includes("keeper"));
   for (const name of dirs) {
     const read = (f) => JSON.parse(readFileSync(join(ROOT, "examples", name, f), "utf8"));
     // A drawn example (pipeline graphics) has no asset plan at all.
     const has = (f) => existsSync(join(ROOT, "examples", name, f));
     const config = read("onevideo.json"), plan = (f) => read(join("plan", `${f}.json`));
-    const [research, script, storyboard, assets] = ["research", "script", "storyboard", "assets"].map((f) => (f === "assets" && !has("plan/assets.json") ? null : plan(f)));
+    // Fiction (a drawn story) has no facts to source, so no research.json either.
+    const [research, script, storyboard, assets] = ["research", "script", "storyboard", "assets"].map((f) => ((f === "assets" || f === "research") && !has(`plan/${f}.json`) ? null : plan(f)));
     const errors = [
-      ...schemaGate("project", config), ...schemaGate("research", research), ...schemaGate("script", script),
+      ...schemaGate("project", config), ...(research ? schemaGate("research", research) : []), ...schemaGate("script", script),
       ...schemaGate("storyboard", storyboard), ...(assets ? schemaGate("assets", assets) : []),
       ...numbersGate(script, research), ...captionGate(script, config), ...storyboardGate(storyboard, script, config, assets),
       ...drawnGate(storyboard, assets, config),

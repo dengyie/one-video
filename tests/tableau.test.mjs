@@ -5,7 +5,10 @@ import { join } from "node:path";
 import {
   KIND_NAMES, PALETTES, bandDepth, bandFor, cameraAt, cameraMoving, elementAt, flashAt, flashTotal, lampLevel, layerView,
   mixHex, paletteAt, settledElement, tableauTimes, waveY, SEA_BANDS,
+  boxOnScreen, cameraFor, elementGeometry, insideShare, onScreen, zoomToFit,
 } from "../shared/tableau.mjs";
+import { resolveTableauRefs, boundaryTransition } from "../cli/lib/timeline/index.mjs";
+import { framingGate, rhythmGate } from "../cli/lib/review/gates.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { schemaGate } from "../cli/lib/review/gates.mjs";
 import { beatsFile, gridBeats } from "../cli/lib/audio/beats.mjs";
@@ -125,4 +128,95 @@ test("compileTimeline: tableau times, strikes on the beat, inherit carries the w
   sb.scenes[0] = { ...sb.scenes[0], type: "kinetic", props: { lines: [{ text: "x" }] } };
   const again = compileTimeline({ ...ex, storyboard: sb, assets: ex.fetchedAssets });
   assert.ok(again.errors.some((e) => /tableau inherit needs/.test(e)));
+});
+
+test("tableau geometry: anchors, cameraFor inverts the parallax, zoomToFit fills the frame", () => {
+  const frame = { W: 1920, H: 1080 };
+  const lh = elementGeometry(elementAt({ type: "lighthouse", x: 0.3 }, 0), frame);
+  assert.ok(lh && lh.box[1] < lh.anchors.lamp[1] && lh.anchors.lamp[1] < lh.anchors.gallery[1] && lh.anchors.gallery[1] < lh.anchors.base[1]);
+  assert.equal(elementGeometry(elementAt({ type: "sea" }, 0), frame), null);
+  for (const [depth, zoom, place] of [[0.9, 2, [0.5, 0.5]], [0.4, 1.6, [0.3, 0.6]], [1, 1, [0.5, 0.5]]]) {
+    const cam = { ...cameraFor(lh.anchors.lamp, depth, zoom, /** @type {[number, number]} */ (place)), zoom, sway: 0 };
+    const [sx, sy] = onScreen(cam, depth, lh.anchors.lamp);
+    near(sx, place[0], 1e-9);
+    near(sy, place[1], 1e-9);
+  }
+  const z = zoomToFit(lh.box, lh.depth, 0.5);
+  const cam = { ...cameraFor(lh.anchors.center, lh.depth, z), zoom: z, sway: 0 };
+  const b = boxOnScreen(cam, lh.depth, lh.box);
+  near(b[3] - b[1], 0.5, 1e-6);
+  assert.equal(insideShare(b), 1);
+  assert.equal(insideShare([-0.5, 0, 0.5, 1]), 0.5);
+});
+
+test("tableau refs: elements stand on anchors, camera keys aim at elements, mistakes are errors", () => {
+  const props = {
+    elements: [
+      { id: "sea", type: "sea" },
+      { id: "lh", type: "lighthouse", x: 0.3 },
+      { id: "keeper", type: "figure", on: "lh", anchor: "gallery", dx: 0.01 },
+      { id: "boat", type: "boat", x: 0.75 },
+    ],
+    camera: [{ on: "lh" }, { t: 2, on: "keeper", anchor: "head", zoom: 2.5, place: [0.5, 0.4] }, { t: 5, on: ["lh", "boat"] }],
+  };
+  const errors = [];
+  resolveTableauRefs(props, { width: 1920, height: 1080 }, errors, 'scene "s"');
+  assert.deepEqual(errors, []);
+  const lh = elementGeometry(elementAt(props.elements[1], 0), { W: 1920, H: 1080 });
+  const keeper = props.elements[2];
+  near(keeper.x, 0.31, 1e-3);
+  near(keeper.y, lh.anchors.gallery[1], 1e-3);
+  assert.equal(keeper.on, undefined);
+  assert.equal(keeper.depth, lh.depth);
+  const [whole, head, both] = props.camera;
+  assert.ok(whole.zoom > 1 && whole.on === undefined);
+  const hg = elementGeometry(elementAt(keeper, 0), { W: 1920, H: 1080 });
+  const [hx, hy] = onScreen({ ...head, sway: 0 }, hg.depth, hg.anchors.head);
+  near(hx, 0.5, 2e-3);
+  near(hy, 0.4, 2e-3);
+  assert.ok(both.zoom >= 1 && both.zoom < whole.zoom);
+
+  const bad = (camera, elements = [{ id: "lh", type: "lighthouse" }, { id: "sky", type: "sky" }]) => {
+    const e = [];
+    resolveTableauRefs({ elements: structuredClone(elements), camera }, { width: 1920, height: 1080 }, e, 'scene "s"');
+    return e.join("\n");
+  };
+  assert.match(bad([{ on: "ghost" }]), /not an element of this scene \(solid ones: lh\)/);
+  assert.match(bad([{ on: "lh", x: 0.3 }]), /either on or x\/y/);
+  assert.match(bad([{ on: "sky" }]), /no body to aim at/);
+  assert.match(bad([{ on: "lh", anchor: "roof" }]), /no anchor "roof" \(center, top, base, gallery, lamp\)/);
+  assert.match(bad([], [{ id: "a", type: "figure", on: "b" }, { id: "b", type: "figure", on: "a" }]), /loops back/);
+});
+
+test("same-world boundaries dissolve; a reframing transition there is flagged", () => {
+  const sc = (type, inherit, extra = {}) => ({ type, durationInFrames: 300, props: inherit ? { inherit: true } : {}, ...extra });
+  const theme = { transition: "zoom" };
+  assert.equal(boundaryTransition(sc("tableau"), sc("tableau", true), theme, 30).type, "fade");
+  assert.equal(boundaryTransition(sc("tableau"), sc("tableau"), theme, 30).type, "zoom");
+  assert.equal(boundaryTransition(sc("tableau"), sc("tableau", true, { enter: "whip" }), theme, 30).type, "whip");
+  const tl = (type) => ({
+    width: 1920, height: 1080, fps: 30, theme: {},
+    scenes: [
+      { id: "a", type: "tableau", start: 0, duration: 4, props: { elements: [] }, shots: [] },
+      { id: "b", type: "tableau", start: 4, duration: 4, props: { inherit: true, elements: [] }, shots: [], transitionIn: { type, frames: 12 } },
+    ],
+  });
+  const hit = (type) => rhythmGate(tl(type), {}).filter((i) => /continues one world/.test(i.msg));
+  assert.equal(hit("fade").length, 0);
+  assert.equal(hit("zoom").length, 1);
+});
+
+test("framingGate: a solid element cut by the frame at rest is flagged unless crop", () => {
+  const scene = (lh) => ({
+    width: 1920, height: 1080,
+    scenes: [{ id: "s", type: "tableau", start: 0, duration: 2, props: { elements: [{ id: "sea", type: "sea" }, lh], camera: [{ x: 0.5, y: 0.5, zoom: 1 }] } }],
+  });
+  assert.deepEqual(framingGate(scene({ id: "lh", type: "lighthouse", x: 0.4 }), {}), []);
+  const cut = framingGate(scene({ id: "lh", type: "lighthouse", x: 0.4, y: 0.45, h: 0.6 }), {});
+  assert.equal(cut.length, 1);
+  assert.match(cut[0].msg, /lighthouse "lh" is cut by the frame edge at rest .*on: "lh"/);
+  assert.equal(cut[0].at.field, "props.elements[1]");
+  assert.deepEqual(framingGate(scene({ id: "lh", type: "lighthouse", x: 0.4, y: 0.5, h: 0.7, crop: true }), {}), []);
+  // Too big to fit at this zoom (a close-up on something standing on it): the set, not a mistake.
+  assert.deepEqual(framingGate(scene({ id: "lh", type: "lighthouse", x: 0.4, y: 0.95, h: 0.85 }), {}), []);
 });

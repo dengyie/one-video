@@ -54,6 +54,11 @@
 - 文字场景背后用代码背景撑住画面：`background` 写 `aurora` / `particles` / `waves`（或 `grid` / `stars`），相邻场景换着用。
 - 不能写任何 `asset`（场景 props、`backdrop`、image 叠层、canvas image 元素）或 `background: "media"`，drawn 门控报错；要用照片就换流水线，或在 `onevideo.json` 写 `"drawn": false`。
 - 节奏照常：每 2–4 秒一个新变化，每个场景有 `shots`，关键数字用 `word` 叠层砸出来。
+- 讲故事用 `tableau`，参考 `examples/keeper`（《守灯人》）：
+  - 一个世界、多个场景用 `inherit` 接着演；两场之间用 fade 或 dip，不用 whip / zoom（画面飞走又落回原处，像跳帧）。
+  - 镜头写 `on: "<元素 id>"` + `anchor`，不手算 x/y；人和物站到别的元素上用元素的 `on`/`anchor`。
+  - 镜头停下时，灯塔、船、人不能被画框切一截（framing 门控），要么推近对准它，要么退开。
+  - 旁白节奏靠 `tts.style` 写明“语速自然偏快、不拖音”，配音前先 `onevideo tts --audition` 试几种声音。
 
 ## 版面（layout 门控，timeline 时检查）
 

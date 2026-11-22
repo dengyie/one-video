@@ -1,7 +1,7 @@
 // Pacing gates, run on the compiled timeline: the hook, screen rhythm (still stretches and their
 // fixes), transition variety, device holds, the audience question and screen text echoing the voice.
 import { normalizeForMatch } from "../core/text.mjs";
-import { OVERLAY_EFFECTS, named, propTimes, screenEvents } from "../timeline/index.mjs";
+import { OVERLAY_EFFECTS, REFRAMING, named, propTimes, sameWorld, screenEvents } from "../timeline/index.mjs";
 import { LAID_OUT_ZOOM, laidOut, weakMove } from "../timeline/shots.mjs";
 import { CUE_LEAD, phraseTime } from "../timeline/cues.mjs";
 import { numberReveals } from "./reveals.mjs";
@@ -149,6 +149,15 @@ export function rhythmGate(timeline, config) {
     const sc = timeline.scenes[i + 1];
     const to = types[i] === "cut" ? "fade" : sc.type === "chapter" ? "wipe" : "cut";
     out.push(issue("warn", "rhythm", `${run}+ consecutive "${types[i]}" transitions ending at "${sc.id}" — vary them at chapter turns (e.g. "enter": "${to}" on "${sc.id}")`, null, { scene: sc.id, path: ["enter"], value: to, add: true }));
+  }
+  // A scene that continues the world before it (inherit) joined by a transition that throws the
+  // whole frame away and back: the same place jumps out and lands again, a glitch, not a cut.
+  for (const [i, sc] of timeline.scenes.entries()) {
+    const prev = timeline.scenes[i - 1];
+    const type = sc.transitionIn?.type;
+    if (!prev || !sameWorld(prev, sc) || !REFRAMING.has(type)) continue;
+    const own = sc.enter ? { scene: sc.id, path: ["enter"] } : { scene: prev.id, path: ["exit"] };
+    out.push(issue("warn", "rhythm", `"${prev.id}" → "${sc.id}" continues one world (inherit) but joins with "${type}": the frame leaves and lands back on the same place, which reads as a glitch — use fade or dip (or a cut when the new framing is clearly different)`, { scene: sc.id, from: sc.start - 0.5, to: sc.start + 0.5, field: own.path[0] }, { ...own, value: "fade" }));
   }
   return out;
 }

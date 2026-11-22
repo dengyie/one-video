@@ -71,6 +71,11 @@ test("storyboardGate: a cue nothing names warns; one named after a props side ge
 test("rateGate flags speech outside the syllables/s band", () => {
   const timings = { scenes: { s: { lines: [{ text: "一二三四五六七八九十", start: 0, end: 0.5 }] } } };
   assert.ok(msgs(rateGate({ scenes: [{ id: "s" }] }, timings, {})).some((x) => /syllables\/s/.test(x)));
+  // Too slow: names the slowest line and points at the style text.
+  const slow = { scenes: { s: { lines: [{ text: "一二三四五六", start: 0, end: 1.5 }, { text: "灯……还亮着", start: 2, end: 4.5 }] } } };
+  const [m] = msgs(rateGate({ scenes: [{ id: "s" }] }, slow, {}));
+  assert.match(m, /"灯……还亮着" 1\.6\/s/);
+  assert.match(m, /tts\.style/);
 });
 
 test("budgetGate errors when narration is far from targetSeconds", () => {
