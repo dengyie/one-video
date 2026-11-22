@@ -246,4 +246,14 @@ test("groundingGate: a piece set on a cliff's top but past its edge hangs over t
   // Reported once, where it first shows, not again in the inherit scene after.
   const twice = world([cliff, { id: "hut", type: "hut", x: 0.31, y: 0.6 }], [{ id: "b", type: "tableau", start: 1, duration: 1, props: { elements: [cliff, { id: "hut", type: "hut", x: 0.31, y: 0.6 }], camera: [{ x: 0.5, y: 0.5, zoom: 1 }] } }]);
   assert.equal(groundingGate(twice).length, 1);
+  // The fix moves x where the storyboard set it: in the scene that defines the piece, even when it
+  // first hangs over the sea in an inherit scene later; never for a piece keyframed in x or placed on another.
+  const hut = { id: "hut", type: "hut", x: 0.31, y: 0.6 };
+  const board = { scenes: [{ id: "a", type: "tableau", props: { elements: [{ id: "sea", type: "sea" }, cliff, hut] } }, { id: "b", type: "tableau", props: { inherit: true, elements: [] } }] };
+  assert.deepEqual(groundingGate(world([cliff, hut]), {}, board)[0].fix, { scene: "a", path: ["props", "elements", 2, "x"], value: 0.234 });
+  const later = world([cliff], [{ id: "b", type: "tableau", start: 1, duration: 1, props: { elements: [cliff, hut], camera: [{ x: 0.5, y: 0.5, zoom: 1 }] } }]);
+  assert.deepEqual(groundingGate(later, {}, board)[0].fix.scene, "a");
+  const moved = structuredClone(board);
+  moved.scenes[1].props.elements.push({ id: "hut", to: [{ at: 0.5, x: 0.2 }] });
+  assert.equal(groundingGate(world([cliff, hut]), {}, moved)[0].fix, undefined);
 });

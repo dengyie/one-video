@@ -263,6 +263,17 @@ test("keeper example: tableau refs resolve, the world joins by fade or dip, noth
   const keeper = fire.props.elements.find((e) => e.id === "keeper"), lh = fire.props.elements.find((e) => e.id === "lh");
   assert.ok(Math.abs(keeper.x - (lh.x + 0.025)) < 1e-3);
   for (const id of ["voyage", "storm", "fire", "home"]) assert.ok(["fade", "dip"].includes(tl.scenes.find((s) => s.id === id).transitionIn.type), id);
+  // One world told in six shots is not a variety repeat.
+  assert.doesNotMatch(out, /\[variety\]/);
+  // The hut set past the cliff's edge again: `fix --apply` puts it back on the rock.
+  const sbPath = join(dir, "plan", "storyboard.json"), sb = json(sbPath);
+  sb.scenes[0].props.elements.find((e) => e.id === "hut").x = 0.31;
+  writeFileSync(sbPath, JSON.stringify(sb));
+  const f = ov(dir, "fix", "--apply");
+  assert.equal(f.status, 0, f.stdout + f.stderr);
+  const hut = json(sbPath).scenes[0].props.elements.find((e) => e.id === "hut");
+  assert.ok(hut.x < 0.27, `hut x ${hut.x}`);
+  assert.doesNotMatch(ov(dir, "validate").stdout, /\[grounding\]/);
 });
 
 test("init --pipeline graphics carries the drawn defaults", () => {

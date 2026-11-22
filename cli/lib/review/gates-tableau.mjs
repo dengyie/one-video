@@ -57,7 +57,25 @@ export function framingGate(timeline, config = {}) {
 const STANDING = ["lighthouse", "hut", "figure", "fire"];
 const GROUND_Y = 0.035, GROUND_DEPTH = 0.1, EDGE = 0.005;
 
-export function groundingGate(timeline, config = {}) {
+// Where the storyboard sets an element's x, so `onevideo fix` can move it: the latest scene up to
+// `upTo` that defines it (an inherited element keeps the x it was given). Only a still piece set by
+// a plain x — one placed on another (on) or keyframed in x is the author's to move.
+function definedX(storyboard, upTo, id) {
+  if (!storyboard?.scenes || id == null) return null;
+  const end = storyboard.scenes.findIndex((s) => s.id === upTo);
+  if (end < 0) return null;
+  const same = storyboard.scenes.flatMap((s) => (s.props?.elements ?? []).filter((e) => e.id === id));
+  if (same.some((e) => e.on != null || (e.to ?? []).some((k) => k.x != null))) return null;
+  for (let k = end; k >= 0; k--) {
+    const sc = storyboard.scenes[k];
+    const j = (sc.props?.elements ?? []).findIndex((e) => e.id === id && e.type);
+    if (j >= 0) return typeof sc.props.elements[j].x === "number" ? { scene: sc.id, path: ["props", "elements", j, "x"] } : null;
+    if (sc.type !== "tableau" || !sc.props?.inherit) return null;
+  }
+  return null;
+}
+
+export function groundingGate(timeline, config = {}, storyboard = null) {
   const g = { ...FRAMING_DEFAULTS, ...(config.gates ?? {}) };
   const { width: W, height: H } = timeline;
   const out = [];
@@ -87,11 +105,12 @@ export function groundingGate(timeline, config = {}) {
         const half = (geo.box[2] - geo.box[0]) / 2;
         const x = Math.round((right ? rock.x + half + EDGE : rock.x - half - EDGE) * 1000) / 1000;
         const named = el.id ? `"${el.id}"` : `#${i}`;
-        out.push(issue("warn", "grounding", `scene "${sc.id}" ${el.type} ${named} stands past the cliff's edge (x ${r2(bx)}, the rock ends at ${r2(rock.x)}) and hangs over the sea: x ${x} puts it on the rock (or widen the cliff, or set its y to the shore if it belongs there)`, { scene: sc.id, from: sc.start + t, field: `props.elements[${i}]` }));
+        out.push(issue("warn", "grounding", `scene "${sc.id}" ${el.type} ${named} stands past the cliff's edge (x ${r2(bx)}, the rock ends at ${r2(rock.x)}) and hangs over the sea: x ${x} puts it on the rock (or widen the cliff, or set its y to the shore if it belongs there)`, { scene: sc.id, from: sc.start + t, field: `props.elements[${i}]` }, fixAt(definedX(storyboard, sc.id, el.id), x)));
       }
     }
   }
   return out;
 }
 
+const fixAt = (spot, value) => (spot ? { ...spot, value } : undefined);
 const r2 = (x) => Math.round(x * 100) / 100;

@@ -254,16 +254,24 @@ const Figure: React.FC<{ c: Ctx; s: any; walking: number }> = ({ c, s, walking }
   const lan = s.lantern * (0.8 + 0.2 * noise(c.t * 7, 3));
   const ink = c.pal.land;
   const P = (px: number, py: number) => `${(px * L).toFixed(1)},${(py * L).toFixed(1)}`;
+  const silhouette = (
+    <>
+      <path d={`M ${P(-0.04, -0.16)} L ${P(-0.06 - step * 0.05, 0)} L ${P(-0.01 - step * 0.05, 0)} L ${P(0.01, -0.16)} Z`} />
+      <path d={`M ${P(0.03, -0.16)} L ${P(0.04 + step * 0.05, 0)} L ${P(0.09 + step * 0.05, 0)} L ${P(0.08, -0.16)} Z`} />
+      <path d={`M ${P(-0.05, -0.8)} Q ${P(0.06, -0.86)} ${P(0.12, -0.76)} L ${P(0.16, -0.16)} L ${P(-0.12, -0.16)} Q ${P(-0.12, -0.5)} ${P(-0.05, -0.8)} Z`} />
+      <path d={`M ${P(0.08, -0.7)} Q ${P(0.2, -0.56)} ${P(0.25, -0.46)} L ${P(0.22, -0.44)} Q ${P(0.13, -0.55)} ${P(0.06, -0.62)} Z`} />
+      <circle cx={0.07 * L} cy={-0.87 * L} r={0.065 * L} />
+      <path d={`M ${P(-0.04, -0.9)} L ${P(0.19, -0.9)} L ${P(0.16, -0.93)} L ${P(0.12, -1.0)} L ${P(0.02, -1.0)} L ${P(-0.01, -0.93)} Z`} />
+    </>
+  );
   return (
     <g opacity={s.opacity * s.enter}>
       {lan > 0.01 && <circle cx={x + s.facing * L * 0.26} cy={y - L * 0.36} r={L * 1.4} fill={`url(#${c.id}-lamp)`} opacity={lan * 0.75} />}
+      {/* A silhouette is the colour of the land, so against a storm sky it vanishes: the sky's rim
+          light traces its outline first (a wider stroke under the fill shows only outside it). */}
       <g transform={`translate(${x.toFixed(1)} ${(y - bob).toFixed(1)}) scale(${s.facing} 1)`}>
-        <path d={`M ${P(-0.04, -0.16)} L ${P(-0.06 - step * 0.05, 0)} L ${P(-0.01 - step * 0.05, 0)} L ${P(0.01, -0.16)} Z`} fill={ink} />
-        <path d={`M ${P(0.03, -0.16)} L ${P(0.04 + step * 0.05, 0)} L ${P(0.09 + step * 0.05, 0)} L ${P(0.08, -0.16)} Z`} fill={ink} />
-        <path d={`M ${P(-0.05, -0.8)} Q ${P(0.06, -0.86)} ${P(0.12, -0.76)} L ${P(0.16, -0.16)} L ${P(-0.12, -0.16)} Q ${P(-0.12, -0.5)} ${P(-0.05, -0.8)} Z`} fill={ink} />
-        <path d={`M ${P(0.08, -0.7)} Q ${P(0.2, -0.56)} ${P(0.25, -0.46)} L ${P(0.22, -0.44)} Q ${P(0.13, -0.55)} ${P(0.06, -0.62)} Z`} fill={ink} />
-        <circle cx={0.07 * L} cy={-0.87 * L} r={0.065 * L} fill={ink} />
-        <path d={`M ${P(-0.04, -0.9)} L ${P(0.19, -0.9)} L ${P(0.16, -0.93)} L ${P(0.12, -1.0)} L ${P(0.02, -1.0)} L ${P(-0.01, -0.93)} Z`} fill={ink} />
+        <g stroke={c.pal.rim} strokeWidth={L * 0.024} strokeLinejoin="round" strokeOpacity={0.55} fill={c.pal.rim}>{silhouette}</g>
+        <g fill={ink}>{silhouette}</g>
         <line x1={0.24 * L} x2={0.24 * L} y1={-0.45 * L} y2={-0.41 * L} stroke={ink} strokeWidth={L * 0.008} />
         <rect x={0.205 * L} y={-0.41 * L} width={0.07 * L} height={0.09 * L} rx={L * 0.01} fill={lan > 0.01 ? "#fff0c0" : ink} opacity={lan > 0.01 ? Math.max(0.35, lan) : 1} />
       </g>

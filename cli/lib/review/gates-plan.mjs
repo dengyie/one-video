@@ -5,7 +5,7 @@ import { normalizeLicense } from "../core/license.mjs";
 import { extractNumbers, parseNumber, spokenLength } from "../core/text.mjs";
 import { timingHashes } from "../voice/tts.mjs";
 import { sceneLines } from "../captions/lines.mjs";
-import { named } from "../timeline/index.mjs";
+import { named, sameWorld } from "../timeline/index.mjs";
 import { GATE_DEFAULTS, STATIC_TYPES, issue } from "./issue.mjs";
 
 const DEFAULT_HOLD_EST = 0.5;
@@ -102,8 +102,10 @@ export function storyboardGate(storyboard, script, config, assets) {
   if (ratio > g.staticRatioMax) out.push(issue("error", "slideshow", `${Math.round(ratio * 100)}% of scenes are static text (${[...STATIC_TYPES].join("/")}); max ${Math.round(g.staticRatioMax * 100)}% — convert some to charts, media or timelines`));
   let run = 1;
   for (let i = 1; i < types.length; i++) {
-    // One device staying on screen across scenes is the point of a product demo, not a repeat.
-    run = types[i] === types[i - 1] && types[i] !== "device" ? run + 1 : 1;
+    // One device staying on screen across scenes is the point of a product demo, not a repeat; one
+    // world continued (inherit) is one story told in several shots, each of which moves on.
+    const [prev, next] = [storyboard.scenes[i - 1], storyboard.scenes[i]];
+    run = types[i] === types[i - 1] && types[i] !== "device" && !sameWorld(prev, next) ? run + 1 : 1;
     if (run === g.maxSameTypeRun + 1) out.push(issue("warn", "variety", `${run}+ consecutive "${types[i]}" scenes ending at "${sbIds[i]}"`));
   }
 

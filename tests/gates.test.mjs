@@ -489,3 +489,12 @@ test("storyboardSpot: the line of the scene's field to change, else of the scene
   assert.equal(storyboardSpot(text, "a", "cues"), line(/"id": "a"/), "b's cues are not a's");
   assert.equal(storyboardSpot(text, "zz", "cues"), null);
 });
+
+test("storyboardGate: one world continued (inherit) is not a variety repeat", () => {
+  const ids = ["a", "b", "c", "d"];
+  const script = { scenes: ids.map((id) => ({ id, narration: "一句话。" })) };
+  const sb = (inherit) => ({ scenes: ids.map((id, i) => ({ id, type: "tableau", props: { elements: [], ...(i && inherit ? { inherit: true } : {}) } })) });
+  const variety = (s) => storyboardGate(s, script, {}, null).filter((x) => x.gate === "variety");
+  assert.equal(variety(sb(false)).length, 1);
+  assert.deepEqual(variety(sb(true)), []);
+});
