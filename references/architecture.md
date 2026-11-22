@@ -78,7 +78,7 @@ commands                     → 以上任意
 
 ## 播放站（`web/`）
 
-`npm run web:deploy` = `web/deploy.mjs`：先跑 `web/sync.mjs` 生成目录，再对站点文件和 Worker 代码求哈希，与上次部署（`web/.wrangler/deployed.sha256`）相同就跳过，不同才 `wrangler deploy`（Worker `onevideo-web`，静态资源 `web/site/`，`/v/*`、`/w/*` 先过 `worker.mjs`）；`--force` 强制部署。发布节点上 `onevideo-web.timer` 每 10 分钟跑一次，`onevideo publish` 之后几分钟上站，节点之间不用手工搬文件。
+`npm run web:deploy` = `web/deploy.mjs`：先跑 `web/sync.mjs` 生成目录，再对站点文件和 Worker 代码求哈希，与上次部署（`web/.wrangler/deployed.sha256`）相同就跳过，不同才 `wrangler deploy`（Worker `onevideo-web`，静态资源 `web/site/`，`/v/*`、`/w/*`、`/feed.xml`、`/sitemap.xml`、`/robots.txt` 先过 `worker.mjs`）；`--force` 强制部署。发布节点上 `onevideo-web.timer` 每 10 分钟跑一次，`onevideo publish` 之后几分钟上站，节点之间不用手工搬文件。
 
 | 文件 | 内容 |
 |---|---|
@@ -88,7 +88,10 @@ commands                     → 以上任意
 | `drive.mjs` | 纯 fetch：`DriveLink`（登录、签名直链缓存 5 分钟、token 过期重登）、`proxyVideo`（透传 Range → 206/416，签名失效换链重试一次，Drive 出错 502；GET 时后台把整片灌进边缘缓存，≤200 MiB）。Worker 与 `tests/web-drive.test.mjs` 共用 |
 | `worker.mjs` | `/v/<slug>/video.mp4` 且已部署 `videos.json` 里该 slug 是 `source: "drive"` → 先查边缘缓存，否则按条目的 `drive` 路径 `proxyVideo`；`/w/<slug>` → `share.mjs` 改写的播放页（未知 slug 404）；其余走静态资源（边缘缓存补 206） |
 | `share.mjs` | 分享页：`/w/<slug>` 是 `site/index.html` 换上该视频的 `<title>`、description、Open Graph / Twitter 标签（海报、成片绝对地址、时长），贴进聊天能展开成视频卡片。纯字符串替换，`tests/web-share.test.mjs` 测。播放页按路径导航（`pushState`），旧链接 `/#slug@t` 仍可用 |
+| `feed.mjs` | `/feed.xml`（RSS 2.0：成片 enclosure、Media RSS 缩略图，guid = 分享页）、`/sitemap.xml`（首页 + 各分享页，Google video sitemap 标签）、`/robots.txt`（指向 sitemap；Cloudflare 区域的托管 robots 内容会被拼在前面）。按请求的 origin 从已部署 `videos.json` 现算，`tests/web-feed.test.mjs` 测 |
 | `secrets.mjs` | 把 `ONEVIDEO_DRIVE_USER/PASS` 和公网 API（`ONEVIDEO_WEB_DRIVE_URL`，默认 `https://api-drive.mangoqwq.com/api`）写成 Worker secret（`wrangler secret bulk`，经 stdin，不打印不落盘）；改密码后重跑 |
+
+播放页在 `localStorage`（`onevideo:pos:<slug>`）记每个视频看到哪（10s 到结尾前 15s 之间），回来时续播并给「从头播放」；`?t=` 链接优先。
 
 Worker 只代理 `videos.json` 列出的路径，不接受任意 Drive 路径。`web/site/.assetsignore` 排除点文件（同步戳 `.synced`、`.publish.json`）和 `description.txt`（已内联进 `videos.json`）。
 
