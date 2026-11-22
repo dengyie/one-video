@@ -35,13 +35,14 @@ function fakeDrive(files, { serve = (path, body) => body } = {}) {
 }
 
 // One project on the drive: its kit plus an archive record listing each file's sha.
-function project(slug, { publish, at = "2026-11-01T00:00:00Z", omit = [] } = {}) {
+function project(slug, { publish, at = "2026-11-01T00:00:00Z", omit = [], extra = {} } = {}) {
   const base = `/OneVideo/${slug}`;
   const kit = {
     "out/v3.mp4": "MP4DATA",
     "out/publish/poster.jpg": "JPEG",
     "out/publish/captions.vtt": "WEBVTT\n",
     "out/publish/description.txt": `${slug} 的简介`,
+    ...extra,
   };
   if (publish !== null) kit["plan/publish.json"] = JSON.stringify(publish ?? {
     title: `${slug} 标题`, summary: "一句话", duration: 42, video: "out/v3.mp4", poster: "out/publish/poster.jpg", rendered: "2026-10-30T08:00:00Z",
@@ -121,5 +122,29 @@ test("drive catalogue: a kit file missing from the archive record is reported, n
     const { videos, warns } = await run(fakeDrive(project("keeper", { omit: ["out/publish/captions.vtt"] })), { vdir });
     assert.deepEqual(videos, []);
     assert.match(warns.join("\n"), /captions\.vtt \(captions\) is not in the archive record yet/);
+  } finally { rmSync(vdir, { recursive: true, force: true }); }
+});
+
+test("drive catalogue: web renditions on the drive are listed highest first; one not uploaded yet is left out", async () => {
+  const vdir = mkdtempSync(join(tmpdir(), "ov-cat-"));
+  try {
+    const publish = {
+      title: "k", duration: 42, video: "out/v3.mp4", poster: "out/publish/poster.jpg",
+      renditions: [
+        { q: "480p", height: 480, kbps: 484, file: "out/publish/web-480p.mp4" },
+        { q: "1080p", height: 1080, kbps: 2528, file: "out/publish/web-1080p.mp4" },
+        { q: "720p", height: 720, kbps: 1196, file: "out/publish/web-720p.mp4" },
+        { q: "../x", height: 1, kbps: 1, file: "out/v3.mp4" },
+      ],
+    };
+    const extra = { "out/publish/web-480p.mp4": "W480", "out/publish/web-720p.mp4": "W720P" };
+    const drive = fakeDrive(project("keeper", { publish, extra }));
+    const { videos, warns } = await run(drive, { vdir });
+    assert.deepEqual(warns, []);
+    assert.deepEqual(videos[0].renditions, [
+      { q: "720p", height: 720, kbps: 1196, size: 5, video: `v/keeper/video-720p.mp4?v=${sha("W720P").slice(0, 12)}`, drive: "/OneVideo/keeper/out/publish/web-720p.mp4" },
+      { q: "480p", height: 480, kbps: 484, size: 4, video: `v/keeper/video-480p.mp4?v=${sha("W480").slice(0, 12)}`, drive: "/OneVideo/keeper/out/publish/web-480p.mp4" },
+    ]);
+    assert.ok(!drive.downloads.some((p) => p.endsWith(".mp4")), "renditions stay on the drive too");
   } finally { rmSync(vdir, { recursive: true, force: true }); }
 });

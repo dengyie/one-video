@@ -60,7 +60,7 @@ onevideo handoff [--lock …] [--next …]              # 交接页 → plan/han
 onevideo lib list|search|recipe <name> --id x --set k=v   # 音效 / Lottie / 镜头配方
 onevideo sheet [--fps 1] [--from s] [--to s] [--video v3] [--vs prev]   # 联系表 → out/qc/sheet-NN.jpg；--vs 新旧对比
 onevideo look [--focus "字幕可读性"] [--models a,b]   # 视觉模型看片 → out/qc/look.json
-onevideo qc | publish [--stems] [--formats 9:16,1:1] [--no-archive] | build [--draft] | doctor | decide <category> <subject> --selected X
+onevideo qc | publish [--stems] [--formats 9:16,1:1] [--no-web] [--no-archive] | build [--draft] | doctor | decide <category> <subject> --selected X
 onevideo archive [--dry] [--prune] [--keep 2] [--takeover]   # 上传到 MangoDrive，逐个回读 sha256 校验 → plan/archive.json；--prune 本地只留最近 2 版；Drive 上每个项目只归一台机器（记录 host），别处的副本不会覆盖，--takeover 改归本机
 onevideo archive --all [--in dir] [--prune]         # 目录下全部项目（跳过 10 分钟内刚写的文件）；VM 每晚由 systemd timer 跑
 onevideo restore [paths…] | restore <name> [--into dir]   # 从 MangoDrive 取回（校验 sha256）

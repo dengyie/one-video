@@ -1,13 +1,15 @@
 // The player's catalogue from MangoDrive (web/sync.mjs, drive source): every project at the drive
 // root whose archive record lists plan/publish.json and the cut it names. Poster, captions and
-// description come down into `vdir/<slug>/`, each checked against the record's sha256; the cut stays
-// on the drive (the Worker streams it, web/drive.mjs). `drive` is anything with list / readJson /
+// description come down into `vdir/<slug>/`, each checked against the record's sha256; the cut and
+// its web renditions (publish.json `renditions`, out/publish/web-*.mp4) stay on the drive and the
+// viewer's browser loads them from there (the Worker hands out signed links, web/drive.mjs). `drive` is anything with list / readJson /
 // download(remote, sink) → { sha256 } (cli/lib/archive/drive.mjs, or a fake in tests).
 import { createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { joinRemote } from "../cli/lib/archive/index.mjs";
 
 export const SLUG = /^[a-z0-9][a-z0-9-]*$/;
+export const QUALITY = /^\d{3,4}p$/;
 const KIT = { captions: "out/publish/captions.vtt", description: "out/publish/description.txt" };
 const LOCAL = { poster: "poster.jpg", captions: "captions.vtt", description: "description.txt" };
 
@@ -62,7 +64,13 @@ async function publishedEntry(drive, base, dst, slug, record, files, log) {
     writeFileSync(stamp, want);
     log(`↓ ${slug} (${pub.video}, ${(files[pub.video].size / 2 ** 20).toFixed(1)} MiB on the drive)`);
   } else log(`= ${slug}`);
+  // Tiers already on the drive, highest first; one listed but not uploaded yet waits for the next run.
+  const renditions = (Array.isArray(pub.renditions) ? pub.renditions : [])
+    .filter((r) => QUALITY.test(r?.q ?? "") && typeof r.file === "string" && files[r.file]?.sha256)
+    .map((r) => ({ q: r.q, height: Number(r.height) || null, kbps: Number(r.kbps) || null, size: files[r.file].size, v: files[r.file].sha256.slice(0, 12), drive: joinRemote(base, r.file) }))
+    .sort((a, b) => (b.height ?? 0) - (a.height ?? 0));
   return entry(slug, pub, {
+    renditions,
     size: files[pub.video].size,
     date: (pub.rendered ?? files[pub.video].at ?? record.at ?? new Date().toISOString()).slice(0, 10),
     v: files[pub.video].sha256.slice(0, 12),
@@ -83,9 +91,10 @@ async function fetchChecked(drive, base, rel, files, abs) {
   return readFileSync(abs, "utf8");
 }
 
-// One videos.json entry. `drive`: the cut's path on the drive (streamed by the Worker); without it
-// the cut is the static asset v/<slug>/video.mp4.
-export function entry(slug, pub, { size, date, v, description, drive }) {
+// One videos.json entry. `drive`: the cut's path on the drive (the Worker redirects to it); without
+// it the cut is the static asset v/<slug>/video.mp4. `renditions` (drive only): the lighter tiers the
+// player picks from, each at v/<slug>/video-<q>.mp4; the cut itself stays the download.
+export function entry(slug, pub, { size, date, v, description, drive, renditions = [] }) {
   return {
     slug,
     title: pub.title,
@@ -100,6 +109,7 @@ export function entry(slug, pub, { size, date, v, description, drive }) {
     captions: `v/${slug}/captions.vtt?v=${v}`,
     description,
     ...(drive ? { source: "drive", drive } : { source: "static" }),
+    ...(drive && renditions.length ? { renditions: renditions.map((r) => ({ q: r.q, height: r.height, kbps: r.kbps, size: r.size, video: `v/${slug}/video-${r.q}.mp4?v=${r.v}`, drive: r.drive })) } : {}),
   };
 }
 

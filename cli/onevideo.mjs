@@ -32,7 +32,7 @@ const COMMANDS = {
   look: [director.look, "look [--focus …] [--models a,b] [--passes 2] [--jobs 3] [--fps N] [--from s] [--to s] [--video v3|prev|file]   vision-model review of the render → out/qc/look.json"],
   studio: [render.studio, "studio [--port 3000]         Remotion Studio on this project"],
   qc: [render.qc, "qc [--video v3|prev|file]    post-render review → plan/review.json"],
-  publish: [render.publish, "publish [--force] [--stems] [--formats 9:16,1:1] [--no-archive]  SRT/VTT, chapters, description (+ stems, + other sizes with their captions) → out/publish/ (needs approved review); then archive when ONEVIDEO_DRIVE_URL is set"],
+  publish: [render.publish, "publish [--force] [--stems] [--formats 9:16,1:1] [--no-web] [--no-archive]  SRT/VTT, chapters, description, web renditions 1080p/720p/480p for the player site (+ stems, + other sizes with their captions) → out/publish/ (needs approved review); then archive when ONEVIDEO_DRIVE_URL is set"],
   stems: [render.stems, "stems [--only voice,music,sfx]  each sound group alone as WAV → out/publish/stems/"],
   build: [render.build, "build [--draft] [--concurrency N]   tts → music → media/depth → timeline → render → qc (then approve review, publish)"],
   lib: [library.lib, "lib list [--kind sfx|lottie] [--category c] | search <words> | import <candidates.json> | merge <catalog.json> | verify | recipe [<name> --id x --set k=v]"],
@@ -60,7 +60,7 @@ else if (!COMMANDS[cmd]) {
 } else {
   try {
     // render / build / depth / stills / preview / publish --formats go to a worker when ONEVIDEO_WORKERS is set (--local: run here).
-    if (!(await dispatch(cmd, rest))) await COMMANDS[cmd][0](parseArgs(rest, { booleans: ["force", "dry", "sample", "draft", "strict", "json", "stems", "full", "dark", "local", "write", "noLlm", "prune", "noArchive", "all", "noGenerate"] }));
+    if (!(await dispatch(cmd, rest))) await COMMANDS[cmd][0](parseArgs(rest, { booleans: ["force", "dry", "sample", "draft", "strict", "json", "stems", "full", "dark", "local", "write", "noLlm", "prune", "noArchive", "noWeb", "all", "noGenerate"] }));
   } catch (e) {
     console.error(`✗ ${e instanceof UserError ? e.message : e.stack ?? e.message}`);
     process.exitCode = 1;

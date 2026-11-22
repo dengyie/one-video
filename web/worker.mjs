@@ -12,9 +12,9 @@ import { SHARE, sharePage } from "./share.mjs";
 // - Everything else is a static asset. Workers static assets answer Range requests with a full 200,
 //   which iOS Safari refuses to play and which makes every seek re-download the file, so the first
 //   hit loads the asset into the colo's edge cache, and the cache answers Range with proper 206s.
-const VIDEO = /^\/v\/([a-z0-9][a-z0-9-]*)\/video\.mp4$/;
+const VIDEO = /^\/v\/([a-z0-9][a-z0-9-]*)\/video(?:-(\d{3,4}p))?\.mp4$/; // the cut, or a web rendition (video-720p.mp4)
 const INDEX_TTL = 60_000;
-let index = null; // { at, list, generatedAt, videos: Map<slug, videos.json entry>, drive: Map<slug, drive path> }
+let index = null; // { at, list, generatedAt, videos: Map<slug, videos.json entry>, drive: Map<slug | slug/<q>, drive path> }
 let link = null;
 const filling = new Set();
 
@@ -30,7 +30,7 @@ export default {
       return new Response(req.method === "HEAD" ? null : body, { headers: { "Content-Type": feed.type, "Cache-Control": "public, max-age=300", "X-Content-Type-Options": "nosniff" } });
     }
     const m = VIDEO.exec(url.pathname);
-    const path = m && (req.method === "GET" || req.method === "HEAD") ? (await catalogue(env)).drive.get(m[1]) : null;
+    const path = m && (req.method === "GET" || req.method === "HEAD") ? (await catalogue(env)).drive.get(m[2] ? `${m[1]}/${m[2]}` : m[1]) : null;
     if (path) {
       const relay = url.searchParams.get("via") === "edge";
       if (relay && req.method === "GET") {
@@ -59,7 +59,14 @@ async function catalogue(env) {
     const res = await env.ASSETS.fetch(new Request("https://assets.local/videos.json"));
     if (res.ok) ({ videos: list = [], generatedAt = null } = await res.json());
   } catch {}
-  const drive = new Map(list.filter((v) => v.source === "drive" && typeof v.drive === "string" && v.drive.startsWith("/")).map((v) => [v.slug, v.drive]));
+  // slug → the cut's drive path, "slug/720p" → that rendition's.
+  const drive = new Map();
+  const onDrive = (p) => typeof p === "string" && p.startsWith("/");
+  for (const v of list) {
+    if (v.source !== "drive" || !onDrive(v.drive)) continue;
+    drive.set(v.slug, v.drive);
+    for (const r of Array.isArray(v.renditions) ? v.renditions : []) if (/^\d{3,4}p$/.test(r?.q ?? "") && onDrive(r.drive)) drive.set(`${v.slug}/${r.q}`, r.drive);
+  }
   index = { at: Date.now(), list, generatedAt, videos: new Map(list.map((v) => [v.slug, v])), drive };
   return index;
 }

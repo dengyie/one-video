@@ -20,7 +20,8 @@ const store = new Map();
 globalThis.caches = { default: { match: async (r) => store.get(r.url)?.clone(), put: async (r, res) => store.set(r.url, res) } };
 const { default: worker } = await import("../web/worker.mjs");
 
-const videos = { generatedAt: "2026-11-22T00:00:00Z", videos: [{ slug: "keeper", source: "drive", drive: "/OneVideo/keeper/out/v4.mp4", video: "v/keeper/video.mp4?v=abc" }] };
+const videos = { generatedAt: "2026-11-22T00:00:00Z", videos: [{ slug: "keeper", source: "drive", drive: "/OneVideo/keeper/out/v4.mp4", video: "v/keeper/video.mp4?v=abc",
+  renditions: [{ q: "720p", drive: "/OneVideo/keeper/out/publish/web-720p.mp4", video: "v/keeper/video-720p.mp4?v=def" }, { q: "../x", drive: "/OneVideo/keeper/plan/archive.json" }] }] };
 const env = {
   DRIVE_URL: "https://drive.example/api", DRIVE_USER: "u", DRIVE_PASS: "p",
   ASSETS: { fetch: async (r) => (new URL(r.url).pathname === "/videos.json" ? Response.json(videos) : new Response("static", { status: 404 })) },
@@ -49,5 +50,14 @@ test("worker: a slug that is not on the drive is no door into it", async () => {
   const before = calls.length;
   const res = await get("/v/other/video.mp4");
   assert.notEqual(res.status, 302);
+  assert.ok(!calls.slice(before).some((u) => u.includes("/fs/get")));
+});
+
+test("worker: a web rendition redirects to its own file; an unlisted quality is not signed", async () => {
+  const res = await get("/v/keeper/video-720p.mp4?v=def");
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("Location"), "https://raw.example/d/OneVideo/keeper/out/publish/web-720p.mp4?sign=s:9999999999");
+  const before = calls.length;
+  for (const p of ["/v/keeper/video-480p.mp4", "/v/keeper/video-x.mp4", "/v/other/video-720p.mp4"]) assert.notEqual((await get(p)).status, 302, p);
   assert.ok(!calls.slice(before).some((u) => u.includes("/fs/get")));
 });

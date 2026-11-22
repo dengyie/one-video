@@ -44,6 +44,7 @@ header .count { color: var(--muted); font-size: 13px; margin-left: auto; }
 .meta h2 { font-size: 22px; line-height: 1.35; margin: 0 0 6px; font-weight: 700; }
 .sub { color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .summary { margin: 12px 0 0; max-width: 72ch; }
+.quality select { font: inherit; font-size: 12px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 0 4px; margin-left: 4px; }
 .resume button { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 footer a { color: inherit; }
 .chapters { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 4px; padding: 0; list-style: none; }
@@ -136,16 +137,17 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
     const saved = t == null ? loadPos(cur.slug) : null;
     const resume = saved != null && saved >= 10 && saved < cur.duration - 15 ? saved : null;
     let start = t ?? resume;
+    const tiers = cur.source === "drive" && Array.isArray(cur.renditions) ? cur.renditions : [];
     main.innerHTML = `
       <div class="player">
         <video id="vid" controls playsinline preload="metadata" poster="${esc(cur.poster)}">
-          <source src="${esc(cur.video)}" type="video/mp4">
+          <source ${tiers.length ? "" : `src="${esc(cur.video)}" `}type="video/mp4">
           <track kind="subtitles" srclang="zh" label="中文字幕（外挂）" src="${esc(cur.captions)}">
         </video>
       </div>
       <div class="meta">
         <h2>${esc(cur.title)}</h2>
-        <div class="sub"><span>${esc(cur.date)}</span><span>${fmt(cur.duration)}</span><span>${(cur.size / 1048576).toFixed(1)} MB</span>${resume != null ? `<span class="resume">从 ${fmt(resume)} 继续 · <button type="button" id="restart">从头播放</button></span>` : ""}</div>
+        <div class="sub"><span>${esc(cur.date)}</span><span>${fmt(cur.duration)}</span><span>${(cur.size / 1048576).toFixed(1)} MB</span>${tiers.length ? `<label class="quality">画质<select id="quality"></select></label>` : ""}${resume != null ? `<span class="resume">从 ${fmt(resume)} 继续 · <button type="button" id="restart">从头播放</button></span>` : ""}</div>
         ${cur.summary ? `<p class="summary">${esc(cur.summary)}</p>` : ""}
         ${cur.chapters.length ? `<ul class="chapters">${cur.chapters.map((c, i) => `<li><button data-i="${i}" data-t="${c.start}"><span class="t">${fmt(c.start)}</span>${esc(c.title)}</button></li>`).join("")}</ul>` : ""}
         <div class="actions"><a href="${esc(cur.video)}" download="${esc(cur.slug)}.mp4">下载 MP4</a><a href="${esc(cur.captions)}" download="${esc(cur.slug)}.vtt">字幕 VTT</a><a href="/w/${esc(cur.slug)}" id="share">复制链接</a></div>
@@ -159,17 +161,7 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
         </a>`).join("")}</div></section>` : ""}`;
 
     const vid = $("#vid");
-    // Drive videos load straight from MangoDrive (the Worker redirects); if that fails, relay once
-    // through the site (?via=edge), keeping the position and play state.
-    const source = vid.querySelector("source");
-    if (cur.source === "drive") source.addEventListener("error", () => {
-      if (source.src.includes("via=edge")) return;
-      const at = vid.currentTime, playing = !vid.paused;
-      if (at) vid.addEventListener("loadedmetadata", () => { vid.currentTime = at; }, { once: true });
-      source.src = cur.video + (cur.video.includes("?") ? "&" : "?") + "via=edge";
-      vid.load();
-      if (playing) vid.play().catch(() => {});
-    }, { once: true });
+    quality(cur, vid, tiers);
     const btns = [...main.querySelectorAll(".chapters button")];
     const starts = cur.chapters.map((c) => c.start);
     const mark = () => {
@@ -206,6 +198,82 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
       e.preventDefault();
       go(a.dataset.slug);
     }));
+  }
+
+  // Drive videos load straight from MangoDrive (the Worker redirects to a signed link). With web
+  // renditions the player picks a tier (abr.mjs): a quality picked by hand, else the last throughput
+  // estimate in this browser, else 720p; while playing it steps down when the buffer fills slower
+  // than playback or playback stalls, and remembers the estimate for the next video. If the direct
+  // link fails, the same file is relayed through the site once (?via=edge). Switching keeps the
+  // position and play state. The download link stays the full cut.
+  const QKEY = "onevideo:q", BWKEY = "onevideo:bw";
+  const stored = (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
+  const store = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+  const abrLib = import("/abr.mjs");
+  abrLib.catch(() => {}); // awaited (and its failure handled) in quality()
+  async function quality(cur, vid, tiers) {
+    const source = vid.querySelector("source");
+    let started = false, waitAt = null;
+    const load = (url) => {
+      const at = vid.currentTime, playing = !vid.paused && !vid.ended;
+      if (at) vid.addEventListener("loadedmetadata", () => { vid.currentTime = at; }, { once: true });
+      started = false; waitAt = null;
+      source.src = url;
+      vid.load();
+      if (playing) vid.play().catch(() => {});
+    };
+    if (cur.source === "drive") source.addEventListener("error", () => {
+      const url = source.getAttribute("src") ?? "";
+      if (url && !url.includes("via=edge")) load(url + (url.includes("?") ? "&" : "?") + "via=edge");
+    });
+    if (!tiers.length) return;
+    let abr = null;
+    try { abr = await abrLib; } catch {}
+    if (!vid.isConnected) return;
+    if (!abr) { load(cur.video); return; }
+    const sel = $("#quality");
+    const conn = navigator.connection ?? {};
+    const bw = stored(BWKEY);
+    let lastKbps = bw && Date.now() - bw.at < 7 * 864e5 ? bw.kbps : null;
+    let manual = stored(QKEY); // a tier's q, "src" (the full cut) or null (automatic)
+    if (manual !== "src" && !tiers.some((r) => r.q === manual)) manual = null;
+    const auto = () => abr.startTier(tiers, { kbps: lastKbps, downlink: conn.downlink, saveData: conn.saveData });
+    let i = manual === "src" ? -1 : manual ? tiers.findIndex((r) => r.q === manual) : auto();
+    const urlOf = (k) => (k < 0 ? cur.video : tiers[k].video);
+    const paint = () => {
+      sel.innerHTML = [`<option value="">自动${manual ? "" : ` · ${esc(tiers[i]?.q ?? "")}`}</option>`, ...tiers.map((r) => `<option value="${esc(r.q)}">${esc(r.q)}</option>`), `<option value="src">原画</option>`].join("");
+      sel.value = manual ?? "";
+    };
+    paint();
+    load(urlOf(i));
+    sel.addEventListener("change", () => {
+      manual = sel.value || null;
+      store(QKEY, manual);
+      const k = manual === "src" ? -1 : manual ? tiers.findIndex((r) => r.q === manual) : auto();
+      if (k !== i) { i = k; samples = []; load(urlOf(i)); }
+      paint();
+    });
+
+    let samples = [], cool = 0;
+    vid.addEventListener("playing", () => { started = true; waitAt = null; });
+    vid.addEventListener("waiting", () => { if (started && !vid.seeking) waitAt ??= performance.now(); });
+    vid.addEventListener("seeking", () => { samples = []; waitAt = null; });
+    const timer = setInterval(() => {
+      if (!vid.isConnected) { clearInterval(timer); return; }
+      if (vid.paused || i < 0) { samples = []; return; } // only while trying to play a tier
+      const t = vid.currentTime, now = performance.now();
+      let end = t;
+      for (let r = 0; r < vid.buffered.length; r++) if (vid.buffered.start(r) <= t + 0.5) end = Math.max(end, vid.buffered.end(r));
+      const dur = Number.isFinite(vid.duration) ? vid.duration : cur.duration;
+      if (end >= dur - 0.5) { samples = []; return; } // all loaded: nothing left to measure
+      samples.push({ at: now, end, ahead: end - t });
+      if (samples.length > 20) samples.shift();
+      const est = abr.estimate(samples, tiers[i].kbps);
+      if (est && est.rate > 0) { lastKbps = est.kbps; store(BWKEY, { kbps: Math.round(est.kbps), at: Date.now() }); }
+      if (manual || now < cool) return;
+      const k = abr.nextTier(tiers, i, est, { ahead: end - t, stalled: waitAt != null && now - waitAt > 3000 });
+      if (k !== i) { i = k; samples = []; cool = now + 8000; load(urlOf(i)); paint(); }
+    }, 1000);
   }
 
   // 文稿: the captions as a list grouped by chapter; the line being heard is lit and kept in view

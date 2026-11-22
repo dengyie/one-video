@@ -7,10 +7,11 @@ import { UserError, loadProject, pipelineDef, readJson, writeJson, log, warn, ON
 import { archiveProject, driveConfig } from "../lib/archive/index.mjs";
 import { productsHash, reviewSubject, stageStatus } from "../lib/core/state.mjs";
 import { checkProject, printIssues } from "../lib/review/check.mjs";
-import { REMOTION_BIN, TEMPLATE_DIR, requireRemotion, run, ffmpeg } from "../lib/core/ffmpeg.mjs";
+import { REMOTION_BIN, TEMPLATE_DIR, requireRemotion, run, ffmpeg, ffprobe } from "../lib/core/ffmpeg.mjs";
 import { runQc } from "../lib/vision/qc.mjs";
 import { aspectTag, DIMENSIONS, withAspect } from "../lib/timeline/index.mjs";
 import { buildPublishKit, posterTime, stemGroups } from "../lib/publish/kit.mjs";
+import { webRenditions } from "../lib/publish/web.mjs";
 import { toSrt, toVtt } from "../lib/captions/index.mjs";
 import { resolveApiKey, trustedKeyHost } from "../lib/core/http.mjs";
 import { ttsConfig } from "../lib/voice/tts.mjs";
@@ -275,6 +276,11 @@ export async function publish(args = {}) {
     kit.publish.poster = "out/publish/poster.jpg";
   } catch (e) {
     warn(`no poster frame (${String(e.message).split("\n")[0]}); the player site skips this video until publish makes one`);
+  }
+  // Lighter tiers of the cut for the player site (out/publish/web-*.mp4), archived with the kit.
+  if (!args.noWeb) {
+    try { kit.publish.renditions = await webRenditions({ root: project.root, main, dir, probe: ffprobe, encode: ffmpeg, log }); }
+    catch (e) { warn(`no web renditions (${String(e.message).split("\n")[0]}); the player site plays the full cut only`); }
   }
   writeJson(project.paths.publish, kit.publish);
   for (const w of kit.publish.warnings) warn(w);
