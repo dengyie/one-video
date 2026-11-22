@@ -12,7 +12,7 @@ OneVideo 把“做一条视频”拆成 11 个阶段。每个阶段都有一份�
 1. `onevideo status` 显示每个阶段的状态和下一步该读哪份导演文档。**每进入一个阶段，先读对应的 `stages/<id>.md`，再动手。**
 2. 创作阶段（research、proposal、script、assets、storyboard）由你写 JSON / Markdown，然后 `onevideo validate`，再把产物给用户看，用户确认后执行 `onevideo approve <stage>`。**不要替用户审批**，除非用户明确授权。
    - **素材先于分镜**：script 通过后先 `onevideo assets suggest`（按场景找授权候选）→ 挑选 → `assets fetch`，把下载好的素材给用户过目，通过后 `approve assets`，再按手里的素材写分镜。素材少，片子一定单薄：density 门控按“素材/分钟”卡（<4 报错、<8 警告，AI 生成的也计入）。
-   - **纯代码流水线 `graphics`**：没有 assets 阶段，`onevideo.json` 里 `drawn: true`。每一帧由代码绘制（kinetic、canvas、`tableau` 插画场景（天空海面灯塔船人物火雨闪电，分层视差镜头，适合讲故事）、图表、unit-grid、scale-compare、map、图标叠层，背景用 `aurora` / `particles` / `waves` / `grid` / `stars`），配程序化音乐和音效；drawn 门控把任何 `asset` 引用（场景、backdrop、叠层、canvas 图片）和 `background: "media"` 判为错误，density 门控不适用，`assets suggest/fetch` 直接拒绝。示例 `examples/graphics-demo`；讲故事看 `examples/keeper`。
+   - **纯代码流水线 `graphics`**：没有 assets 阶段，`onevideo.json` 里 `drawn: true`。每一帧由代码绘制（kinetic、canvas、`tableau` 插画场景（天空海面灯塔船人物火雨闪电，分层视差镜头，适合讲故事）、图表、unit-grid、scale-compare、map、图标叠层，背景用 `aurora` / `particles` / `waves` / `grid` / `stars`），配程序化音乐和音效；drawn 门控把任何 `asset` 引用（场景、backdrop、叠层、canvas 图片）和 `background: "media"` 判为错误，density 门控不适用，`assets suggest/fetch` 直接拒绝。示例 `examples/graphics-demo`；讲故事看 `examples/keeper`（海边）/ `examples/postman`（山里）。
    - **整片渲染前先过预览**：timeline 之后 `onevideo preview` 把每个场景的静帧铺成 `out/qc/preview-*.jpg`，给用户看，通过后 `approve preview`；未通过时 `render` 只允许 `--draft` / `--scenes`，`build` 停在 preview。layout 门控在这一步之前就会报出贴纸压字幕、出画、重叠、贴纸过小、大字或贴纸压住地图钉、钉标签、国名和航线标签（平面与地球仪）、推镜把字推出画面（图表、数字卡推过 1.1）。
 3. 非创作阶段由 CLI 执行：`tts`、`music`、`depth`、`timeline`、`preview`、`render`、`qc`，也可以用 `build` 一次跑到 qc（缺的素材自动下载，有 depth 工具时自动做深度图和亮度网格；preview 未审批时停在 preview）。`publish` 要求 review 已审批；配了 `ONEVIDEO_DRIVE_URL` 时 publish 结束后自动 `archive` 到 MangoDrive，播放站 vedio.mangoqwq.com 从 Drive 读发布记录（`publish.json` 的 `video` 指向版本文件、`out/publish/poster.jpg` 海报），定时同步上线。
 4. 结构按观众的问题排（proposal 写问题链，script 每个场景写 `question`）；画面按三条线分工：旁白解释、屏幕文字只放关键词、画面给证据（storyboard.md）。
@@ -40,7 +40,7 @@ OneVideo 把“做一条视频”拆成 11 个阶段。每个阶段都有一份�
 ## 命令
 
 ```bash
-onevideo init <dir> --pipeline data-explainer|documentary|shorts|promo|graphics [--style midnight-data] [--aspect 16:9] [--example spacex-motion|spacex-ipo|promo-demo|graphics-demo|keeper]
+onevideo init <dir> --pipeline data-explainer|documentary|shorts|promo|graphics [--style midnight-data] [--aspect 16:9] [--example spacex-motion|spacex-ipo|promo-demo|graphics-demo|keeper|postman]
 onevideo status | validate [--strict] | approve <stage> [--note …]
 onevideo tts [--sample|--dry|--force|--only a,b]   # 逐句合成 → plan/timings.json（含响度归一化）；tts.design 描述说话人 → 设计参考音 + 克隆朗读（去播音腔），tts.ref 克隆一段录音
 onevideo tts --audition ["描述1|描述2|…"]           # 试音：几种设计声音（或 tts.auditions）读同一句开场 → out/audition/voice-<k>.wav + 每条语速，选中的描述写进 tts.design
@@ -77,4 +77,4 @@ onevideo restore [paths…] | restore <name> [--into dir]   # 从 MangoDrive 取
 - 数据与授权：`references/data-integrity.md` · `references/licensing.md`
 - 质检：`references/qc-thresholds.md`
 - 代码架构（改 CLI 前先读）：`references/architecture.md`
-- 示例：`examples/spacex-motion/`（动效引擎示范，36s）· `examples/spacex-ipo/`（数据图表版，85s）· `examples/promo-demo/`（promo 流水线：capture 截图 + device 场景，20s）· `examples/graphics-demo/`（graphics 流水线：纯代码绘制，无素材，45s）· `examples/keeper/`（《守灯人》：tableau 讲故事，镜头 `on` 对准元素、inherit 场景间溶解、试音，50s）；`onevideo init demo --example spacex-motion`
+- 示例：`examples/spacex-motion/`（动效引擎示范，36s）· `examples/spacex-ipo/`（数据图表版，85s）· `examples/promo-demo/`（promo 流水线：capture 截图 + device 场景，20s）· `examples/graphics-demo/`（graphics 流水线：纯代码绘制，无素材，45s）· `examples/keeper/`（《守灯人》：tableau 讲故事，镜头 `on` 对准元素、inherit 场景间溶解、试音，50s）· `examples/postman/`（《山中邮差》：内陆世界——山脊、雾、小镇亮灯、松林、飞鸟、大雪，人沿山脊走，40s）；`onevideo init demo --example spacex-motion`

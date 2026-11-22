@@ -59,7 +59,7 @@
   - 镜头写 `on: "<元素 id>"` + `anchor`，不手算 x/y；人和物站到别的元素上用元素的 `on`/`anchor`。
   - 镜头停下时，灯塔、船、人不能被画框切一截（framing 门控），要么推近对准它，要么退开。
   - 站在悬崖上的东西（灯塔、小屋、人、火）要整个落在崖顶上，越过崖边就悬在海上（grounding 门控）。
-  - 不在海边的故事用内陆元素搭世界：`hills`（远山分层、`cap` 积雪）+ `fog` + `town`（关键帧推 `lit` 让窗灯一盏盏亮起）+ `trees` + `shore` 当前景地面，再加 `birds` `snow`；字段见 `references/scene-catalog.md`。
+  - 不在海边的故事用内陆元素搭世界：`hills`（远山分层、`cap` 积雪）+ `fog` + `town`（关键帧推 `lit` 让窗灯一盏盏亮起）+ `trees` + `shore` 当前景地面，再加 `birds` `snow`；人在山上走写 `on: "hills", anchor: "ridge"` 只给 x，脚下自动贴着脊线；参考 `examples/postman`（《山中邮差》），字段见 `references/scene-catalog.md`。
   - 旁白节奏靠 `tts.style` 写明“语速自然偏快、不拖音”，配音前先 `onevideo tts --audition` 试几种声音。
 
 ## 版面（layout 门控，timeline 时检查）

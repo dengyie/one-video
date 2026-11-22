@@ -1,8 +1,9 @@
 // Tableau props that name other elements instead of coordinates, resolved once their times are:
 // an element placed `on` another stands on one of its anchor points (the keeper on the lighthouse
 // gallery), and a camera key `on` an element (or several) is solved through the parallax so that
-// point lands where the key says — no hand-computed focus that drifts when a piece moves.
-import { BODIES, cameraFor, elementAt, elementGeometry, horizonAt, zoomToFit } from "../../../shared/tableau.mjs";
+// point lands where the key says — no hand-computed focus that drifts when a piece moves. On
+// hills an element stands on a ridgeline at its own x and keeps to it as it moves (`follow`).
+import { BODIES, KINDS, cameraFor, elementAt, elementGeometry, horizonAt, ridgeDepth, ridgeTop, stateAt, zoomToFit } from "../../../shared/tableau.mjs";
 import { r3 } from "./util.mjs";
 
 export const DEFAULT_FILL = 0.5;
@@ -24,6 +25,7 @@ export function resolveTableauRefs(props, { width, height }, errors, where) {
     const ok = target && target !== el && place(target, `element ${target.id}`);
     resolving.delete(el);
     if (!target || target === el) errors.push(`${where} ${label}: on "${el.on}" is not another element of this scene (solid ones: ${names()})`);
+    if (target && target !== el && ok && target.type === "hills") return onRidge(el, target, label);
     const g = target && target !== el && ok ? geometry(target, el.t ?? 0, label) : null;
     const p = g && anchorPoint(g, el.anchor, target.id, label);
     if (!p) { failed.add(el); return false; }
@@ -33,8 +35,24 @@ export function resolveTableauRefs(props, { width, height }, errors, where) {
     for (const k of ["on", "anchor", "dx", "dy"]) delete el[k];
     return true;
   };
+  // Standing on hills: the ridgeline (`anchor` ridge = the nearest, ridge0… far to near) at the
+  // element's own x; every keyframe that moves x gets the ridge's y there, and `follow` lets the
+  // renderer keep the feet on the crest between keys.
+  const onRidge = (el, hills, label) => {
+    const s = elementAt(hills, el.t ?? 0), n = Math.max(1, Math.round(s.layers ?? 1));
+    const m = /^ridge(\d*)$/.exec(el.anchor ?? "ridge"), k = m ? (m[1] === "" ? n - 1 : Number(m[1])) : -1;
+    if (k < 0 || k >= n) { errors.push(`${where} ${label}: "${hills.id}" has no anchor "${el.anchor}" (ridge = the nearest ridgeline, ridge0…ridge${n - 1} far to near)`); failed.add(el); return false; }
+    const dx = el.dx ?? 0, dy = el.dy ?? 0, at = (x) => r3(ridgeTop(s, k, x).y + dy);
+    el.depth ??= ridgeDepth(s, k);
+    el.x = r3((el.x ?? KINDS[el.type]?.x ?? 0.5) + dx);
+    el.y = at(el.x);
+    for (const key of el.to ?? []) if (typeof key.x === "number") { key.x = r3(key.x + dx); key.y ??= at(key.x); }
+    el.follow = { id: hills.id, k, dy };
+    for (const f of ["on", "anchor", "dx", "dy"]) delete el[f];
+    return true;
+  };
   const geometry = (el, t, label) => {
-    const g = elementGeometry(elementAt(el, t), { W: width, H: height, horizon: horizonAt(els, t) });
+    const g = elementGeometry(stateAt(el, els, t), { W: width, H: height, horizon: horizonAt(els, t) });
     if (!g) errors.push(`${where} ${label}: "${el.id}" (${el.type}) has no body to aim at (${BODIES.join(", ")} do)`);
     return g;
   };

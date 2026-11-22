@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ROOT, estimatedTimings } from "./helpers.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
+import { elementAt, ridgeTop, stateAt } from "../shared/tableau.mjs";
 import { resolveApiKey, viaApiBase, requireApiKey } from "../cli/lib/core/http.mjs";
 import { reviewSubject } from "../cli/lib/core/state.mjs";
 
@@ -274,6 +275,27 @@ test("keeper example: tableau refs resolve, the world joins by fade or dip, noth
   const hut = json(sbPath).scenes[0].props.elements.find((e) => e.id === "hut");
   assert.ok(hut.x < 0.27, `hut x ${hut.x}`);
   assert.doesNotMatch(ov(dir, "validate").stdout, /\[grounding\]/);
+});
+
+test("postman example: an inland world compiles clean, the walker keeps to the nearest ridge", async () => {
+  const dir = join(mkdtempSync(join(tmpdir(), "ov-cli-")), "postman");
+  assert.equal(ov(ROOT, "init", dir, "--example", "postman").status, 0);
+  const config = json(join(dir, "onevideo.json"));
+  writeFileSync(join(dir, "plan", "timings.json"), JSON.stringify(await estimatedTimings(json(join(dir, "plan", "script.json")), config)));
+  const r = ov(dir, "timeline", "--force");
+  const out = r.stdout + r.stderr;
+  assert.equal(r.status, 0, out);
+  assert.doesNotMatch(out, /\[(framing|grounding|drawn|cues|variety|schema:\w+)\]|continues one world/);
+  const tl = json(join(dir, "plan", "timeline.json"));
+  assert.ok(!JSON.stringify(tl.scenes).includes('"on":'));
+  const walk = tl.scenes.find((s) => s.id === "walk"), postman = walk.props.elements.find((e) => e.id === "postman");
+  const hills = walk.props.elements.find((e) => e.id === "hills");
+  assert.deepEqual(postman.follow, { id: "hills", k: hills.layers - 1, dy: 0 });
+  for (const t of [0, 4, 8]) {
+    const s = stateAt(postman, walk.props.elements, t);
+    assert.ok(Math.abs(s.y - ridgeTop(elementAt(hills, t), hills.layers - 1, s.x).y) < 1e-9, `t=${t}`);
+  }
+  for (const id of ["walk", "snow", "lights", "dawn"]) assert.ok(["fade", "dip"].includes(tl.scenes.find((s) => s.id === id).transitionIn.type), id);
 });
 
 test("init --pipeline graphics carries the drawn defaults", () => {

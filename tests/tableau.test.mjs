@@ -6,7 +6,7 @@ import {
   KIND_NAMES, PALETTES, bandDepth, bandFor, cameraAt, cameraMoving, elementAt, flashAt, flashTotal, lampLevel, layerView,
   mixHex, paletteAt, settledElement, tableauTimes, waveY, SEA_BANDS,
   boxOnScreen, cameraFor, elementGeometry, insideShare, onScreen, zoomToFit,
-  horizonAt, ridgeDepth, ridgeTop, townBlocks, treeRow, windowOn,
+  horizonAt, ridgeDepth, ridgeTop, stateAt, townBlocks, treeRow, windowOn,
 } from "../shared/tableau.mjs";
 import { resolveTableauRefs, boundaryTransition } from "../cli/lib/timeline/index.mjs";
 import { framingGate, groundingGate, rhythmGate } from "../cli/lib/review/gates.mjs";
@@ -201,6 +201,30 @@ test("tableau land: ridgelines recede into the haze, a town fills its spread, wi
   resolveTableauRefs(props, { width: 1920, height: 1080 }, errors, 'scene "s"');
   assert.deepEqual(errors, []);
   assert.ok(props.camera[0].zoom > 1);
+});
+
+test("tableau refs: a piece on hills stands on a ridgeline at its x and keeps to it as it walks", () => {
+  const hills = { id: "hills", type: "hills", layers: 3, rough: 0.6 };
+  const els = [hills, { id: "w", type: "figure", x: 0.2, t: 0, on: "hills", to: [{ t: 2, x: 0.7, dur: 4 }] }, { id: "far", type: "fire", x: 0.6, on: "hills", anchor: "ridge0", dy: 0.01 }];
+  const errors = [];
+  resolveTableauRefs({ elements: els }, { width: 1920, height: 1080 }, errors, 'scene "s"');
+  assert.deepEqual(errors, []);
+  const s = elementAt(hills, 0), [w, far] = [els[1], els[2]];
+  near(w.y, ridgeTop(s, 2, 0.2).y, 1e-3);
+  near(w.depth, ridgeDepth(s, 2));
+  assert.deepEqual(w.follow, { id: "hills", k: 2, dy: 0 });
+  near(w.to[0].y, ridgeTop(s, 2, 0.7).y, 1e-3);
+  assert.equal(w.on, undefined);
+  for (const t of [2.5, 3.3, 4.1, 5]) {
+    const st = stateAt(w, els, t);
+    near(st.y, ridgeTop(s, 2, st.x).y, 1e-9);
+  }
+  near(far.y, ridgeTop(s, 0, 0.6).y + 0.01, 1e-3);
+  near(far.depth, ridgeDepth(s, 0));
+  assert.equal(stateAt({ id: "x", type: "figure", y: 0.5 }, els, 1).y, 0.5);
+  const bad = (el) => { const e = []; resolveTableauRefs({ elements: [hills, el] }, { width: 1920, height: 1080 }, e, 'scene "s"'); return e.join("\n"); };
+  assert.match(bad({ id: "f", type: "figure", on: "hills", anchor: "ridge5" }), /no anchor "ridge5" \(ridge = the nearest ridgeline, ridge0…ridge2/);
+  assert.match(bad({ id: "f", type: "figure", on: "hills", anchor: "lamp" }), /no anchor "lamp"/);
 });
 
 test("tableau refs: elements stand on anchors, camera keys aim at elements, mistakes are errors", () => {

@@ -1,0 +1,12 @@
+{
+  "title": "山中邮差",
+  "summary": "一座只有一条山路的小镇，一个每周翻山送信的邮差，一场封山的大雪，一镇子为他点亮的灯。",
+  "scenes": [
+    { "id": "hook", "beat": "hook", "chapter": "山路", "question": "这是一个什么样的地方？", "narration": "山那边有个小镇，只有一条路，通向外面。" },
+    { "id": "walk", "beat": "setup", "chapter": "山路", "question": "谁走这条路？", "narration": "每个星期，邮差老周背着信，翻过三道山梁，走进镇子。" },
+    { "id": "snow", "beat": "turn", "chapter": "大雪", "question": "然后发生了什么？", "narration": "那年冬天，大雪封了山。路看不见了，天也黑了，他的马灯，只剩一点光。" },
+    { "id": "lights", "beat": "climax", "chapter": "灯", "question": "镇上的人做了什么？", "narration": "镇上的人，把家里所有的灯都点亮了。整座镇子，在山谷里亮成一片。老周，看见了。" },
+    { "id": "dawn", "beat": "landing", "chapter": "到了", "question": "后来呢？", "narration": "天亮的时候，老周走进了镇子。那一包信，一封也没少。" },
+    { "id": "credits", "beat": "credits" }
+  ]
+}

@@ -3,7 +3,7 @@ import { AbsoluteFill } from "remotion";
 import { useLayout, useScene, useTheme, useTime } from "../engine/context";
 import {
   SEA_BANDS, bandBase, bandDepth, bandFor, boltPath, cameraAt, cameraMoving, elementAt, flashAt, flashTotal, hash, lampLevel,
-  layerView, mixHex, noise, paletteAt, ridgeDepth, ridgeTop, townBlocks, treeRow, waveY, windowOn,
+  layerView, mixHex, noise, paletteAt, ridgeDepth, stateAt, ridgeTop, townBlocks, treeRow, waveY, windowOn,
 } from "../../../shared/tableau.mjs";
 
 // Tableau: an illustrated place drawn by code, in layers at their own depth — sky, stars, moon or
@@ -487,7 +487,7 @@ export const TableauScene: React.FC<Props> = ({ elements = [], camera = [] }) =>
   const id = `tb-${scene.id}`.replace(/[^a-zA-Z0-9_-]/g, "_");
   const cam = cameraAt(camera, t);
   const pal = paletteAt(elements, t);
-  const states = elements.map((el) => ({ el, s: elementAt(el, t) })).filter((x) => x.s.shown);
+  const states = elements.map((el) => ({ el, s: stateAt(el, elements, t) })).filter((x) => x.s.shown);
   const sea = states.find((x) => x.el.type === "sea")?.s;
   const hills = states.find((x) => x.el.type === "hills")?.s;
   const horizon = sea?.y ?? hills?.y ?? 0.66;
@@ -596,6 +596,11 @@ export const TableauScene: React.FC<Props> = ({ elements = [], camera = [] }) =>
             <stop offset="0.5" stopColor={pal.haze} stopOpacity={0.35} />
             <stop offset="1" stopColor={pal.haze} stopOpacity={0} />
           </linearGradient>
+          <linearGradient id={`${id}-flash`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={mixHex(pal.rim, "#ffffff", 0.6)} stopOpacity={1} />
+            <stop offset={hz.toFixed(3)} stopColor={mixHex(pal.rim, "#ffffff", 0.6)} stopOpacity={0.8} />
+            <stop offset="1" stopColor={mixHex(pal.rim, "#ffffff", 0.6)} stopOpacity={0.4} />
+          </linearGradient>
           <radialGradient id={`${id}-vignette`} cx="50%" cy="50%" r="75%">
             <stop offset="0.55" stopColor="#000" stopOpacity={0} />
             <stop offset="1" stopColor="#000" stopOpacity={0.6} />
@@ -607,8 +612,10 @@ export const TableauScene: React.FC<Props> = ({ elements = [], camera = [] }) =>
         {draws.filter((d) => d.depth >= bandDepth(0) - 0.05).map((d, i) => <g key={`f${i}`} transform={layerTransform(cam, d.depth, W, H)}>{d.node}</g>)}
         {rain && <Rain c={c} s={rain} />}
         {snow && <Snow c={c} s={snow} />}
-        {flash > 0.01 && <rect width={W} height={H} fill={mixHex(pal.rim, "#ffffff", 0.6)} opacity={flash * 0.42} />}
         <rect width={W} height={H} fill={`url(#${id}-vignette)`} />
+        {/* A strike lights the whole sky at once: over the vignette (under it the edges stay dark
+            and the flash reads as a bright ellipse), strongest at the top, the foreground less. */}
+        {flash > 0.01 && <rect width={W} height={H} fill={`url(#${id}-flash)`} opacity={flash * 0.42} />}
       </svg>
     </AbsoluteFill>
   );

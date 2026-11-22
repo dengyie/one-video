@@ -1,0 +1,130 @@
+{
+  "scenes": [
+    {
+      "id": "hook", "type": "tableau", "enter": "cut", "exit": { "type": "fade", "duration": 0.6 },
+      "intent": "开场：黄昏，镜头从天空落到层层山脊，山谷里雾慢慢流，一群鸟飞过；小镇亮着零星几扇窗；片名浮现又隐去",
+      "cues": { "town": "有个小镇", "road": "只有一条路", "out": "通向外面" },
+      "props": {
+        "elements": [
+          { "id": "sky", "type": "sky", "tone": "dusk" },
+          { "id": "stars", "type": "stars", "density": 0.5, "opacity": 0.5 },
+          { "id": "moon", "type": "moon", "x": 0.78, "y": 0.2, "r": 0.035 },
+          { "id": "hills", "type": "hills", "y": 0.6, "h": 0.26, "layers": 4, "rough": 0.7, "cap": 0.55 },
+          { "id": "fog", "type": "fog", "y": 0.7, "h": 0.08, "cover": 0.5 },
+          { "id": "town", "type": "town", "x": 0.62, "y": 0.8, "spread": 0.34, "size": 0.1, "count": 11, "lit": 0.25, "depth": 0.66 },
+          { "id": "pines", "type": "trees", "x": 0.13, "y": 0.92, "spread": 0.32, "count": 7, "size": 0.22, "depth": 0.86 },
+          { "id": "pines2", "type": "trees", "x": 0.93, "y": 0.93, "spread": 0.22, "count": 5, "size": 0.24, "depth": 0.88 },
+          { "id": "birds", "type": "birds", "x": 0.16, "y": 0.32, "count": 6, "speed": 0.03 },
+          { "id": "title", "type": "title", "text": "山 中 邮 差", "depth": 0.02, "y": 0.28, "size": 0.09, "at": 0.3, "fade": 1.4, "to": [{ "cue": "road", "dur": 1.2, "opacity": 0 }] }
+        ],
+        "camera": [
+          { "at": 0, "x": 0.5, "y": 0.22, "zoom": 1.1 },
+          { "cue": "town", "zoom": 1.45, "dur": 3, "on": "town" },
+          { "cue": "out", "x": 0.5, "y": 0.52, "zoom": 1.05, "dur": 3 }
+        ]
+      },
+      "hold": 0.5
+    },
+    {
+      "id": "walk", "type": "tableau", "enter": { "type": "fade", "duration": 0.6 },
+      "intent": "天黑下来，邮差提着马灯走在最近的一道山梁上，镜头贴着他走，再拉开看到前面的镇子",
+      "cues": { "mail": "背着信", "ridge": "三道山梁", "in": "走进镇子" },
+      "props": {
+        "inherit": true,
+        "elements": [
+          { "id": "title", "opacity": 0 },
+          { "id": "birds", "opacity": 0 },
+          { "id": "sky", "to": [{ "at": 0, "dur": 4, "tone": "night" }] },
+          { "id": "stars", "to": [{ "at": 0.5, "dur": 3, "opacity": 1, "density": 1 }] },
+          { "id": "postman", "type": "figure", "on": "hills", "anchor": "ridge", "x": 0.2, "size": 0.06, "lantern": 1, "facing": 1, "to": [{ "cue": "mail", "dur": 7, "x": 0.38 }] }
+        ],
+        "camera": [
+          { "at": 0, "zoom": 2.2, "on": "postman" },
+          { "cue": "ridge", "zoom": 1.8, "dur": 2.4, "on": "postman" },
+          { "cue": "in", "x": 0.5, "y": 0.6, "zoom": 1.2, "dur": 2.6 }
+        ]
+      },
+      "hold": 0.5
+    },
+    {
+      "id": "snow", "type": "tableau", "enter": { "type": "dip", "duration": 0.5 },
+      "intent": "转折：云压下来、大雪落下，山脊被雪盖白，雾漫上来，镇子的灯一扇扇灭了；邮差的马灯只剩一点光",
+      "cues": { "winter": "那年冬天", "seal": "大雪封了山", "dark": "天也黑了", "lamp": "只剩一点光" },
+      "props": {
+        "inherit": true,
+        "elements": [
+          { "id": "sky", "to": [{ "at": 0, "dur": 2.2, "tone": "storm" }] },
+          { "id": "stars", "to": [{ "at": 0, "dur": 1.6, "opacity": 0 }] },
+          { "id": "moon", "to": [{ "at": 0, "dur": 1.4, "opacity": 0 }] },
+          { "id": "clouds", "type": "clouds", "cover": 0, "y": 0.2, "to": [{ "at": 0, "dur": 2.4, "cover": 0.95, "speed": 0.05 }] },
+          { "id": "snowfall", "type": "snow", "intensity": 0, "wind": 0.4, "to": [{ "cue": "seal", "dur": 1.6, "intensity": 1 }] },
+          { "id": "hills", "to": [{ "cue": "seal", "dur": 3, "cap": 1 }] },
+          { "id": "fog", "to": [{ "cue": "seal", "dur": 3, "cover": 0.95, "h": 0.16 }] },
+          { "id": "pines", "to": [{ "cue": "winter", "dur": 2, "wind": 0.8 }] },
+          { "id": "pines2", "to": [{ "cue": "winter", "dur": 2, "wind": 0.8 }] },
+          { "id": "town", "to": [{ "cue": "dark", "dur": 1.2, "lit": 0 }] },
+          { "id": "postman", "x": 0.42, "to": [{ "at": 0, "dur": 6, "x": 0.5 }, { "cue": "lamp", "dur": 1.4, "lantern": 0.25 }] }
+        ],
+        "camera": [
+          { "at": 0, "x": 0.5, "y": 0.5, "zoom": 1.15, "sway": 0.4, "cut": true },
+          { "cue": "seal", "x": 0.5, "y": 0.55, "zoom": 1.3, "dur": 3, "sway": 0.8 },
+          { "cue": "lamp", "zoom": 2.4, "dur": 2.4, "sway": 0.5, "on": "postman" }
+        ]
+      },
+      "hold": 0.8
+    },
+    {
+      "id": "lights", "type": "tableau", "enter": { "type": "fade", "duration": 0.4 },
+      "intent": "高潮：镇子的窗一扇扇亮起来，亮成一片，雪小了；镜头从镇子拉开，越过山谷找到山梁上那一点马灯",
+      "cues": { "people": "镇上的人", "all": "所有的灯都点亮了", "valley": "亮成一片", "see": "看见了" },
+      "props": {
+        "inherit": true,
+        "elements": [
+          { "id": "town", "to": [{ "cue": "all", "dur": 3.2, "lit": 1 }] },
+          { "id": "snowfall", "to": [{ "cue": "valley", "dur": 3, "intensity": 0.45 }] },
+          { "id": "fog", "to": [{ "cue": "valley", "dur": 3, "cover": 0.6, "h": 0.1 }] },
+          { "id": "postman", "to": [{ "cue": "see", "dur": 0.6, "lantern": 0.8 }] }
+        ],
+        "camera": [
+          { "at": 0, "zoom": 1.7, "sway": 0.3, "on": "town" },
+          { "cue": "people", "zoom": 2, "dur": 2, "sway": 0.3, "on": "town" },
+          { "cue": "valley", "x": 0.5, "y": 0.58, "zoom": 1.05, "dur": 3.4, "sway": 0.3 },
+          { "cue": "see", "zoom": 2, "dur": 2.2, "on": "postman" }
+        ]
+      },
+      "hold": 1
+    },
+    {
+      "id": "dawn", "type": "tableau", "enter": { "type": "dip", "duration": 1 },
+      "intent": "收束：天亮，雪停，太阳从山后升起，鸟又飞回来；邮差走下山梁、走进镇子，镜头慢慢拉开",
+      "cues": { "day": "天亮的时候", "in": "走进了镇子", "all": "一封也没少" },
+      "props": {
+        "inherit": true,
+        "elements": [
+          { "id": "sky", "to": [{ "at": 0, "dur": 0.01, "tone": "dawn" }] },
+          { "id": "clouds", "cover": 0.3, "speed": 0.01 },
+          { "id": "snowfall", "intensity": 0 },
+          { "id": "fog", "cover": 0.45, "h": 0.08 },
+          { "id": "pines", "wind": 0.2 },
+          { "id": "pines2", "wind": 0.2 },
+          { "id": "town", "lit": 0.5, "to": [{ "cue": "all", "dur": 3, "lit": 0.2 }] },
+          { "id": "sun", "type": "sun", "x": 0.3, "y": 0.62, "r": 0.05, "to": [{ "cue": "day", "dur": 8, "y": 0.42 }] },
+          { "id": "birds", "opacity": 1, "x": 0.7, "y": 0.3, "facing": -1, "cue": "all", "fade": 1 },
+          { "id": "postman", "opacity": 0 },
+          { "id": "zhou", "type": "figure", "x": 0.4, "y": 0.92, "size": 0.16, "depth": 0.8, "lantern": 0, "facing": 1, "to": [{ "cue": "in", "dur": 4, "x": 0.52 }] }
+        ],
+        "camera": [
+          { "at": 0, "x": 0.42, "y": 0.62, "zoom": 1.3 },
+          { "cue": "in", "zoom": 1.4, "dur": 3.2, "on": "town" },
+          { "cue": "all", "x": 0.5, "y": 0.5, "zoom": 1, "dur": 4 }
+        ]
+      },
+      "hold": 1.6
+    },
+    {
+      "id": "credits", "type": "title", "background": "stars", "enter": { "type": "dip", "duration": 1.2 }, "duration": 4.5,
+      "intent": "片尾：故事名和制作说明，音乐在主和弦上收尾",
+      "props": { "kicker": "一个关于灯的小故事", "title": "山中邮差", "subtitle": "OneVideo · 纯代码绘制 · 程序化叙事配乐" }
+    }
+  ]
+}

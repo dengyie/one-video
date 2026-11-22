@@ -100,6 +100,16 @@ export function elementAt(el, t) {
   const enter = el.settled || start <= 0 ? 1 : easeInOut(clamp01((t - start) / (el.fade ?? 0.8)));
   return { ...s, palette, enter, shown: t >= start || el.settled === true };
 }
+/**
+ * elementAt within its scene: a piece the compiler set on a ridgeline (`follow` {id, k, dy})
+ * keeps its feet on that crest wherever its x has got to.
+ * @param {any} el @param {any[]} elements @param {number} t
+ */
+export function stateAt(el, elements, t) {
+  const s = elementAt(el, t), f = s.follow;
+  const hills = f && elements.find((e) => e.id === f.id && e.type === "hills");
+  return hills ? { ...s, y: ridgeTop(elementAt(hills, t), f.k, s.x).y + (f.dy ?? 0) } : s;
+}
 /** @param {any} o */
 function strip(o) {
   const { to: _to, at: _at, cue: _cue, t: _t, dur: _dur, fade: _fade, settled: _s, strikes: _k, ...rest } = o;
