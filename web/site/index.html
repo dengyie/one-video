@@ -213,11 +213,12 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
   abrLib.catch(() => {}); // awaited (and its failure handled) in quality()
   async function quality(cur, vid, tiers) {
     const source = vid.querySelector("source");
-    let started = false, waitAt = null;
+    let started = false, waitAt = null, settling = false;
+    vid.addEventListener("canplay", () => { settling = false; });
     const load = (url) => {
       const at = vid.currentTime, playing = !vid.paused && !vid.ended;
       if (at) vid.addEventListener("loadedmetadata", () => { vid.currentTime = at; }, { once: true });
-      started = false; waitAt = null;
+      started = false; waitAt = null; settling = true;
       source.src = url;
       vid.load();
       if (playing) vid.play().catch(() => {});
@@ -261,12 +262,12 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
     // asking for the new range; on a lighter tier over a slow link that is most of the file (45 s of
     // 480p at 40 KB/s took 45 s to land). When the gap would take more than a few seconds to fill
     // at the measured rate, reload at the target: the index is at the front, so that is two short
-    // requests. Skipped while a load is still settling (readyState < 2), which also stops it
+    // requests. Skipped while a load is still settling (until canplay), which also stops it
     // re-firing on the position restored after its own reload.
     let lastRate = null;
     vid.addEventListener("seeking", () => {
       samples = []; waitAt = null;
-      if (i < 0 || vid.readyState < 2) return;
+      if (i < 0 || settling) return;
       const t = vid.currentTime;
       let end = null;
       for (let r = 0; r < vid.buffered.length; r++) {
