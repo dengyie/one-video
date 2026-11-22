@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { request, requireApiKey, pool } from "../core/http.mjs";
-import { parseWav, readWav, toMono, trimSilence, concatWithGaps, findPauses, writeWav } from "../audio/wav.mjs";
+import { parseWav, readWav, toMono, trimSilence, concatWithGaps, findPauses, timeStretch, writeWav } from "../audio/wav.mjs";
 import { speakable, spokenLength } from "../core/text.mjs";
 import { sceneLines } from "../captions/lines.mjs";
 import { log, UserError } from "../core/project.mjs";
@@ -34,11 +34,39 @@ export const TTS_DEFAULTS = {
   designText: "那天晚上，风一阵比一阵紧。我站在窗边，看着远处那点灯光，忽明忽暗的……说实话，我心里也没底。可是天总会亮的，对吧？",
 };
 
+// Pace applied after synthesis (pitch kept): a designed or cloned voice takes its pace from the
+// speaker it imitates, and a style hint barely moves it. `tempo: "auto"` measures every scene and,
+// when one falls outside the rate band, speeds the narration up (or slows it down) by one factor
+// for the whole film, within these limits; a number applies that factor as is.
+export const TEMPO_RANGE = [0.8, 1.5];
+const AUTO_TEMPO = [0.85, 1.35];
+const BAND = [3.5, 6.2]; // the rate gate's default syllablesPerSec
+
+// The tempo marks the timing hashes (so changing it re-times the captions) but not the cached
+// synthesis, which stays the voice's own pace.
+const tempoTag = (t) => (t.tempo === undefined || t.tempo === 1 ? "" : t.tempo === "auto" ? "~tauto" : `~t${Math.round(t.tempo * 100)}`);
+
+// The single factor "auto" applies, from each scene's syllables/s: lifts the slowest scene just
+// inside the band floor without pushing the fastest past the ceiling (or, when one is crowded and
+// none slow, the reverse); a narration already inside is left alone.
+export function autoTempo(rates, [lo, hi] = BAND) {
+  const r = (Array.isArray(rates) ? rates : [rates]).filter((x) => x > 0);
+  if (!r.length) return 1;
+  const slowest = Math.min(...r), fastest = Math.max(...r);
+  let f = 1;
+  if (slowest < lo) f = Math.max(1, Math.min((lo * 1.04) / slowest, (hi * 0.97) / fastest));
+  else if (fastest > hi) f = Math.min(1, Math.max((hi * 0.96) / fastest, (lo * 1.03) / slowest));
+  return Math.round(Math.min(AUTO_TEMPO[1], Math.max(AUTO_TEMPO[0], f)) * 100) / 100;
+}
+
 const sha = (...parts) => createHash("sha1").update(parts.join("\u0001")).digest("hex").slice(0, 12);
 
 export function ttsConfig(config) {
   const t = { ...TTS_DEFAULTS, ...(config.tts ?? {}) };
   t.pause = { ...TTS_DEFAULTS.pause, ...(config.tts?.pause ?? {}) };
+  if (t.tempo !== undefined && t.tempo !== "auto" && !(typeof t.tempo === "number" && t.tempo >= TEMPO_RANGE[0] && t.tempo <= TEMPO_RANGE[1])) {
+    throw new UserError(`tts.tempo: "auto" or a factor ${TEMPO_RANGE.join("–")} (1.15 = 15% faster), not ${JSON.stringify(t.tempo)}`);
+  }
   // A cloned voice: the clone model speaks, and the voice is named by its reference so changing
   // the description (or pointing at another recording) re-synthesizes every scene.
   if (t.design || t.ref) {
@@ -71,8 +99,9 @@ export function sceneSpeech(scene, config, lexicon) {
 export function timingHashes(scene, config, lexicon) {
   const t = ttsConfig(config);
   const { lines, speak } = sceneSpeech(scene, config, lexicon);
-  if (t.unit === "line") return lines.map((l) => lineHash(l.speak, t));
-  const h = lineHash(speak, t);
+  const tag = tempoTag(t);
+  if (t.unit === "line") return lines.map((l) => lineHash(l.speak, t) + tag);
+  const h = lineHash(speak, t) + tag;
   return lines.map((_, i) => `${h}.${i}`);
 }
 
@@ -201,7 +230,7 @@ export async function runTts(project, script, { force = false, only = [], dry = 
     const lineJobs = lines.map((l, i) => ({ scene: scene.id, text: l.text, speak: l.speak, hash: hashes[i], pause: l.pause }));
     // One synthesis unit per scene, or per line.
     const units = !lines.length ? [] : t.unit === "line"
-      ? lineJobs.map((l) => ({ scene: scene.id, label: l.text, speak: l.speak, file: join(paths.linesDir, `${l.hash}.wav`) }))
+      ? lineJobs.map((l) => ({ scene: scene.id, label: l.text, speak: l.speak, file: join(paths.linesDir, `${lineHash(l.speak, t)}.wav`) }))
       : [{ scene: scene.id, label: `${lines.length} line(s), ${spokenLength(speak)} syllables`, speak, file: join(paths.linesDir, `${lineHash(speak, t)}.wav`) }];
     // --only limits synthesis to those scenes; the others must already be cached.
     const selected = only.length === 0 || only.includes(scene.id);
@@ -235,12 +264,20 @@ export async function runTts(project, script, { force = false, only = [], dry = 
   if (uncached.length) throw new UserError(`${uncached.length} ${t.unit}(s) outside --only are not synthesized yet (first: scene "${uncached[0].scene}"); run: onevideo tts`);
 
   const out = { sampleRate: t.sampleRate, voice: { model: t.model, voice: t.voice, protocol: t.protocol, unit: t.unit, ...(t.design && { design: t.design }) }, scenes: {} };
+  const clipsById = {};
+  for (const s of scenes) if (s.lines.length) clipsById[s.id] = s.units.map((u) => trimSilence(toMono(readWav(u.file), t.sampleRate), t.sampleRate));
+  const tempo = t.tempo === "auto" ? autoTempo(sceneRates(scenes, clipsById, t), config.gates?.syllablesPerSec) : t.tempo ?? 1;
+  if (tempo !== 1) {
+    for (const id of Object.keys(clipsById)) clipsById[id] = clipsById[id].map((c) => timeStretch(c, t.sampleRate, tempo));
+    log(`  tempo ×${tempo}${t.tempo === "auto" ? " (auto: the voice's own pace is outside the rate band)" : ""}`);
+  }
+  if (tempo !== 1) out.voice.tempo = tempo;
   const joinedById = {};
   const spansById = {};
   for (const s of scenes) {
     if (!s.lines.length) continue;
     const lead = new Float32Array(Math.round(t.leadIn * t.sampleRate));
-    const clips = s.units.map((u) => trimSilence(toMono(readWav(u.file), t.sampleRate), t.sampleRate));
+    const clips = clipsById[s.id];
     if (t.unit === "line") {
       const gaps = s.lines.map((l, i) => (i === s.lines.length - 1 ? t.tail : t.pause[l.pause] ?? t.pause.sentence));
       const joined = concatWithGaps([lead, ...clips], [0, ...gaps], t.sampleRate);
@@ -283,3 +320,23 @@ export async function runTts(project, script, { force = false, only = [], dry = 
 }
 
 const round = (x) => Math.round(x * 1000) / 1000;
+
+// Each scene's syllables per second as the rate gate counts them (caption text over the speech
+// each line spans): line unit times each clip, scene unit places the lines on the scene's pauses.
+function sceneRates(scenes, clipsById, t) {
+  const rates = [];
+  for (const s of scenes) {
+    const clips = clipsById[s.id];
+    if (!clips) continue;
+    const chars = s.lines.reduce((n, l) => n + spokenLength(l.text), 0);
+    let speech;
+    if (t.unit === "line") speech = clips.reduce((n, c) => n + c.length / t.sampleRate, 0);
+    else {
+      const dur = clips[0].length / t.sampleRate;
+      const spans = alignLines(s.lines.map((l) => Math.max(1, spokenLength(l.speak))), dur, findPauses(clips[0], t.sampleRate), s.lines.map((l) => l.pause));
+      speech = spans.reduce((n, [a, b]) => n + (b - a), 0);
+    }
+    if (speech > 0) rates.push(chars / speech);
+  }
+  return rates;
+}

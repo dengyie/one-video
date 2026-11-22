@@ -30,7 +30,7 @@ function sampleScene(script, config) {
 const measuredRate = (s) => s.lines.reduce((n, l) => n + spokenLength(l.text), 0) / Math.max(0.1, s.lines.reduce((n, l) => n + l.end - l.start, 0));
 
 // Candidate voices for an audition: --audition "描述1|描述2", else tts.auditions (strings, or
-// { design, style } when a take also tries another delivery).
+// { design, style, designText } when a take also tries another delivery or reference script).
 export function auditionTakes(arg, config) {
   const raw = typeof arg === "string" ? arg.split("|") : config.tts?.auditions ?? [];
   const takes = raw.map((a) => (typeof a === "string" ? { design: a.trim() } : { ...a, design: String(a.design ?? "").trim() })).filter((a) => a.design);
@@ -74,7 +74,7 @@ async function audition(project, script, args) {
   for (const [i, take] of takes.entries()) {
     const k = i + 1;
     const { ref: _ref, auditions: _a, ...base } = config.tts ?? {};
-    const tts = { ...base, protocol: "chat", design: take.design, ...(take.style !== undefined && { style: take.style }) };
+    const tts = { ...base, protocol: "chat", design: take.design, ...(take.style !== undefined && { style: take.style }), ...(take.designText !== undefined && { designText: take.designText }) };
     log(`take ${k}/${takes.length}: ${take.design}`);
     const res = await runTts({ ...project, config: { ...config, tts } }, { ...script, scenes: [sample] }, { force: Boolean(args.force) });
     const s = res.scenes._sample;
@@ -83,9 +83,9 @@ async function audition(project, script, args) {
     rmSync(join(paths.audioDir, "_sample.wav"), { force: true });
     const rate = measuredRate(s);
     line ||= s.lines.map((l) => l.text).join(" / ");
-    report.push({ take: k, design: take.design, ...(tts.style && { style: tts.style }), file: `out/audition/voice-${k}.wav`, duration: s.duration, rate: Math.round(rate * 10) / 10 });
-    const pace = rate < lo ? " — slow: ask for pace in style" : rate > hi ? " — crowded" : "";
-    log(`  out/audition/voice-${k}.wav (${s.duration.toFixed(2)}s, ${rate.toFixed(1)} syllables/s${pace})`);
+    report.push({ take: k, design: take.design, ...(tts.style && { style: tts.style }), ...(take.designText && { designText: take.designText }), file: `out/audition/voice-${k}.wav`, duration: s.duration, rate: Math.round(rate * 10) / 10, ...(res.voice.tempo && { tempo: res.voice.tempo }) });
+    const pace = rate < lo ? (tts.tempo === "auto" ? " — slow even with tempo auto" : " — slow: tts.tempo \"auto\" would speed it up") : rate > hi ? " — crowded" : "";
+    log(`  out/audition/voice-${k}.wav (${s.duration.toFixed(2)}s, ${rate.toFixed(1)} syllables/s${res.voice.tempo ? ` at ×${res.voice.tempo}` : ""}${pace})`);
   }
   writeJson(join(dir, "auditions.json"), { line, takes: report });
   log(`listen to out/audition/voice-*.wav, put the winner's description in tts.design, then run: onevideo tts`);

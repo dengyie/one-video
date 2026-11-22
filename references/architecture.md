@@ -34,8 +34,8 @@ engine/Video · engine/Captions              挂场景的只有 Video；二者�
 |---|---|---|
 | `core/` | 项目加载与路径、参数解析、HTTP（重试、密钥）、ffmpeg、JSON Schema、阶段状态、文本度量（视觉宽度、朗读音节、读音规则、数字提取）、重活派发到 worker（`ONEVIDEO_WORKERS`）、授权白名单（门控与检索共用） | `project.mjs` `http.mjs` `ffmpeg.mjs` `text.mjs` `worker.mjs` `license.mjs` |
 | `captions/` | 字幕：旁白切行（`splitLines` `sceneLines` `captionMaxChars`）、字幕带位置与主体避让（`captionBand` `placeCaptions`）、SRT/VTT（`toSrt` `toVtt`）、宽度门禁（`captionGate`） | `index.mjs` |
-| `voice/` | 配音：TTS 请求、按停顿对齐字幕行、响度归一；其他画幅的字幕时间（`variant.mjs`：同一段场景音频，窄画幅的短行按主时间轴的停顿与朗读占比重排，无需 key） | `tts.mjs` `variant.mjs` |
-| `audio/` | WAV 读写、响度、程序化音乐与音效、节拍检测 | `wav` `loudness` `synth` `beats` |
+| `voice/` | 配音：TTS 请求、按停顿对齐字幕行、合成后变速（`tts.tempo`：`"auto"` 按各场景实测语速取一个倍率，把最慢的场景拉进 rate 区间，只进时间轴哈希、不动合成缓存）、响度归一；其他画幅的字幕时间（`variant.mjs`：同一段场景音频，窄画幅的短行按主时间轴的停顿与朗读占比重排，无需 key） | `tts.mjs` `variant.mjs` |
+| `audio/` | WAV 读写、保音高变速（`timeStretch`，WSOLA）、响度、程序化音乐与音效、节拍检测 | `wav` `loudness` `synth` `beats` |
 | `library/` | 本地素材库（音效 / Lottie / 配方）、图标、国家地图 | `catalog` `icons` `geo` |
 | `llm/` | 模型客户端：`ask`（文本 + 图片，JSON 回复解析、模型回退） | `client.mjs` |
 | `prompts/` | 所有发给模型的提示词，一个提示词一个纯函数（数据进、字符串出） | `index.mjs` |

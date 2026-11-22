@@ -119,3 +119,46 @@ export function findPauses(mono, sampleRate, { minMs = 90, relative = 0.04, floo
   }
   return out;
 }
+
+// Change the pace of speech without changing its pitch (WSOLA): 30 ms Hann frames laid down at a
+// fixed hop, each read from where the faster (or slower) clock says it should start, nudged up to
+// ±10 ms to the offset that best continues the frame before it, so the waveform stays in phase.
+// `factor` > 1 speaks faster (the clip gets shorter by that factor).
+export function timeStretch(mono, sampleRate, factor) {
+  if (!(factor > 0) || Math.abs(factor - 1) < 1e-3 || mono.length === 0) return mono;
+  const N = 2 * Math.round(sampleRate * 0.015);
+  const hop = N / 2;
+  const tol = Math.round(sampleRate * 0.01);
+  const win = new Float32Array(N);
+  for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N);
+  const outLen = Math.max(1, Math.round(mono.length / factor));
+  const out = new Float32Array(outLen + N);
+  const weight = new Float32Array(outLen + N);
+  const at = (i) => (i >= 0 && i < mono.length ? mono[i] : 0);
+  let prev = 0; // where the last frame was read from
+  for (let k = 0; k * hop < outLen; k++) {
+    const nominal = Math.round(k * hop * factor);
+    let start = nominal;
+    if (k > 0) {
+      // The natural continuation of the previous frame; pick the read offset most like it.
+      const ref = prev + hop;
+      let best = -Infinity;
+      for (let d = -tol; d <= tol; d += 2) {
+        const s = nominal + d;
+        if (s < 0) continue;
+        let c = 0;
+        for (let j = 0; j < N; j += 4) c += at(s + j) * at(ref + j);
+        if (c > best) { best = c; start = s; }
+      }
+    }
+    const o = k * hop;
+    for (let j = 0; j < N; j++) {
+      out[o + j] += win[j] * at(start + j);
+      weight[o + j] += win[j];
+    }
+    prev = start;
+  }
+  const res = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i++) res[i] = weight[i] > 1e-3 ? out[i] / weight[i] : out[i];
+  return res;
+}

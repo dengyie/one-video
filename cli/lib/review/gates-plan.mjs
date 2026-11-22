@@ -171,7 +171,9 @@ export function rateGate(script, timings, config) {
     const slow = rate < g.syllablesPerSec[0];
     const worst = t.lines.reduce((a, l) => ((slow ? lineRate(l) < lineRate(a) : lineRate(l) > lineRate(a)) ? l : a));
     const lever = slow
-      ? `the voice drags — ask for pace in tts.style (e.g. "自然口语，语速偏快，不拖音"), drop ……/—— that stretch pauses, then onevideo tts --sample`
+      ? config.tts?.tempo === "auto"
+        ? `the voice drags even after tts.tempo "auto" (×${timings.voice?.tempo ?? 1}: capped at ×1.35, or held back so the fastest scene stays under ${g.syllablesPerSec[1]}) — pick a brisker speaker (onevideo tts --audition), tighten the slow line, drop ……/—— that stretch pauses`
+        : `the voice drags — set tts.tempo "auto" (speeds the narration into the band, pitch kept) or a factor like 1.2; a designed voice keeps its speaker's pace whatever tts.style says; drop ……/—— that stretch pauses`
       : "too crowded to follow — cut words or split the scene, or ask for a calmer pace in tts.style";
     out.push(issue("warn", "rate", `scene "${s.id}" speaks ${rate.toFixed(1)} syllables/s (expected ${g.syllablesPerSec.join("–")}; "${worst.text}" ${lineRate(worst).toFixed(1)}/s): ${lever}`));
   }

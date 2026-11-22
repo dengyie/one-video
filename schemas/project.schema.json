@@ -162,7 +162,7 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": ["design"],
-                "properties": { "design": { "type": "string", "minLength": 4 }, "style": { "type": "string" } }
+                "properties": { "design": { "type": "string", "minLength": 4 }, "style": { "type": "string" }, "designText": { "type": "string", "minLength": 4 } }
               }
             ]
           }
@@ -185,6 +185,10 @@
         "style": {
           "description": "Delivery direction for the voice (tone, pace, emphasis). Sent as the chat user turn, or as instructions with protocol speech.",
           "type": "string"
+        },
+        "tempo": {
+          "description": "pace applied after synthesis, pitch kept: \"auto\" brings a narration outside the rate band (gates.syllablesPerSec) into it (×0.85–1.35, one factor for the film), or a factor 0.8–1.5 (1.15 = 15% faster). A designed or cloned voice keeps its speaker's pace whatever style says.",
+          "anyOf": [{ "const": "auto" }, { "type": "number", "minimum": 0.8, "maximum": 1.5 }]
         },
         "syllablesPerSecond": {
           "type": "number",

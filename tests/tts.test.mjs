@@ -90,3 +90,47 @@ test("tts --audition takes: a |-list wins over tts.auditions, objects keep their
   assert.throws(() => auditionTakes(true, {}), /give voice descriptions/);
   assert.throws(() => auditionTakes("a1234|b1234|c1234|d1234|e1234|f1234|g1234", {}), /at most 6/);
 });
+
+test("timeStretch changes the pace, not the pitch", async () => {
+  const { timeStretch } = await import("../cli/lib/audio/wav.mjs");
+  const sr = 24000;
+  const tone = new Float32Array(sr * 2).map((_, i) => 8000 * Math.sin((2 * Math.PI * 220 * i) / sr));
+  const crossings = (x) => { let n = 0; for (let i = 1; i < x.length; i++) if (x[i - 1] < 0 && x[i] >= 0) n++; return n / (x.length / sr); };
+  for (const f of [1.25, 0.85]) {
+    const out = timeStretch(tone, sr, f);
+    assert.equal(out.length, Math.round(tone.length / f));
+    assert.ok(Math.abs(crossings(out.subarray(1000, out.length - 1000)) - 220) < 3, `pitch kept at ×${f}`);
+    let peak = 0;
+    for (let i = 1000; i < out.length - 1000; i++) peak = Math.max(peak, Math.abs(out[i]));
+    assert.ok(peak > 7000 && peak < 9000, `level kept at ×${f} (${peak})`);
+  }
+  assert.equal(timeStretch(tone, sr, 1), tone);
+});
+
+test("tts.tempo: auto lands a slow voice in the band, retimes the captions, keeps the synthesis cache", async () => {
+  const { autoTempo, lineHash } = await import("../cli/lib/voice/tts.mjs");
+  assert.equal(autoTempo([4.5, 5]), 1);
+  assert.equal(autoTempo([3.1]), 1.17);
+  // The slowest scene decides, even when the film on average is inside the band.
+  assert.equal(autoTempo([3.3, 3.5, 4.4, 4.6]), 1.1);
+  // …but never pushes the fastest scene past the ceiling.
+  assert.equal(autoTempo([3.0, 5.8]), 1.04);
+  assert.equal(autoTempo([2.1]), 1.35); // capped: a voice that slow needs another speaker
+  assert.equal(autoTempo([7.5]), 0.85);
+  assert.ok(autoTempo([3.1], [4, 6]) > 1.3);
+
+  const scene = { id: "a", narration: "海边有一座灯塔。每天夜里，它只亮一盏灯。" };
+  const base = { aspect: "16:9", tts: { design: "三十多岁的男性，嗓音偏低" } };
+  const plain = timingHashes(scene, base, {});
+  const auto = timingHashes(scene, { ...base, tts: { ...base.tts, tempo: "auto" } }, {});
+  const fixed = timingHashes(scene, { ...base, tts: { ...base.tts, tempo: 1.2 } }, {});
+  assert.notEqual(auto[0], plain[0]);
+  assert.notEqual(fixed[0], auto[0]);
+  // The synthesized clip is named by the voice and text alone: changing the tempo costs no API call.
+  const split = (h) => h.split(".")[0].split("~")[0];
+  assert.equal(split(auto[0]), split(plain[0]));
+  assert.equal(split(fixed[0]), lineHash(sceneSpeech(scene, base, {}).speak, ttsConfig(base)));
+  assert.equal(auto[0].split(".").length, 2, "the scene-audio hash stays one dot-free token");
+  assert.throws(() => ttsConfig({ tts: { tempo: 2 } }), /tts.tempo/);
+  assert.throws(() => ttsConfig({ tts: { tempo: "fast" } }), /tts.tempo/);
+});
