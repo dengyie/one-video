@@ -70,6 +70,10 @@ test("publish requires the review stage to be approved", () => {
   const ok = ov(dir, "publish");
   assert.equal(ok.status, 0, ok.stderr);
   assert.ok(readFileSync(join(dir, "out", "publish", "captions.srt"), "utf8").length > 0);
+  // The player site finds the cut on the drive as its version file (a pre-versioning cut is adopted).
+  const pub = json(join(dir, "plan", "publish.json"));
+  assert.equal(pub.video, "out/versions/v1.mp4");
+  assert.match(pub.rendered, /^\d{4}-\d\d-\d\dT/);
   // A new render after sign-off is not the cut that was reviewed.
   writeFileSync(video, "cut 2, longer");
   const again = ov(dir, "publish");

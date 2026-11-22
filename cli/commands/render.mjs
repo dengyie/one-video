@@ -268,6 +268,7 @@ export async function publish(args = {}) {
   const main = videoPath(project);
   if (!existsSync(main)) throw new UserError(`no video at ${relative(project.root, main)}; run: onevideo render`);
   kit.publish.video = publishedVersion(project, main);
+  kit.publish.rendered = (readRenders(project).find((r) => r.file === kit.publish.video)?.at) ?? statSync(main).mtime.toISOString();
   if (!kit.publish.video) warn(`${relative(project.root, main)} is not a logged render version (a version since rendered over it, or pruned); the player site cannot find it on the drive (render again)`);
   try {
     await ffmpeg(["-v", "error", "-y", "-ss", posterTime(kit.publish).toFixed(2), "-i", main, "-frames:v", "1", "-vf", "scale=1280:-2", "-q:v", "3", join(dir, "poster.jpg")]);

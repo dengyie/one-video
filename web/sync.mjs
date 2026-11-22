@@ -81,7 +81,7 @@ async function driveEntry(drive, slug) {
   const v = files[pub.video].sha256.slice(0, 12);
   return entry(slug, pub, {
     size: files[pub.video].size,
-    date: (files[pub.video].at ?? record.at ?? new Date().toISOString()).slice(0, 10),
+    date: (pub.rendered ?? files[pub.video].at ?? record.at ?? new Date().toISOString()).slice(0, 10),
     v,
     description: readFileSync(join(dst, "description.txt"), "utf8"),
     drive: joinRemote(base, pub.video),
