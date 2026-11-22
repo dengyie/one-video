@@ -78,14 +78,16 @@ commands                     → 以上任意
 
 ## 播放站（`web/`）
 
-`npm run web:deploy` = `web/deploy.mjs`：先跑 `web/sync.mjs` 生成目录，再对站点文件和 Worker 代码求哈希，与上次部署（`web/.wrangler/deployed.sha256`）相同就跳过，不同才 `wrangler deploy`（Worker `onevideo-web`，静态资源 `web/site/`，`/v/*` 先过 `worker.mjs`）；`--force` 强制部署。发布节点上 `onevideo-web.timer` 每 10 分钟跑一次，`onevideo publish` 之后几分钟上站，节点之间不用手工搬文件。
+`npm run web:deploy` = `web/deploy.mjs`：先跑 `web/sync.mjs` 生成目录，再对站点文件和 Worker 代码求哈希，与上次部署（`web/.wrangler/deployed.sha256`）相同就跳过，不同才 `wrangler deploy`（Worker `onevideo-web`，静态资源 `web/site/`，`/v/*`、`/w/*` 先过 `worker.mjs`）；`--force` 强制部署。发布节点上 `onevideo-web.timer` 每 10 分钟跑一次，`onevideo publish` 之后几分钟上站，节点之间不用手工搬文件。
 
 | 文件 | 内容 |
 |---|---|
-| `sync.mjs` | 两种来源。**drive**（配了 `ONEVIDEO_DRIVE_*` 时默认）：列出 MangoDrive 根目录下的项目，读 `plan/archive.json`，记录里有 `plan/publish.json` 的才上站；`publish.json` 的 `video`（成片对应的版本文件，如 `out/versions/v4.mp4`）留在 Drive 上由 Worker 播放时拉取，海报 `poster`、字幕、简介下载进静态资源，全部按归档记录的 sha256 校验；单个项目出错（上传中途、网络）保留上次的条目。**host**（`ONEVIDEO_WEB_FROM=host`）：从本机或 `ONEVIDEO_HOST` 上的项目复制，成片走静态资源，超 25 MiB 让同步失败 |
+| `sync.mjs` | 命令入口：选来源、写 `videos.json`、清掉下架的目录。**drive**（配了 `ONEVIDEO_DRIVE_*` 时默认）交给 `catalog.mjs`。**host**（`ONEVIDEO_WEB_FROM=host`）：从本机或 `ONEVIDEO_HOST` 上的项目复制，成片走静态资源，超 25 MiB 让同步失败 |
+| `catalog.mjs` | `driveCatalogue({ drive, root, vdir, previous })`：列出 MangoDrive 根目录下的项目，读 `plan/archive.json`，记录里有 `plan/publish.json` 的才上站；`publish.json` 的 `video`（成片对应的版本文件，如 `out/versions/v4.mp4`）留在 Drive 上由 Worker 播放时拉取，海报 `poster`、字幕、简介下载进 `vdir/<slug>/`，全部按归档记录的 sha256 校验（`.synced` 戳相同则不重下）；日期取 `publish.rendered`；单个项目出错（上传中途、网络）保留 `previous` 里的条目。`drive` 可注入，`tests/web-catalog.test.mjs` 用假 Drive 测 |
 | `deploy.mjs` | sync + 变更检测 + 部署，可放进 timer |
 | `drive.mjs` | 纯 fetch：`DriveLink`（登录、签名直链缓存 5 分钟、token 过期重登）、`proxyVideo`（透传 Range → 206/416，签名失效换链重试一次，Drive 出错 502；GET 时后台把整片灌进边缘缓存，≤200 MiB）。Worker 与 `tests/web-drive.test.mjs` 共用 |
-| `worker.mjs` | `/v/<slug>/video.mp4` 且已部署 `videos.json` 里该 slug 是 `source: "drive"` → 先查边缘缓存，否则按条目的 `drive` 路径 `proxyVideo`；其余走静态资源（边缘缓存补 206） |
+| `worker.mjs` | `/v/<slug>/video.mp4` 且已部署 `videos.json` 里该 slug 是 `source: "drive"` → 先查边缘缓存，否则按条目的 `drive` 路径 `proxyVideo`；`/w/<slug>` → `share.mjs` 改写的播放页（未知 slug 404）；其余走静态资源（边缘缓存补 206） |
+| `share.mjs` | 分享页：`/w/<slug>` 是 `site/index.html` 换上该视频的 `<title>`、description、Open Graph / Twitter 标签（海报、成片绝对地址、时长），贴进聊天能展开成视频卡片。纯字符串替换，`tests/web-share.test.mjs` 测。播放页按路径导航（`pushState`），旧链接 `/#slug@t` 仍可用 |
 | `secrets.mjs` | 把 `ONEVIDEO_DRIVE_USER/PASS` 和公网 API（`ONEVIDEO_WEB_DRIVE_URL`，默认 `https://api-drive.mangoqwq.com/api`）写成 Worker secret（`wrangler secret bulk`，经 stdin，不打印不落盘）；改密码后重跑 |
 
 Worker 只代理 `videos.json` 列出的路径，不接受任意 Drive 路径。`web/site/.assetsignore` 排除点文件（同步戳 `.synced`、`.publish.json`）和 `description.txt`（已内联进 `videos.json`）。
