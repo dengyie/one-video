@@ -255,7 +255,7 @@ test("keeper example: tableau refs resolve, the world joins by fade or dip, noth
   const r = ov(dir, "timeline", "--force");
   const out = r.stdout + r.stderr;
   assert.equal(r.status, 0, out);
-  assert.doesNotMatch(out, /\[(framing|drawn|schema:\w+)\]|continues one world/);
+  assert.doesNotMatch(out, /\[(framing|grounding|drawn|schema:\w+)\]|continues one world/);
   const tl = json(join(dir, "plan", "timeline.json"));
   const fire = tl.scenes.find((s) => s.id === "fire");
   assert.ok(!JSON.stringify(tl.scenes).includes('"on":'));

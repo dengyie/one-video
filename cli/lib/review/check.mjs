@@ -1,7 +1,7 @@
 // Collects every pre-compose issue for a project; used by `validate`, `timeline` and `render`.
 import { existsSync } from "node:fs";
 import { readJson } from "../core/project.mjs";
-import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, drawnGate, timingsGate, rhythmGate, openingGate, questionGate, echoGate, deviceGate, layoutGate, fitOverlays, densityGate, framingGate, summarize } from "./gates.mjs";
+import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, drawnGate, timingsGate, rhythmGate, openingGate, questionGate, echoGate, deviceGate, layoutGate, fitOverlays, densityGate, framingGate, groundingGate, summarize } from "./gates.mjs";
 import { compileTimeline } from "../timeline/index.mjs";
 
 export function loadPlan(project) {
@@ -35,7 +35,8 @@ export function checkProject(project, { needTimings = false, plan = loadPlan(pro
   if (scriptOk) {
     issues.push(...numbersGate(plan.script, plan.research, config));
     issues.push(...captionGate(plan.script, config));
-    issues.push(...budgetGate(plan.script, config));
+    // Measured on the timeline when it compiles (below); estimated from the script until then.
+    if (!(boardOk && plan.timings)) issues.push(...budgetGate(plan.script, config));
     issues.push(...questionGate(plan.script));
   }
   if (boardOk) {
@@ -46,6 +47,7 @@ export function checkProject(project, { needTimings = false, plan = loadPlan(pro
       issues.push(...timingsGate(plan.script, plan.timings, config));
       issues.push(...rateGate(plan.script, plan.timings, config));
       const res = compileTimeline({ config, script: plan.script, storyboard: plan.storyboard, timings: plan.timings, assets: plan.assets, research: plan.research, root: project.root });
+      issues.push(...budgetGate(plan.script, config, res.timeline));
       if (plan.assets) issues.push(...assetsGate(plan.assets, config, res.timeline && new Set(Object.keys(res.timeline.assets ?? {}))));
       issues.push(...res.errors.map((msg) => ({ level: "error", gate: "timeline", msg })));
       issues.push(...res.warnings.map((msg) => ({ level: "warn", gate: "timeline", msg })));
@@ -55,7 +57,7 @@ export function checkProject(project, { needTimings = false, plan = loadPlan(pro
         const last = new Map(moved.map((m) => [`${m.scene}#${m.i}`, m]));
         for (const m of last.values()) issues.push({ level: "info", gate: "layout", msg: `scene "${m.scene}" overlay ${m.i} moved to ${Object.entries(m.set).map(([k, v]) => `${k} ${v}`).join(", ")} for ${project.aspect}` });
       }
-      if (res.timeline) issues.push(...rhythmGate(res.timeline, config), ...openingGate(res.timeline, config), ...echoGate(res.timeline, config), ...deviceGate(res.timeline, config), ...layoutGate(res.timeline, config), ...framingGate(res.timeline, config), ...densityGate(res.timeline, plan.assets, config));
+      if (res.timeline) issues.push(...rhythmGate(res.timeline, config), ...openingGate(res.timeline, config), ...echoGate(res.timeline, config), ...deviceGate(res.timeline, config), ...layoutGate(res.timeline, config), ...framingGate(res.timeline, config), ...groundingGate(res.timeline, config), ...densityGate(res.timeline, plan.assets, config));
       timeline = res.timeline;
     } else if (needTimings) issues.push({ level: "error", gate: "files", msg: "missing plan/timings.json; run: onevideo tts" });
   }

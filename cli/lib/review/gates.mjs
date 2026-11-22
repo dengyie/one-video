@@ -13,4 +13,4 @@ export { schemaGate, numbersGate, storyboardGate, timingsGate, rateGate, assetsG
 export { openingGate, rhythmGate, DEVICE_HOLD, deviceGate, questionGate, echoGate } from "./gates-pacing.mjs";
 export { LAYOUT_DEFAULTS, layoutGate, fitOverlays, DENSITY_DEFAULTS, densityGate } from "./gates-layout.mjs";
 export { mapBoxes } from "./map-model.mjs";
-export { FRAMING_DEFAULTS, framingGate } from "./gates-tableau.mjs";
+export { FRAMING_DEFAULTS, framingGate, groundingGate } from "./gates-tableau.mjs";

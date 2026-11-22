@@ -8,7 +8,7 @@ import {
   boxOnScreen, cameraFor, elementGeometry, insideShare, onScreen, zoomToFit,
 } from "../shared/tableau.mjs";
 import { resolveTableauRefs, boundaryTransition } from "../cli/lib/timeline/index.mjs";
-import { framingGate, rhythmGate } from "../cli/lib/review/gates.mjs";
+import { framingGate, groundingGate, rhythmGate } from "../cli/lib/review/gates.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { schemaGate } from "../cli/lib/review/gates.mjs";
 import { beatsFile, gridBeats } from "../cli/lib/audio/beats.mjs";
@@ -219,4 +219,31 @@ test("framingGate: a solid element cut by the frame at rest is flagged unless cr
   assert.deepEqual(framingGate(scene({ id: "lh", type: "lighthouse", x: 0.4, y: 0.5, h: 0.7, crop: true }), {}), []);
   // Too big to fit at this zoom (a close-up on something standing on it): the set, not a mistake.
   assert.deepEqual(framingGate(scene({ id: "lh", type: "lighthouse", x: 0.4, y: 0.95, h: 0.85 }), {}), []);
+});
+
+test("groundingGate: a piece set on a cliff's top but past its edge hangs over the sea", () => {
+  const world = (els, more = []) => ({
+    width: 1920, height: 1080,
+    scenes: [
+      { id: "a", type: "tableau", start: 0, duration: 1, props: { elements: [{ id: "sea", type: "sea" }, ...els], camera: [{ x: 0.5, y: 0.5, zoom: 1 }] } },
+      ...more,
+    ],
+  });
+  const cliff = { id: "cliff", type: "cliff", x: 0.27, y: 0.6 };
+  // The keeper example's hut: x 0.31 with the rock ending at 0.27.
+  const [w] = groundingGate(world([cliff, { id: "hut", type: "hut", x: 0.31, y: 0.6 }]));
+  assert.match(w.msg, /hut "hut" stands past the cliff's edge \(x 0\.31, the rock ends at 0\.27\).*x 0\.234 puts it on the rock/);
+  assert.equal(w.at.field, "props.elements[2]");
+  assert.deepEqual(groundingGate(world([cliff, { id: "hut", type: "hut", x: 0.234, y: 0.6 }])), []);
+  // On the shore (foot at the sea line, nearer depth) it is not on the cliff at all.
+  assert.deepEqual(groundingGate(world([cliff, { id: "k", type: "figure", x: 0.5, y: 0.86 }])), []);
+  // A right-hand cliff's rock runs the other way; a piece walking off it is caught when it gets there.
+  const right = { id: "c2", type: "cliff", side: "right", x: 0.7, y: 0.6 };
+  assert.deepEqual(groundingGate(world([right, { id: "lh", type: "lighthouse", x: 0.8, y: 0.6 }])), []);
+  const walk = groundingGate(world([right, { id: "f", type: "figure", x: 0.8, y: 0.6, depth: 0.62, to: [{ t: 0.2, dur: 0.4, x: 0.6 }] }]));
+  assert.equal(walk.length, 1);
+  assert.ok(walk[0].at.from >= 0.4);
+  // Reported once, where it first shows, not again in the inherit scene after.
+  const twice = world([cliff, { id: "hut", type: "hut", x: 0.31, y: 0.6 }], [{ id: "b", type: "tableau", start: 1, duration: 1, props: { elements: [cliff, { id: "hut", type: "hut", x: 0.31, y: 0.6 }], camera: [{ x: 0.5, y: 0.5, zoom: 1 }] } }]);
+  assert.equal(groundingGate(twice).length, 1);
 });

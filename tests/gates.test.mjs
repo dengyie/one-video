@@ -85,6 +85,11 @@ test("budgetGate errors when narration is far from targetSeconds", () => {
   const script = { scenes: [{ id: "s", narration: "很短。" }] };
   assert.equal(budgetGate(script, { targetSeconds: 120 })[0].level, "error");
   assert.deepEqual(budgetGate(script, {}), []);
+  // Once the timeline compiles it is measured, not estimated: a slow voice the estimate missed shows.
+  const long = budgetGate({ scenes: [{ id: "s", narration: "很短的一句话，大约十个字。" }] }, { targetSeconds: 45 }, { duration: 56.7 });
+  assert.equal(long[0].level, "error");
+  assert.match(long[0].msg, /runs 57s vs target 45s \(\+26%\)/);
+  assert.deepEqual(budgetGate(script, { targetSeconds: 45 }, { duration: 47 }), []);
 });
 
 test("normalizeLicense is an allowlist", () => {

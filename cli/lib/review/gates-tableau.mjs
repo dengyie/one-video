@@ -48,3 +48,50 @@ export function framingGate(timeline, config = {}) {
   }
   return out;
 }
+
+// Tableau grounding: a lighthouse, hut or figure set on a cliff's top (its foot at the cliff's
+// height, at the cliff's depth) must stand on it. Past the cliff's edge the top gives way to the
+// face, so the piece hangs over the sea — invisible in the opening wide, glaring once a later shot
+// moves in (the keeper's hut floated beside the storm). Reported once per element, where it first
+// shows, with the x that brings it back onto the rock.
+const STANDING = ["lighthouse", "hut", "figure", "fire"];
+const GROUND_Y = 0.035, GROUND_DEPTH = 0.1, EDGE = 0.005;
+
+export function groundingGate(timeline, config = {}) {
+  const g = { ...FRAMING_DEFAULTS, ...(config.gates ?? {}) };
+  const { width: W, height: H } = timeline;
+  const out = [];
+  const seen = new Set();
+  for (const sc of timeline.scenes) {
+    if (sc.type !== "tableau") continue;
+    const els = sc.props?.elements ?? [];
+    const cliffs = els.filter((e) => e.type === "cliff");
+    if (!cliffs.length) continue;
+    for (let t = 0; t < sc.duration; t += g.framingStep) {
+      const horizon = horizonAt(els, t);
+      const rocks = cliffs.map((c) => elementAt(c, t)).filter((c) => c.shown && (c.opacity ?? 1) > 0.5);
+      for (const [i, el] of els.entries()) {
+        const key = el.id ?? `${sc.id}#${i}`;
+        if (!STANDING.includes(el.type) || seen.has(key)) continue;
+        const s = elementAt(el, t);
+        if (!s.shown || (s.opacity ?? 1) * s.enter < 0.5) continue;
+        const geo = elementGeometry(s, { W, H, horizon });
+        if (!geo) continue;
+        const [bx, by] = geo.anchors.base ?? [(geo.box[0] + geo.box[2]) / 2, geo.box[3]];
+        const rock = rocks.find((c) => Math.abs(by - c.y) <= GROUND_Y && Math.abs(geo.depth - (c.depth ?? 0)) <= GROUND_DEPTH);
+        if (!rock) continue;
+        const right = rock.side === "right";
+        const off = right ? bx < rock.x - EDGE : bx > rock.x + EDGE;
+        if (!off) continue;
+        seen.add(key);
+        const half = (geo.box[2] - geo.box[0]) / 2;
+        const x = Math.round((right ? rock.x + half + EDGE : rock.x - half - EDGE) * 1000) / 1000;
+        const named = el.id ? `"${el.id}"` : `#${i}`;
+        out.push(issue("warn", "grounding", `scene "${sc.id}" ${el.type} ${named} stands past the cliff's edge (x ${r2(bx)}, the rock ends at ${r2(rock.x)}) and hangs over the sea: x ${x} puts it on the rock (or widen the cliff, or set its y to the shore if it belongs there)`, { scene: sc.id, from: sc.start + t, field: `props.elements[${i}]` }));
+      }
+    }
+  }
+  return out;
+}
+
+const r2 = (x) => Math.round(x * 100) / 100;

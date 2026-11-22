@@ -6,7 +6,7 @@
   "style": "vector-flow",
   "aspect": "16:9",
   "fps": 30,
-  "targetSeconds": 45,
+  "targetSeconds": 55,
   "drawn": true,
   "music": {
     "preset": "story",

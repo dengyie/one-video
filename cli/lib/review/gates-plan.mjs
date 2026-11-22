@@ -208,16 +208,21 @@ export function assetsGate(assets, config = {}, used) {
   return out;
 }
 
-// Estimated runtime from spoken syllables vs. the target length in onevideo.json.
+// Runtime vs. the target length in onevideo.json: the compiled timeline once there is one (the
+// voice's real pace, holds, transitions and end card), before that an estimate from the syllables —
+// which a slow designed voice can miss by a quarter.
 export const SYLLABLES_PER_SEC = 4.8;
-export function budgetGate(script, config) {
+export function budgetGate(script, config, timeline = null) {
   if (!config.targetSeconds) return [];
-  const cps = config.tts?.syllablesPerSecond ?? SYLLABLES_PER_SEC;
-  let chars = 0, lines = 0;
-  for (const s of script.scenes) for (const l of sceneLines(s, config)) { chars += spokenLength(l.text); lines++; }
-  const est = chars / cps + lines * 0.3 + script.scenes.length * DEFAULT_HOLD_EST;
+  let est = timeline?.duration;
+  if (!(est > 0)) {
+    const cps = config.tts?.syllablesPerSecond ?? SYLLABLES_PER_SEC;
+    let chars = 0, lines = 0;
+    for (const s of script.scenes) for (const l of sceneLines(s, config)) { chars += spokenLength(l.text); lines++; }
+    est = chars / cps + lines * 0.3 + script.scenes.length * DEFAULT_HOLD_EST;
+  }
   const dev = (est - config.targetSeconds) / config.targetSeconds;
-  const msg = `estimated ${est.toFixed(0)}s vs target ${config.targetSeconds}s (${dev >= 0 ? "+" : ""}${(dev * 100).toFixed(0)}%)`;
+  const msg = `${timeline?.duration > 0 ? "runs" : "estimated"} ${est.toFixed(0)}s vs target ${config.targetSeconds}s (${dev >= 0 ? "+" : ""}${(dev * 100).toFixed(0)}%)`;
   if (Math.abs(dev) > 0.25) return [issue("error", "budget", `${msg}; cut or extend narration`)];
   if (Math.abs(dev) > 0.12) return [issue("warn", "budget", msg)];
   return [];
