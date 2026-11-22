@@ -80,3 +80,15 @@ test("an approved preview goes stale when the timeline compiles differently", ()
   assert.equal(stageStatus(project, pipeline)[0].status, "stale");
   assert.throws(() => approveStage(project, pipeline, "preview"), /onevideo preview/);
 });
+
+test("fiction: research is optional and numbersGate stays quiet without it", async () => {
+  const { numbersGate } = await import("../cli/lib/review/gates.mjs");
+  const root = mkdtempSync(join(tmpdir(), "ov-fiction-"));
+  const pipeline = { stages: [{ id: "research", produces: ["plan/research.json"], approval: true }, { id: "proposal", produces: ["plan/proposal.md"], approval: true }] };
+  const project = (config) => ({ root, config, paths: { state: join(root, "plan", "state.json") } });
+  assert.equal(stageStatus(project({}), pipeline)[0].status, "pending");
+  assert.equal(stageStatus(project({ fiction: true }), pipeline)[0].status, "optional");
+  const script = { scenes: [{ id: "a", narration: "三百年前，一座灯塔。" }] };
+  assert.equal(numbersGate(script, null, {}).length, 1);
+  assert.deepEqual(numbersGate(script, null, { fiction: true }), []);
+});

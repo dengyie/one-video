@@ -2,6 +2,7 @@
   "name": "keeper",
   "title": "守灯人",
   "pipeline": "graphics",
+  "fiction": true,
   "style": "vector-flow",
   "aspect": "16:9",
   "fps": 30,

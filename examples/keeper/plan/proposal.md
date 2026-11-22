@@ -16,4 +16,4 @@
 
 ## 画面
 
-全部代码绘制，无素材，因此没有 assets 阶段；虚构内容，不含需要来源的事实或数字，因此没有 research.json。
+全部代码绘制，无素材，因此没有 assets 阶段；虚构内容（`onevideo.json` 里 `"fiction": true`）：research 阶段为可选，旁白数字不对照 research.json。

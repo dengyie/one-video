@@ -424,6 +424,10 @@
     "gates": {
       "type": "object"
     },
+    "fiction": {
+      "type": "boolean",
+      "description": "A made-up story: the research stage is optional (no facts to source) and narration numbers are not held to research.json unless one is written."
+    },
     "drawn": {
       "type": "boolean",
       "description": "Every frame is drawn by code (pipeline graphics): no photos, footage, captures or generated media; the drawn gate holds the storyboard to it."

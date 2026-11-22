@@ -74,7 +74,9 @@ export function stageStatus(project, pipeline, state = loadState(project)) {
     const rec = state.stages[stage.id];
     const outdated = hash !== null ? outdatedFor(project, products) : null;
     let status;
-    if (hash === null) status = stage.optional ? "optional" : "pending";
+    // A story (config.fiction) has no facts to source: research is there only if one is written.
+    const optional = stage.optional || (stage.id === "research" && project.config?.fiction === true);
+    if (hash === null) status = optional ? "optional" : "pending";
     else if (outdated) status = "stale";
     else if (!stage.approval) status = "done";
     else if (rec?.hash === hash) status = "approved";

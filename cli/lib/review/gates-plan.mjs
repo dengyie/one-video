@@ -52,8 +52,9 @@ export function schemaGate(name, value) {
 // Every number spoken in narration must equal a number in a research fact (claim, value or quote),
 // token for token: "25万亿" is not sourced by a "2025年" fact, and "1.8万亿" is not "1.85万亿".
 // Units must agree when both sides carry one; a numeric fact value also matches by magnitude ("857亿" = 85.7e9).
-export function numbersGate(script, research) {
-  if (!research) return [issue("warn", "facts", "no plan/research.json; narration numbers are unchecked")];
+// A story (config.fiction) without research has no claims to check; with one, it is held like any.
+export function numbersGate(script, research, config = {}) {
+  if (!research) return config.fiction === true ? [] : [issue("warn", "facts", "no plan/research.json; narration numbers are unchecked (a made-up story: \"fiction\": true in onevideo.json)")];
   const sourced = [];
   const amounts = [];
   for (const f of research.facts ?? []) {

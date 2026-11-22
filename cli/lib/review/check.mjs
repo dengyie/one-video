@@ -33,7 +33,7 @@ export function checkProject(project, { needTimings = false, plan = loadPlan(pro
 
   let timeline = null;
   if (scriptOk) {
-    issues.push(...numbersGate(plan.script, plan.research));
+    issues.push(...numbersGate(plan.script, plan.research, config));
     issues.push(...captionGate(plan.script, config));
     issues.push(...budgetGate(plan.script, config));
     issues.push(...questionGate(plan.script));
