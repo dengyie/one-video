@@ -6,6 +6,7 @@ import {
   KIND_NAMES, PALETTES, bandDepth, bandFor, cameraAt, cameraMoving, elementAt, flashAt, flashTotal, lampLevel, layerView,
   mixHex, paletteAt, settledElement, tableauTimes, waveY, SEA_BANDS,
   boxOnScreen, cameraFor, elementGeometry, insideShare, onScreen, zoomToFit,
+  horizonAt, ridgeDepth, ridgeTop, townBlocks, treeRow, windowOn,
 } from "../shared/tableau.mjs";
 import { resolveTableauRefs, boundaryTransition } from "../cli/lib/timeline/index.mjs";
 import { framingGate, groundingGate, rhythmGate } from "../cli/lib/review/gates.mjs";
@@ -147,6 +148,59 @@ test("tableau geometry: anchors, cameraFor inverts the parallax, zoomToFit fills
   near(b[3] - b[1], 0.5, 1e-6);
   assert.equal(insideShare(b), 1);
   assert.equal(insideShare([-0.5, 0, 0.5, 1]), 0.5);
+});
+
+test("tableau land: ridgelines recede into the haze, a town fills its spread, windows light up with lit", () => {
+  for (const k of ["hills", "fog", "town", "trees", "birds", "snow"]) assert.ok(KIND_NAMES.includes(k), k);
+  const hills = elementAt({ type: "hills", layers: 3, rough: 0.2 }, 0);
+  const mean = (k) => { let a = 0; for (let x = 0; x <= 1; x += 0.01) a += ridgeTop(hills, k, x).y; return a / 101; };
+  assert.ok(mean(0) < mean(1) && mean(1) < mean(2), "the far ridge stands highest in the frame");
+  assert.ok(ridgeDepth(hills, 0) < ridgeDepth(hills, 2) && ridgeDepth(hills, 2) <= 0.9);
+  const spread = (rough) => { const s = elementAt({ type: "hills", layers: 1, rough }, 0), ys = []; for (let x = 0; x <= 1; x += 0.005) ys.push(ridgeTop(s, 0, x).y); return ys.reduce((a, y, i) => (i ? a + Math.abs(y - ys[i - 1]) : 0), 0); };
+  assert.ok(spread(1) > spread(0) * 1.5, "rough ridges are jagged");
+  for (let x = 0; x <= 1; x += 0.1) { const r = ridgeTop(hills, 0, x); assert.ok(r.v >= 0 && r.v <= 1 && r.y < hills.y + 1e-9); }
+
+  const town = elementAt({ type: "town", x: 0.5, spread: 0.6, count: 10 }, 0);
+  const blocks = townBlocks(town);
+  assert.equal(blocks.length, 10);
+  near(blocks[0].x, 0.2, 1e-9);
+  near(blocks.at(-1).x + blocks.at(-1).w, 0.8, 1e-9);
+  assert.equal(blocks.filter((b) => b.spire).length, 1);
+  assert.ok(blocks.every((b) => b.h <= town.size + 1e-9) && blocks.find((b) => b.spire).h === town.size);
+  const lit = (l) => { let n = 0; for (let r = 0; r < 6; r++) for (let c = 0; c < 6; c++) n += windowOn(3, r, c, 2, l) ? 1 : 0; return n; };
+  assert.equal(lit(0), 0);
+  assert.equal(lit(1), 36);
+  assert.ok(lit(0.3) <= lit(0.7) && lit(0.3) > 0 && lit(0.7) < 36);
+  for (let r = 0; r < 6; r++) for (let c = 0; c < 6; c++) if (windowOn(3, r, c, 2, 0.3)) assert.ok(windowOn(3, r, c, 2, 0.7), "a window lit stays lit as lit rises");
+
+  const row = treeRow(elementAt({ type: "trees", x: 0.5, spread: 0.4, count: 7 }, 0));
+  assert.equal(row.length, 7);
+  assert.ok(row.every((p) => p.x > 0.29 && p.x < 0.71));
+  assert.ok(row.every((p, i) => i === 0 || p.y >= row[i - 1].y), "far (higher) pines first");
+
+  const frame = { W: 1920, H: 1080 };
+  const tg = elementGeometry(town, frame);
+  near(tg.box[0], 0.2, 1e-9);
+  near(tg.box[3], town.y, 1e-9);
+  near(tg.box[1], town.y - town.size, 1e-9);
+  assert.ok(elementGeometry(elementAt({ type: "trees" }, 0), frame));
+  assert.equal(elementGeometry(elementAt({ type: "hills" }, 0), frame), null);
+  assert.equal(horizonAt([{ id: "h", type: "hills", y: 0.62 }], 0), 0.62);
+  assert.equal(horizonAt([{ id: "h", type: "hills", y: 0.62 }, { id: "s", type: "sea", y: 0.7 }], 0), 0.7);
+
+  const scenes = [{ id: "a", type: "tableau", props: { elements: [
+    { id: "sky", type: "sky", tone: "dusk" }, { id: "hills", type: "hills", layers: 4, rough: 0.8, cap: 0.6 }, { id: "fog", type: "fog", y: 0.7 },
+    { id: "town", type: "town", lit: 0, to: [{ at: 1, lit: 1, dur: 3 }] }, { id: "pines", type: "trees", count: 12, wind: 0.4 },
+    { id: "birds", type: "birds", count: 6, speed: 0.04, facing: -1 }, { id: "snow", type: "snow", intensity: 0.8 },
+  ] } }];
+  assert.deepEqual(schemaGate("storyboard", { scenes }), []);
+  assert.ok(schemaGate("storyboard", { scenes: [{ id: "x", type: "tableau", props: { elements: [{ id: "h", type: "hills", layers: 9 }] } }] }).length);
+  near(elementAt({ ...scenes[0].props.elements[3], to: [{ t: 1, lit: 1, dur: 3 }] }, 2.5).lit, 0.5, 1e-9);
+  const props = { elements: [{ id: "town", type: "town" }, { id: "pines", type: "trees" }], camera: [{ on: "town" }, { t: 2, on: ["town", "pines"] }] };
+  const errors = [];
+  resolveTableauRefs(props, { width: 1920, height: 1080 }, errors, 'scene "s"');
+  assert.deepEqual(errors, []);
+  assert.ok(props.camera[0].zoom > 1);
 });
 
 test("tableau refs: elements stand on anchors, camera keys aim at elements, mistakes are errors", () => {

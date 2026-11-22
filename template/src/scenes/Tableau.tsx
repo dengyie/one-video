@@ -3,12 +3,13 @@ import { AbsoluteFill } from "remotion";
 import { useLayout, useScene, useTheme, useTime } from "../engine/context";
 import {
   SEA_BANDS, bandBase, bandDepth, bandFor, boltPath, cameraAt, cameraMoving, elementAt, flashAt, flashTotal, hash, lampLevel,
-  layerView, mixHex, noise, paletteAt, waveY,
+  layerView, mixHex, noise, paletteAt, ridgeDepth, ridgeTop, townBlocks, treeRow, waveY, windowOn,
 } from "../../../shared/tableau.mjs";
 
 // Tableau: an illustrated place drawn by code, in layers at their own depth — sky, stars, moon or
 // sun, clouds, a sea of swells, cliffs, a lighthouse sweeping its beam, a hut, a rocking boat, a
-// figure carrying a lantern, a fire on the shore, rain and lightning — each piece keyframed
+// figure carrying a lantern, a fire on the shore, rain and lightning; inland, ridgelines fading
+// into the haze, fog, a town lighting its windows, pines, birds and snow — each piece keyframed
 // (`to`, by cue or time) and a camera (`camera`) that moves through them with parallax.
 // State, palettes, waves and the camera are shared/tableau.mjs (the compiler uses them too).
 
@@ -17,6 +18,11 @@ type Props = { elements?: El[]; camera?: Record<string, any>[]; inherit?: boolea
 type Ctx = { W: number; H: number; S: number; t: number; pal: ReturnType<typeof paletteAt>; horizon: number; swell: number; id: string; fonts: { body: string } };
 
 const LANTERN = "#ffd48a";
+// How much a silhouette needs the sky's rim light to stay off it: full under a dark sky, none by day.
+const rimNeed = (pal: { top: string }) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(pal.top.slice(i, i + 2), 16) / 255);
+  return Math.max(0, Math.min(1, (0.32 - (0.2126 * r + 0.7152 * g + 0.0722 * b)) / 0.24));
+};
 const pts = (p: [number, number][]) => p.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
 
 // One layer's transform: points of the layer (frame px) move by its share of the camera.
@@ -270,7 +276,7 @@ const Figure: React.FC<{ c: Ctx; s: any; walking: number }> = ({ c, s, walking }
       {/* A silhouette is the colour of the land, so against a storm sky it vanishes: the sky's rim
           light traces its outline first (a wider stroke under the fill shows only outside it). */}
       <g transform={`translate(${x.toFixed(1)} ${(y - bob).toFixed(1)}) scale(${s.facing} 1)`}>
-        <g stroke={c.pal.rim} strokeWidth={L * 0.024} strokeLinejoin="round" strokeOpacity={0.55} fill={c.pal.rim}>{silhouette}</g>
+        {rimNeed(c.pal) > 0.01 && <g stroke={c.pal.rim} strokeWidth={L * 0.024} strokeLinejoin="round" strokeOpacity={0.55 * rimNeed(c.pal)} fill={c.pal.rim} fillOpacity={rimNeed(c.pal)}>{silhouette}</g>}
         <g fill={ink}>{silhouette}</g>
         <line x1={0.24 * L} x2={0.24 * L} y1={-0.45 * L} y2={-0.41 * L} stroke={ink} strokeWidth={L * 0.008} />
         <rect x={0.205 * L} y={-0.41 * L} width={0.07 * L} height={0.09 * L} rx={L * 0.01} fill={lan > 0.01 ? "#fff0c0" : ink} opacity={lan > 0.01 ? Math.max(0.35, lan) : 1} />
@@ -301,6 +307,130 @@ const Fire: React.FC<{ c: Ctx; s: any }> = ({ c, s }) => {
         const ph = (c.t * (0.35 + hash(i, 70) * 0.4) + hash(i, 71)) % 1;
         const ex = x + (hash(i, 72) - 0.5) * r * 1.6 + Math.sin(c.t * 2 + i) * r * 0.5 * ph;
         return <circle key={i} cx={ex} cy={y - r * (0.8 + ph * 6)} r={r * 0.045 * (1 - ph * 0.5)} fill="#ffc46a" opacity={(1 - ph) * 0.9} />;
+      })}
+    </g>
+  );
+};
+
+// Hills: one ridgeline per layer, each at its own depth; the far ones take the haze's colour
+// (atmospheric perspective), mist pools at every foot, snow settles on the highest crests.
+const Ridge: React.FC<{ c: Ctx; s: any; k: number }> = ({ c, s, k }) => {
+  const n = Math.max(1, Math.round(s.layers)), far = n > 1 ? 1 - k / (n - 1) : 0.5;
+  const top: [number, number][] = [], high: number[] = [];
+  for (let x = -0.7; x <= 1.7001; x += 0.006) { const r = ridgeTop(s, k, x); top.push([x * c.W, r.y * c.H]); high.push(r.v); }
+  const fill = mixHex(c.pal.land, c.pal.haze, 0.12 + 0.5 * far);
+  const line = 1 - 0.5 * s.cap * (0.35 + 0.65 * far);
+  const snow = top.map(([px, py], i) => [px, py + Math.max(0, high[i] - line) * s.h * c.H * 0.9] as [number, number]);
+  const foot = (s.y + 0.045 * k) * c.H;
+  return (
+    <g opacity={s.opacity * s.enter}>
+      <polygon points={pts([[-0.7 * c.W, 1.6 * c.H], ...top, [1.7 * c.W, 1.6 * c.H]])} fill={fill} />
+      {s.cap > 0.01 && <polygon points={pts([...top, ...snow.reverse()])} fill={mixHex(mixHex("#eef2f6", c.pal.rim, 0.35), c.pal.haze, 0.35 * far)} opacity={0.9} />}
+      <polyline points={pts(top)} fill="none" stroke={c.pal.rim} strokeWidth={1.3 * (c.S / 1080)} opacity={0.08 + 0.14 * (1 - far)} />
+      <rect x={-0.7 * c.W} y={foot - s.h * c.H * 0.35} width={2.4 * c.W} height={s.h * c.H * 0.35 + 0.06 * c.H} fill={`url(#${c.id}-mist)`} opacity={0.35 + 0.4 * far} />
+    </g>
+  );
+};
+
+const Fog: React.FC<{ c: Ctx; s: any }> = ({ c, s }) => {
+  const n = Math.round(4 + s.cover * 9);
+  return (
+    <g opacity={s.opacity * s.enter * (0.3 + 0.7 * s.cover)}>
+      {Array.from({ length: n }, (_, k) => {
+        const span = 2.4, raw = hash(k, s.seed) * span - 0.7 + c.t * s.speed * (0.5 + hash(k, s.seed + 1));
+        const x = ((raw + 0.7) % span + span) % span - 0.7;
+        const y = s.y + (hash(k, s.seed + 2) - 0.5) * s.h;
+        const rx = 0.3 + 0.35 * hash(k, s.seed + 3), ry = s.h * (0.35 + 0.4 * hash(k, s.seed + 4));
+        return <ellipse key={k} cx={x * c.W} cy={y * c.H} rx={rx * c.W} ry={ry * c.H} fill={`url(#${c.id}-fog)`} />;
+      })}
+    </g>
+  );
+};
+
+// A town: buildings side by side, one tower with a spire, windows lit by `lit` (each window has its
+// own threshold, so raising lit wakes the town window by window) and a glow over the roofs.
+const Town: React.FC<{ c: Ctx; s: any }> = ({ c, s }) => {
+  const y = s.y * c.H, body = mixHex(c.pal.land, c.pal.haze, 0.12 + 0.35 * (1 - s.depth));
+  const ww = Math.max(1.5, s.size * c.S * 0.055), wh = ww * 1.35;
+  return (
+    <g opacity={s.opacity * s.enter}>
+      {s.lit > 0.02 && <ellipse cx={s.x * c.W} cy={y - s.size * c.S * 0.4} rx={s.spread * c.W * 0.62} ry={s.size * c.S * 1.3} fill={`url(#${c.id}-lamp)`} opacity={0.4 * Math.min(1, s.lit * 1.4)} />}
+      {townBlocks(s).map((b) => {
+        const x0 = b.x * c.W, w = b.w * c.W, h = b.h * c.S;
+        const cols = Math.max(0, Math.floor((w - ww) / (ww * 2.1))), rows = Math.max(0, Math.floor((h * 0.82 - wh) / (wh * 1.9)));
+        const gx = (w - (cols * ww * 2.1 - ww * 1.1)) / 2;
+        return (
+          <g key={b.j}>
+            <rect x={x0} y={y - h} width={w + 0.6} height={h} fill={body} />
+            {b.roof && <polygon points={pts([[x0 - w * 0.04, y - h], [x0 + w / 2, y - h - w * 0.38], [x0 + w * 1.04, y - h]])} fill={body} />}
+            {b.spire && <polygon points={pts([[x0 + w * 0.3, y - h], [x0 + w / 2, y - h - h * 0.45], [x0 + w * 0.7, y - h]])} fill={body} />}
+            {Array.from({ length: rows * cols }, (_, i) => {
+              const r = Math.floor(i / cols), col = i % cols;
+              if (!windowOn(b.j, r, col, s.seed, s.lit)) return null;
+              const flick = hash(b.j * 7 + r, col + 11) < 0.12 ? 0.55 + 0.45 * noise(c.t * 4 + i, b.j) : 1;
+              return <rect key={i} x={x0 + gx + col * ww * 2.1} y={y - h + wh * 1.2 + r * wh * 1.9} width={ww} height={wh} fill={LANTERN} opacity={0.85 * flick} />;
+            })}
+          </g>
+        );
+      })}
+      <line x1={(s.x - s.spread / 2) * c.W} x2={(s.x + s.spread / 2) * c.W} y1={y} y2={y} stroke={body} strokeWidth={c.S * 0.004} />
+    </g>
+  );
+};
+
+// Pines in a row, nearer ones lower and darker, swaying in the wind; a rim light keeps them off a
+// dark sky.
+const Trees: React.FC<{ c: Ctx; s: any }> = ({ c, s }) => {
+  const ink = mixHex(c.pal.land, c.pal.haze, 0.3 * (1 - s.depth)), rim = rimNeed(c.pal);
+  return (
+    <g opacity={s.opacity * s.enter}>
+      {treeRow(s).map((p) => {
+        const L = p.size * c.S, sway = s.wind * 3 * Math.sin(c.t * 1.2 + p.j * 1.7) + s.wind * 2;
+        const tiers = [0, 1, 2].map((k) => {
+          const w = L * (0.3 - k * 0.07), y0 = -L * (0.12 + k * 0.24), y1 = y0 - L * (0.42 - k * 0.04);
+          return `M ${(-w).toFixed(1)},${y0.toFixed(1)} L 0,${y1.toFixed(1)} L ${w.toFixed(1)},${y0.toFixed(1)} Z`;
+        }).join(" ");
+        return (
+          <g key={p.j} transform={`translate(${(p.x * c.W).toFixed(1)} ${(p.y * c.H).toFixed(1)}) rotate(${sway.toFixed(2)})`}>
+            <rect x={-L * 0.03} y={-L * 0.16} width={L * 0.06} height={L * 0.17} fill={ink} />
+            {rim > 0.01 && <path d={tiers} fill="none" stroke={c.pal.rim} strokeWidth={L * 0.03} strokeOpacity={0.22 * rim} strokeLinejoin="round" />}
+            <path d={tiers} fill={ink} />
+          </g>
+        );
+      })}
+    </g>
+  );
+};
+
+const Birds: React.FC<{ c: Ctx; s: any }> = ({ c, s }) => {
+  const ink = mixHex(c.pal.land, c.pal.rim, 0.18);
+  return (
+    <g opacity={s.opacity * s.enter}>
+      {Array.from({ length: Math.max(1, Math.round(s.count)) }, (_, k) => {
+        const L = s.size * c.S * (0.7 + 0.5 * hash(k, s.seed));
+        const x = (s.x + c.t * s.speed * s.facing + (hash(k, s.seed + 1) - 0.5) * 0.14 - s.facing * k * 0.012) * c.W;
+        const y = (s.y + (hash(k, s.seed + 2) - 0.5) * 0.07 + 0.004 * Math.sin(c.t * 1.4 + k)) * c.H;
+        const flap = Math.sin(c.t * (6 + hash(k, s.seed + 3) * 3) + k * 2);
+        const tip = y - flap * L * 0.45, mid = y - L * 0.12 + flap * L * 0.1;
+        return <path key={k} d={`M ${(x - L).toFixed(1)},${tip.toFixed(1)} Q ${(x - L * 0.45).toFixed(1)},${mid.toFixed(1)} ${x.toFixed(1)},${y.toFixed(1)} Q ${(x + L * 0.45).toFixed(1)},${mid.toFixed(1)} ${(x + L).toFixed(1)},${tip.toFixed(1)}`} fill="none" stroke={ink} strokeWidth={L * 0.13} strokeLinecap="round" strokeLinejoin="round" />;
+      })}
+    </g>
+  );
+};
+
+const Snow: React.FC<{ c: Ctx; s: any }> = ({ c, s }) => {
+  const a = s.intensity * s.opacity * s.enter;
+  if (a < 0.01) return null;
+  const n = Math.round(240 * Math.min(1.3, a));
+  return (
+    <g>
+      <rect width={c.W} height={c.H} fill={mixHex(c.pal.haze, "#ffffff", 0.3)} opacity={0.1 * a} />
+      {Array.from({ length: n }, (_, k) => {
+        const near = hash(k, 91), sp = (0.06 + 0.08 * hash(k, 92)) * (0.6 + near);
+        const ph = (c.t * sp + hash(k, 93)) % 1;
+        const y = ph * 1.2 - 0.1;
+        const x = ((hash(k, 94) * 1.4 - 0.2 + s.wind * ph * 0.5 + 0.012 * Math.sin(c.t * (0.7 + hash(k, 95)) + k)) % 1.4 + 1.4) % 1.4 - 0.2;
+        return <circle key={k} cx={x * c.W} cy={y * c.H} r={(1.2 + 3.2 * near * near) * (c.S / 1080)} fill="#f4f6fa" opacity={a * (0.35 + 0.55 * near)} />;
       })}
     </g>
   );
@@ -359,14 +489,15 @@ export const TableauScene: React.FC<Props> = ({ elements = [], camera = [] }) =>
   const pal = paletteAt(elements, t);
   const states = elements.map((el) => ({ el, s: elementAt(el, t) })).filter((x) => x.s.shown);
   const sea = states.find((x) => x.el.type === "sea")?.s;
-  const horizon = sea?.y ?? 0.66;
+  const hills = states.find((x) => x.el.type === "hills")?.s;
+  const horizon = sea?.y ?? hills?.y ?? 0.66;
   const c: Ctx = { W, H, S: Math.min(W, H), t, pal, horizon, swell: sea?.swell ?? 0.3, id, fonts: theme.fonts };
   const flash = flashTotal(elements, t);
   const shore = states.find((x) => x.el.type === "shore")?.s;
   const moon = states.find((x) => x.el.type === "moon")?.s ?? states.find((x) => x.el.type === "sun")?.s;
   const glint = moon && sea && sea.reflect > 0 ? { x: moon.x, a: moon.opacity * moon.enter * sea.reflect * (1 - 0.8 * (states.find((x) => x.el.type === "clouds")?.s.cover ?? 0) ** 2) } : null;
   // Horizon on screen, as the farthest sea band sees the camera: the sky gradient meets it.
-  const fv = layerView(cam, bandDepth(0));
+  const fv = layerView(cam, sea || !hills ? bandDepth(0) : ridgeDepth(hills, 0));
   const hz = Math.min(0.98, Math.max(0.05, (horizon - fv.cy) * fv.scale + 0.5));
 
   // Draw back to front: every piece in its depth's layer; the sea is one layer per band, and a
@@ -390,6 +521,14 @@ export const TableauScene: React.FC<Props> = ({ elements = [], camera = [] }) =>
         case "fire": return <Fire c={c} s={s} />;
         case "title": return <Title c={c} s={s} />;
         case "lightning": return <Bolts c={c} s={{ ...s, strikes: el.strikes }} />;
+        case "fog": return <Fog c={c} s={s} />;
+        case "town": return <Town c={c} s={s} />;
+        case "trees": return <Trees c={c} s={s} />;
+        case "birds": return <Birds c={c} s={s} />;
+        case "hills": {
+          for (let k = 0; k < Math.max(1, Math.round(s.layers)); k++) draws.push({ depth: ridgeDepth(s, k), order, node: <Ridge key={`ridge${order}-${k}`} c={c} s={s} k={k} /> });
+          return null;
+        }
         case "sea": {
           for (let i = 0; i < SEA_BANDS; i++) {
             if (shore && bandDepth(i) > shore.depth) continue;
@@ -400,10 +539,11 @@ export const TableauScene: React.FC<Props> = ({ elements = [], camera = [] }) =>
         default: return null;
       }
     })();
-    if (node && el.type !== "rain") draws.push({ depth: s.depth, order, node });
+    if (node) draws.push({ depth: s.depth, order, node });
   });
   draws.sort((a, b) => a.depth - b.depth || a.order - b.order);
   const rain = states.find((x) => x.el.type === "rain")?.s;
+  const snow = states.find((x) => x.el.type === "snow")?.s;
   const moving = cameraMoving(camera, t);
 
   return (
@@ -441,6 +581,16 @@ export const TableauScene: React.FC<Props> = ({ elements = [], camera = [] }) =>
             <stop offset="0.6" stopColor={pal.cloud} stopOpacity={0.55} />
             <stop offset="1" stopColor={pal.cloud} stopOpacity={0} />
           </radialGradient>
+          <radialGradient id={`${id}-fog`}>
+            <stop offset="0" stopColor={mixHex(pal.haze, pal.rim, 0.2)} stopOpacity={0.55} />
+            <stop offset="0.6" stopColor={mixHex(pal.haze, pal.rim, 0.2)} stopOpacity={0.22} />
+            <stop offset="1" stopColor={pal.haze} stopOpacity={0} />
+          </radialGradient>
+          <linearGradient id={`${id}-mist`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={pal.haze} stopOpacity={0} />
+            <stop offset="0.7" stopColor={pal.haze} stopOpacity={0.55} />
+            <stop offset="1" stopColor={pal.haze} stopOpacity={0} />
+          </linearGradient>
           <linearGradient id={`${id}-haze`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor={pal.haze} stopOpacity={0} />
             <stop offset="0.5" stopColor={pal.haze} stopOpacity={0.35} />
@@ -456,6 +606,7 @@ export const TableauScene: React.FC<Props> = ({ elements = [], camera = [] }) =>
         <rect x={0} y={(hz - 0.07) * H} width={W} height={0.14 * H} fill={`url(#${id}-haze)`} />
         {draws.filter((d) => d.depth >= bandDepth(0) - 0.05).map((d, i) => <g key={`f${i}`} transform={layerTransform(cam, d.depth, W, H)}>{d.node}</g>)}
         {rain && <Rain c={c} s={rain} />}
+        {snow && <Snow c={c} s={snow} />}
         {flash > 0.01 && <rect width={W} height={H} fill={mixHex(pal.rim, "#ffffff", 0.6)} opacity={flash * 0.42} />}
         <rect width={W} height={H} fill={`url(#${id}-vignette)`} />
       </svg>

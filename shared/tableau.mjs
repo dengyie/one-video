@@ -58,11 +58,19 @@ export const KINDS = {
   rain: { depth: 1, intensity: 0, wind: 0.25, opacity: 1 },
   lightning: { depth: 0.12, x: 0.66, opacity: 1 },
   title: { depth: 1, x: 0.5, y: 0.42, size: 0.11, opacity: 1, text: "" },
+  // Land worlds: ridgelines fading into the haze, a row of pines, a town whose windows light up,
+  // drifting fog, a flock of birds, falling snow.
+  hills: { depth: 0.22, y: 0.66, h: 0.2, rough: 0.3, layers: 3, cap: 0, opacity: 1, seed: 5 },
+  fog: { depth: 0.5, y: 0.7, h: 0.1, cover: 0.6, speed: 0.01, opacity: 1, seed: 6 },
+  town: { depth: 0.5, x: 0.5, y: 0.66, spread: 0.6, size: 0.12, count: 12, lit: 0.6, opacity: 1, seed: 2 },
+  trees: { depth: 0.72, x: 0.5, y: 0.8, spread: 0.6, size: 0.14, count: 9, wind: 0.2, opacity: 1, seed: 4 },
+  birds: { depth: 0.3, x: 0.3, y: 0.3, size: 0.025, count: 5, speed: 0.03, facing: 1, opacity: 1, seed: 8 },
+  snow: { depth: 1, intensity: 0, wind: 0.1, opacity: 1 },
 };
 export const KIND_NAMES = Object.keys(KINDS);
 
 /** Keys that blend when a keyframe changes them (the rest switch at the keyframe). */
-const NUMERIC = ["x", "y", "r", "h", "size", "opacity", "cover", "speed", "swell", "lit", "beam", "sweep", "window", "rock", "lantern", "intensity", "wind", "density", "reflect", "depth"];
+const NUMERIC = ["x", "y", "r", "h", "size", "opacity", "cover", "speed", "swell", "lit", "beam", "sweep", "window", "rock", "lantern", "intensity", "wind", "density", "reflect", "depth", "spread", "rough", "cap", "count"];
 
 /**
  * An element's state at t: kind defaults, its own fields, then each due keyframe (`to`) blended in
@@ -253,6 +261,8 @@ export function tableauTimes(props) {
 // framing gate checks the box against the frame. Kinds without a body (sky, sea, rain…) give null.
 /** @typedef {{ box: [number, number, number, number], anchors: Record<string, [number, number]>, depth: number }} Geometry */
 export const SOLID = ["lighthouse", "hut", "boat", "figure", "fire", "moon", "sun"];
+/** Kinds a camera key or an `on` can name: the solid ones plus rows meant to run off the frame. */
+export const BODIES = [...SOLID, "town", "trees"];
 /** @param {any} s an element state (elementAt) @param {{ W: number, H: number, horizon?: number }} frame @returns {Geometry | null} */
 export function elementGeometry(s, { W, H, horizon = 0.66 }) {
   const S = Math.min(W, H), sx = S / W, sy = S / H;
@@ -279,6 +289,10 @@ export function elementGeometry(s, { W, H, horizon = 0.66 }) {
     case "fire": {
       const r = s.r, y = s.y;
       return geo([x - 1.1 * r * sx, y - 2.6 * r * sy, x + 1.1 * r * sx, y + 0.1 * r * sy], { base: [x, y] });
+    }
+    case "town": case "trees": {
+      const half = s.spread / 2, y = s.y, top = Math.max(...(s.type === "town" ? townBlocks(s).map((b) => b.h) : treeRow(s).map((p) => p.size)));
+      return geo([x - half, y - top * sy, x + half, y], { base: [x, y] });
     }
     case "moon": case "sun": {
       const r = s.r, y = s.y;
@@ -323,8 +337,54 @@ export function insideShare(b) {
   return (w * h) / area;
 }
 
-/** The sea line at t (where a boat with no y floats). @param {any[]} elements @param {number} t */
+/** The horizon at t: the sea line (where a boat with no y floats), else the foot of the hills. @param {any[]} elements @param {number} t */
 export function horizonAt(elements, t) {
-  const sea = elements.find((e) => e.type === "sea");
-  return sea ? elementAt(sea, t).y ?? 0.66 : 0.66;
+  const ground = elements.find((e) => e.type === "sea") ?? elements.find((e) => e.type === "hills");
+  return ground ? elementAt(ground, t).y ?? 0.66 : 0.66;
 }
+
+// Land. Hills are `layers` ridgelines, the far one (k 0) tallest and palest, each nearer one a
+// little lower down the frame; `rough` 0 rolls, 1 is jagged peaks. ridgeTop gives a layer's crest
+// at frame x: its y and how high it stands there (0..1, where snow `cap` settles on the highest).
+/** @param {any} s @param {number} k @param {number} x */
+export function ridgeTop(s, k, x) {
+  const n = Math.max(1, Math.round(s.layers ?? 1)), near = n > 1 ? k / (n - 1) : 1;
+  const seed = (s.seed ?? 0) + k * 13, f = 2.2 + 1.6 * k;
+  const smooth = noise(x * f, seed) * 0.65 + noise(x * f * 2.3, seed + 1) * 0.35;
+  const sharp = Math.pow(1 - Math.abs(2 * noise(x * f * 1.7, seed + 2) - 1), 1.6) * 0.7 + noise(x * f * 5.1, seed + 3) * 0.3;
+  const v = clamp01(lerp(smooth, sharp, clamp01(s.rough ?? 0)));
+  const amp = (s.h ?? 0.2) * (1 - 0.4 * near * (n > 1 ? 1 : 0));
+  return { y: (s.y ?? 0.66) + 0.045 * k - amp * (0.2 + 0.8 * v), v };
+}
+/** A layer's depth: the far ridge at the element's depth, each nearer one 0.1 closer. @param {any} s @param {number} k */
+export const ridgeDepth = (s, k) => Math.min(0.9, (s.depth ?? 0.22) + 0.1 * k);
+
+/** The pines of a row: x, size (short-edge fraction) and foot y, far (higher) ones first. @param {any} s */
+export function treeRow(s) {
+  const n = Math.max(1, Math.round(s.count ?? 1)), seed = s.seed ?? 0, w = (s.spread ?? 0.6) / n;
+  return Array.from({ length: n }, (_, j) => ({
+    x: (s.x ?? 0.5) - (s.spread ?? 0.6) / 2 + w * (j + 0.5) + (hash(j, seed) - 0.5) * w * 0.8,
+    size: (s.size ?? 0.14) * (0.7 + 0.6 * hash(j, seed + 1)),
+    y: (s.y ?? 0.8) + (hash(j, seed + 2) - 0.5) * 0.016,
+    j,
+  })).sort((a, b) => a.y - b.y);
+}
+
+/**
+ * The buildings of a town, side by side across `spread`: left edge and width (frame fractions),
+ * height (short-edge fraction), a pitched roof or not, and the one tower with a spire.
+ * @param {any} s
+ */
+export function townBlocks(s) {
+  const n = Math.max(1, Math.round(s.count ?? 1)), seed = s.seed ?? 0, spread = s.spread ?? 0.6;
+  const raw = Array.from({ length: n }, (_, j) => 0.6 + hash(j, seed + 3) * 0.9), sum = raw.reduce((a, b) => a + b, 0);
+  const tower = Math.floor(hash(seed, 77) * n);
+  let left = (s.x ?? 0.5) - spread / 2;
+  return raw.map((r, j) => {
+    const w = (spread * r) / sum, b = { x: left, w, h: (s.size ?? 0.12) * (j === tower ? 1 : 0.35 + 0.5 * hash(j, seed + 4)), roof: j !== tower && hash(j, seed + 5) > 0.55, spire: j === tower, j };
+    left += w;
+    return b;
+  });
+}
+/** Whether window (row, col) of building j is lit when the town's `lit` is at that level. @param {number} j @param {number} row @param {number} col @param {number} seed @param {number} lit */
+export const windowOn = (j, row, col, seed, lit) => hash(j * 31 + row * 7 + 1, col + seed * 5 + 3) < lit;

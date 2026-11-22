@@ -2,7 +2,7 @@
 // an element placed `on` another stands on one of its anchor points (the keeper on the lighthouse
 // gallery), and a camera key `on` an element (or several) is solved through the parallax so that
 // point lands where the key says — no hand-computed focus that drifts when a piece moves.
-import { SOLID, cameraFor, elementAt, elementGeometry, horizonAt, zoomToFit } from "../../../shared/tableau.mjs";
+import { BODIES, cameraFor, elementAt, elementGeometry, horizonAt, zoomToFit } from "../../../shared/tableau.mjs";
 import { r3 } from "./util.mjs";
 
 export const DEFAULT_FILL = 0.5;
@@ -11,7 +11,7 @@ const MAX_AUTO_ZOOM = 3;
 export function resolveTableauRefs(props, { width, height }, errors, where) {
   const els = props.elements ?? [];
   const byId = new Map(els.filter((e) => e.id).map((e) => [e.id, e]));
-  const names = () => els.filter((e) => SOLID.includes(e.type)).map((e) => e.id).join(", ") || "none";
+  const names = () => els.filter((e) => BODIES.includes(e.type)).map((e) => e.id).join(", ") || "none";
   const resolving = new Set(), failed = new Set();
 
   // An element on another one sits where that one is: resolve the target first (chains allowed).
@@ -35,7 +35,7 @@ export function resolveTableauRefs(props, { width, height }, errors, where) {
   };
   const geometry = (el, t, label) => {
     const g = elementGeometry(elementAt(el, t), { W: width, H: height, horizon: horizonAt(els, t) });
-    if (!g) errors.push(`${where} ${label}: "${el.id}" (${el.type}) has no body to aim at (${SOLID.join(", ")} do)`);
+    if (!g) errors.push(`${where} ${label}: "${el.id}" (${el.type}) has no body to aim at (${BODIES.join(", ")} do)`);
     return g;
   };
   const anchorPoint = (g, anchor, id, label) => {

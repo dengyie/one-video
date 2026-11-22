@@ -2982,7 +2982,13 @@
                   "fire",
                   "rain",
                   "lightning",
-                  "title"
+                  "title",
+                  "hills",
+                  "fog",
+                  "town",
+                  "trees",
+                  "birds",
+                  "snow"
                 ]
               },
               "at": {
@@ -3062,7 +3068,7 @@
               },
               "speed": {
                 "type": "number",
-                "description": "clouds: drift per second"
+                "description": "clouds / fog / birds: drift per second"
               },
               "seed": {
                 "type": "integer"
@@ -3089,7 +3095,7 @@
                 "type": "number",
                 "minimum": 0,
                 "maximum": 1,
-                "description": "lighthouse lamp 0..1 (in between it flickers)"
+                "description": "lighthouse lamp 0..1 (in between it flickers); town: share of windows lit"
               },
               "beam": {
                 "type": "number",
@@ -3127,13 +3133,43 @@
                 "type": "number",
                 "minimum": 0,
                 "maximum": 1.5,
-                "description": "fire / rain"
+                "description": "fire / rain / snow"
               },
               "wind": {
                 "type": "number",
                 "minimum": -1,
                 "maximum": 1,
-                "description": "rain slant"
+                "description": "rain / snow slant; trees sway in it"
+              },
+              "spread": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 3,
+                "description": "town / trees: width of the row (frame fraction), centred on x"
+              },
+              "count": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 60,
+                "description": "town: buildings; trees: pines; birds: flock size"
+              },
+              "rough": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "hills: 0 rolling, 1 jagged peaks"
+              },
+              "layers": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 6,
+                "description": "hills: ridgelines, far to near"
+              },
+              "cap": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "hills: snow on the peaks"
               },
               "text": {
                 "type": "string"
@@ -3247,7 +3283,7 @@
                     },
                     "speed": {
                       "type": "number",
-                      "description": "clouds: drift per second"
+                      "description": "clouds / fog / birds: drift per second"
                     },
                     "seed": {
                       "type": "integer"
@@ -3274,7 +3310,7 @@
                       "type": "number",
                       "minimum": 0,
                       "maximum": 1,
-                      "description": "lighthouse lamp 0..1 (in between it flickers)"
+                      "description": "lighthouse lamp 0..1 (in between it flickers); town: share of windows lit"
                     },
                     "beam": {
                       "type": "number",
@@ -3312,13 +3348,43 @@
                       "type": "number",
                       "minimum": 0,
                       "maximum": 1.5,
-                      "description": "fire / rain"
+                      "description": "fire / rain / snow"
                     },
                     "wind": {
                       "type": "number",
                       "minimum": -1,
                       "maximum": 1,
-                      "description": "rain slant"
+                      "description": "rain / snow slant; trees sway in it"
+                    },
+                    "spread": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 3,
+                      "description": "town / trees: width of the row (frame fraction), centred on x"
+                    },
+                    "count": {
+                      "type": "number",
+                      "minimum": 1,
+                      "maximum": 60,
+                      "description": "town: buildings; trees: pines; birds: flock size"
+                    },
+                    "rough": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "hills: 0 rolling, 1 jagged peaks"
+                    },
+                    "layers": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 6,
+                      "description": "hills: ridgelines, far to near"
+                    },
+                    "cap": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "hills: snow on the peaks"
                     },
                     "text": {
                       "type": "string"
