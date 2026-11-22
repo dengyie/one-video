@@ -36,7 +36,17 @@ async function driveEntry(drive, root, vdir, slug, log) {
   const files = record?.files ?? {};
   if (!files["plan/publish.json"]) return null; // archived but never published
   const dst = join(vdir, slug);
+  const made = !existsSync(dst);
   mkdirSync(dst, { recursive: true });
+  try {
+    return await publishedEntry(drive, base, dst, slug, record, files, log);
+  } catch (err) {
+    if (made) rmSync(dst, { recursive: true, force: true }); // nothing half-made for a project that never listed
+    throw err;
+  }
+}
+
+async function publishedEntry(drive, base, dst, slug, record, files, log) {
   const pub = JSON.parse(await fetchChecked(drive, base, "plan/publish.json", files, join(dst, ".publish.json")));
   if (!pub.video) throw new Error("plan/publish.json names no cut (published before the player read the drive): run onevideo publish again on its render node");
   if (!pub.poster) throw new Error("plan/publish.json names no poster frame: run onevideo publish again on its render node");

@@ -94,7 +94,7 @@ test("drive catalogue: a file that does not match its record keeps the listed en
     const first = await run(fakeDrive(files), { vdir });
     assert.deepEqual(first.videos.map((v) => v.slug), ["keeper"]);
     assert.match(first.warns.join("\n"), /old: plan\/publish\.json names no cut/);
-    assert.ok(!existsSync(join(vdir, "old", "poster.jpg")));
+    assert.ok(!existsSync(join(vdir, "old")), "a project that fails before it was ever listed leaves no directory (sync would delete it every run)");
 
     // The poster on the drive changed under its record (an archive run in flight): keep what is listed.
     files["/OneVideo/keeper/out/publish/poster.jpg"] = "NEWJPEG";

@@ -59,6 +59,16 @@ details { margin: 14px 0 0; border-top: 1px solid var(--line); padding-top: 10px
 summary { cursor: pointer; color: var(--muted); font-size: 13px; width: fit-content; }
 details pre { white-space: pre-wrap; word-break: break-word; font: inherit; font-size: 13px; color: var(--muted); margin: 10px 0 0; }
 details a { color: var(--accent); }
+.transcript .find { display: block; width: 100%; max-width: 320px; margin: 10px 0 0; font: inherit; font-size: 13px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.transcript ol { list-style: none; margin: 8px 0 0; padding: 4px 0; max-height: 340px; overflow: auto; position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.transcript li.ch { font-size: 12px; font-weight: 600; color: var(--muted); padding: 10px 12px 2px; }
+.transcript li button { display: grid; grid-template-columns: 44px 1fr; gap: 10px; width: 100%; text-align: left; font: inherit; font-size: 14px; color: var(--text); background: none; border: 0; padding: 5px 12px; cursor: pointer; }
+.transcript li button:hover { background: var(--surface-2); }
+.transcript li button[aria-current="true"] { background: var(--chip); }
+.transcript li button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.transcript li button .t { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.transcript mark { background: var(--chip-on); color: var(--chip-on-text); border-radius: 3px; padding: 0 1px; }
+.transcript .none { color: var(--muted); font-size: 13px; padding: 6px 12px; }
 .actions { display: flex; gap: 14px; margin-top: 12px; font-size: 13px; }
 .actions a { color: var(--accent); text-decoration: none; }
 .actions a:hover { text-decoration: underline; }
@@ -139,6 +149,7 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
         ${cur.summary ? `<p class="summary">${esc(cur.summary)}</p>` : ""}
         ${cur.chapters.length ? `<ul class="chapters">${cur.chapters.map((c, i) => `<li><button data-i="${i}" data-t="${c.start}"><span class="t">${fmt(c.start)}</span>${esc(c.title)}</button></li>`).join("")}</ul>` : ""}
         <div class="actions"><a href="${esc(cur.video)}" download="${esc(cur.slug)}.mp4">下载 MP4</a><a href="${esc(cur.captions)}" download="${esc(cur.slug)}.vtt">字幕 VTT</a><a href="/w/${esc(cur.slug)}" id="share">复制链接</a></div>
+        <details class="transcript" id="transcript" hidden><summary>文稿</summary><input class="find" type="search" placeholder="在文稿里找" aria-label="在文稿里找"><ol></ol></details>
         ${cur.description ? `<details><summary>说明与数据来源</summary><pre>${linkify(cur.description)}</pre></details>` : ""}
       </div>
       ${videos.length > 1 ? `<section class="list"><h3>全部视频</h3><div class="grid">${videos.map((v) => `
@@ -171,6 +182,7 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
       e.target.closest(".resume").remove();
       vid.play().catch(() => {});
     });
+    transcript(cur, vid);
     $("#share").addEventListener("click", (e) => {
       e.preventDefault();
       const url = `${location.origin}/w/${cur.slug}${vid.currentTime > 1 ? "?t=" + Math.floor(vid.currentTime) : ""}`;
@@ -183,6 +195,76 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
       e.preventDefault();
       go(a.dataset.slug);
     }));
+  }
+
+  // 文稿: the captions as a list grouped by chapter; the line being heard is lit and kept in view
+  // (scrolling only the list, never the page), a click plays from that line, the box filters it.
+  let shown = null; // the video the transcript belongs to; a slower fetch for an earlier one is dropped
+  const vttLib = import("/vtt.mjs");
+  vttLib.catch(() => {}); // awaited (and its failure handled) in transcript()
+  async function transcript(cur, vid) {
+    shown = cur.slug;
+    const box = $("#transcript");
+    let cues;
+    try {
+      const [{ parseVtt, cueAt }, res] = await Promise.all([vttLib, fetch(cur.captions)]);
+      if (!res.ok) return;
+      cues = parseVtt(await res.text());
+      if (shown !== cur.slug || !cues.length || !box.isConnected) return;
+      box.hidden = false;
+      $("summary", box).textContent = `文稿 · ${cues.length} 句`;
+      const list = $("ol", box), find = $(".find", box);
+      const chapterAt = (i) => cur.chapters.findIndex((c, k) => cues[i].start + 0.05 >= c.start && (k === cur.chapters.length - 1 || cues[i].start + 0.05 < cur.chapters[k + 1].start));
+      const draw = (q) => {
+        const hit = (text) => !q || text.toLowerCase().includes(q.toLowerCase());
+        const mark = (text) => {
+          if (!q) return esc(text);
+          const lo = text.toLowerCase(), ql = q.toLowerCase();
+          let out = "", i = 0, j;
+          while ((j = lo.indexOf(ql, i)) >= 0) { out += `${esc(text.slice(i, j))}<mark>${esc(text.slice(j, j + q.length))}</mark>`; i = j + q.length; }
+          return out + esc(text.slice(i));
+        };
+        let html = "", lastCh = -2;
+        cues.forEach((c, i) => {
+          if (!hit(c.text)) return;
+          const ch = cur.chapters.length > 1 ? chapterAt(i) : -1;
+          if (ch !== lastCh && ch >= 0) html += `<li class="ch">${esc(cur.chapters[ch].title)}</li>`;
+          lastCh = ch;
+          html += `<li><button type="button" data-i="${i}"><span class="t">${fmt(c.start)}</span><span>${mark(c.text)}</span></button></li>`;
+        });
+        list.innerHTML = html || `<li class="none">没有找到“${esc(q)}”</li>`;
+        lit = -2;
+        follow(true);
+      };
+      let lit = -2;
+      const follow = (jump) => {
+        const i = cueAt(cues, vid.currentTime);
+        if (i === lit) return;
+        lit = i;
+        let on = null;
+        for (const b of list.querySelectorAll("button")) {
+          const me = Number(b.dataset.i) === i;
+          b.setAttribute("aria-current", String(me));
+          if (me) on = b;
+        }
+        if (!on || !box.open) return;
+        const top = on.offsetTop, bottom = top + on.offsetHeight;
+        if (top < list.scrollTop || bottom > list.scrollTop + list.clientHeight) list.scrollTo({ top: top - list.clientHeight / 3, behavior: jump ? "auto" : "smooth" });
+      };
+      list.addEventListener("click", (e) => {
+        const b = e.target.closest("button[data-i]");
+        if (!b) return;
+        vid.currentTime = cues[Number(b.dataset.i)].start;
+        vid.play().catch(() => {});
+      });
+      find.addEventListener("input", () => draw(find.value.trim()));
+      box.addEventListener("toggle", () => { lit = -2; follow(true); });
+      vid.addEventListener("timeupdate", () => follow(false));
+      vid.addEventListener("seeked", () => follow(true));
+      draw("");
+    } catch {
+      // No transcript is fine: the captions track still works in the player.
+    }
   }
 
   window.addEventListener("popstate", render);
