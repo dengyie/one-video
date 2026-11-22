@@ -19,8 +19,15 @@ const now = siteHash();
 const last = existsSync(STAMP) ? readFileSync(STAMP, "utf8").trim() : null;
 if (!force && now === last) { console.log("site and worker unchanged since the last deploy; nothing to do"); process.exit(0); }
 
-const r = spawnSync("npx", ["--yes", "wrangler@4.158.0", "deploy"], { cwd: WEB, stdio: "inherit" });
-if (r.status !== 0) { console.error(`wrangler deploy failed (exit ${r.status ?? r.signal})`); process.exit(1); }
+// One retry: Cloudflare's API occasionally fails a deploy that goes through a moment later.
+let r;
+for (let attempt = 1; attempt <= 2; attempt++) {
+  r = spawnSync("npx", ["--yes", "wrangler@4.158.0", "deploy"], { cwd: WEB, stdio: "inherit" });
+  if (r.status === 0) break;
+  console.error(`wrangler deploy failed (exit ${r.status ?? r.signal})${attempt === 1 ? "; retrying in 30s" : ""}`);
+  if (attempt === 1) spawnSync("sleep", ["30"]);
+}
+if (r.status !== 0) process.exit(1);
 mkdirSync(dirname(STAMP), { recursive: true });
 writeFileSync(STAMP, now + "\n");
 
