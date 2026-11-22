@@ -247,6 +247,7 @@ export async function qc(args) {
 // Publishing needs the human review sign-off on the current QC report (onevideo approve review).
 export async function publish(args = {}) {
   const project = loadProject();
+  if (args.webOnly) return publishWeb(project, args);
   const tl = readJson(project.paths.timeline);
   const script = readJson(project.paths.script);
   const research = existsSync(project.paths.research) ? readJson(project.paths.research) : null;
@@ -287,6 +288,26 @@ export async function publish(args = {}) {
   log(`publish kit → ${dir} (${[...Object.keys(kit.files), ...(kit.publish.poster ? ["poster.jpg"] : [])].join(", ")})${kit.publish.video ? ` · cut ${kit.publish.video}` : ""}`);
   if (args.stems) await stems({ _: [] });
   // The published cut and everything behind it go to the archive when one is configured.
+  if (driveConfig() && !args.noArchive) {
+    try { await archiveProject(project, { log, warn }); }
+    catch (e) { warn(`archive: ${e.message}; run onevideo archive again`); }
+  }
+}
+
+// --web-only: the web renditions of the cut already published (publish.json `video`), nothing else
+// rebuilt; no review is needed since no new content goes out. For projects published before
+// renditions existed, or whose tiers were lost.
+async function publishWeb(project, args) {
+  if (!existsSync(project.paths.publish)) throw new UserError("nothing published yet; run: onevideo publish");
+  const pub = readJson(project.paths.publish);
+  if (!pub.video) throw new UserError("plan/publish.json names no cut; run: onevideo publish");
+  const main = join(project.root, pub.video);
+  if (!existsSync(main)) throw new UserError(`${pub.video} is not here; run: onevideo restore ${pub.video}`);
+  const dir = join(project.paths.out, "publish");
+  mkdirSync(dir, { recursive: true });
+  pub.renditions = await webRenditions({ root: project.root, main, dir, probe: ffprobe, encode: ffmpeg, log });
+  writeJson(project.paths.publish, pub);
+  log(`web renditions of ${pub.video}: ${pub.renditions.map((r) => r.q).join(", ") || "none (the cut is under 480p)"}`);
   if (driveConfig() && !args.noArchive) {
     try { await archiveProject(project, { log, warn }); }
     catch (e) { warn(`archive: ${e.message}; run onevideo archive again`); }
