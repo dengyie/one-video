@@ -91,7 +91,7 @@ commands                     → 以上任意
 | `feed.mjs` | `/feed.xml`（RSS 2.0：成片 enclosure、Media RSS 缩略图，guid = 分享页）、`/sitemap.xml`（首页 + 各分享页，Google video sitemap 标签）、`/robots.txt`（指向 sitemap；Cloudflare 区域的托管 robots 内容会被拼在前面）。按请求的 origin 从已部署 `videos.json` 现算，`tests/web-feed.test.mjs` 测 |
 | `secrets.mjs` | 把 `ONEVIDEO_DRIVE_USER/PASS` 和公网 API（`ONEVIDEO_WEB_DRIVE_URL`，默认 `https://api-drive.mangoqwq.com/api`）写成 Worker secret（`wrangler secret bulk`，经 stdin，不打印不落盘）；改密码后重跑 |
 
-Drive 成片默认由浏览器直连 MangoDrive 播放（站点只发一次 302）；直链失败（网络到不了 Drive、签名被吊销）时播放页在 `<source>` 的 error 上改用 `?via=edge` 重载一次，保留进度和播放状态。代价：不再用 Cloudflare 边缘缓存，离 Drive 远的观众首字节和吞吐取决于 Drive 出口（新加坡节点实测：直连 1 MB 约 0.9–1.5s，热缓存中转约 0.15s）。
+Drive 成片默认由浏览器直连 MangoDrive 播放（站点只发一次 302）；直链失败（网络到不了 Drive、签名被吊销）时播放页在 `<source>` 的 error 上改用 `?via=edge` 重载一次，保留进度和播放状态。代价：成片走直链时不经 Cloudflare 边缘缓存，离 Drive 远的观众首字节和吞吐取决于 Drive 出口（新加坡节点实测：直连 1 MB 约 0.9–1.5s，热缓存中转约 0.15s）；网页分档另有 zone 级缓存规则（见下段）。
 
 播放器下方「文稿」面板：取 `captions.vtt` 用 `site/vtt.mjs`（`parseVtt` / `cueAt`，`tests/web-vtt.test.mjs` 测）解析，按章节分组，跟随播放高亮、点句跳转、站内搜索高亮。
 
@@ -100,5 +100,7 @@ Drive 成片默认由浏览器直连 MangoDrive 播放（站点只发一次 302�
 Worker 只为 `videos.json` 列出的路径签链 / 中转，不接受任意 Drive 路径。`web/site/.assetsignore` 排除点文件（同步戳 `.synced`、`.publish.json`）和 `description.txt`（已内联进 `videos.json`）。
 
 **网页分档与自适应播放**：`publish` 末尾由 `cli/lib/publish/web.mjs` 把成片转成 1080p/720p/480p（不超原片高度；H.264 CRF + `maxrate` 封顶 2400k/1100k/420k，音频 128k/96k/64k；GOP 固定 2s，`-sc_threshold 0`；`+faststart`）→ `out/publish/web-<q>.mp4`，比成片新则跳过，写进 `publish.json` 的 `renditions`，随 kit 归档。`--no-web` 不出分档；`publish --web-only` 只给 `publish.json` 已发布的那版成片补分档并归档，不重建 kit、不需要重新审批（老项目回填用）。播放页 `web/site/abr.mjs`（`tests/web-abr.test.mjs`）选档：手选的画质 > 本浏览器上次测得的吞吐（`onevideo:bw`，7 天内）> 720p（`navigator.connection` 只能往下调，Save-Data 直接最低档）；播放中每秒按缓冲增长 × 该档平均码率（size×8/时长）估吞吐，缓冲不足 6s 且增长慢于播放、或卡顿超过 3s 就降档（至少一档，8s 冷却），并记住估值。前跳超出缓冲且按当前速度补不上时整段重载到目标位置——Chrome 对 2 MB 内的前跳会等在途下载而不是发新 Range，低码率档上就是几十秒。画质菜单：自动 / 各档 / 原画；下载仍是成片。字节始终由浏览器直连 Drive（Worker 只发 302）。
+
+**分档的 CF 缓存**（zone `mangoqwq.com` 缓存规则，不在本仓库）：`api-drive.mangoqwq.com` 上 `/p/GooglePool-Secure/Apps/onevideo/**/out/publish/web-*.mp4` 缓存键去掉全部查询参数（签名 `sign` 每次 fs/get 都变，带进键就每个新链接都穿透源站），边缘 TTL 4h 覆盖源站、4xx/5xx 不缓存。效果：同一机房第二个观众起命中（本机代理链路 MISS ~38 KB/s → HIT 94–138 KB/s）。取舍：分档在某机房缓存后，不带签名也能取到（本来就是公开播放的内容）；成片、版本、kit 其他文件不在规则内，仍要签名。坑：冷文件第一次被**无效/过期签名**（401）访问后，该机房对这个键会一直标成 BYPASS（实测 45 分钟以上不恢复，按 URL purge 也清不掉；之后有效签名也不缓存，但照常播放，等于退回没有规则时）；签名 30h 有效，正常观众只有隔天恢复旧标签页才会碰到。回滚：删掉这条规则。
 
 **发布链路**：渲染节点 `onevideo publish` → 写 `plan/publish.json`（`video`、`poster`）和 `out/publish/poster.jpg` → 自动 `archive` 到 Drive → 发布节点的 timer 从 Drive 同步并部署。**一个项目只归一台机器**：归档记录写 `host`，别的机器上的副本 `archive` 时被拒（`archive --all` 跳过并报出），换机器用 `archive --takeover`。
