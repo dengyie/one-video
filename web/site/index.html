@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>OneVideo 放映室</title>
 <meta name="description" content="OneVideo 流水线产出的视频">
+<link rel="alternate" type="application/rss+xml" title="OneVideo 放映室" href="/feed.xml">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b1530'/%3E%3Cpath d='M12 9l12 7-12 7z' fill='%2322d3ee'/%3E%3C/svg%3E">
 <style>
 :root {
@@ -43,6 +44,8 @@ header .count { color: var(--muted); font-size: 13px; margin-left: auto; }
 .meta h2 { font-size: 22px; line-height: 1.35; margin: 0 0 6px; font-weight: 700; }
 .sub { color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
 .summary { margin: 12px 0 0; max-width: 72ch; }
+.resume button { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+footer a { color: inherit; }
 .chapters { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 4px; padding: 0; list-style: none; }
 .chapters button {
   font: inherit; font-size: 13px; border: 0; cursor: pointer; color: var(--text);
@@ -89,7 +92,7 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
     <span class="count" id="count"></span>
   </header>
   <main id="main"><p class="empty">加载中…</p></main>
-  <footer>由 OneVideo 流水线渲染 · 素材版权与数据来源见各视频说明</footer>
+  <footer>由 OneVideo 流水线渲染 · 素材版权与数据来源见各视频说明 · <a href="/feed.xml">RSS 订阅</a></footer>
 </div>
 <script>
 (() => {
@@ -108,6 +111,11 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
     const [slug, t] = decodeURIComponent(location.hash.slice(1)).split("@");
     return { slug, t: t ? Number(t) : null };
   }
+  // Where each video was left off, in this browser only: coming back to it resumes there (a ?t= link
+  // wins). Storage can be missing or throw (private mode, blocked site data); then nothing is kept.
+  const POS = "onevideo:pos:";
+  const loadPos = (slug) => { try { const p = JSON.parse(localStorage.getItem(POS + slug)); return Number.isFinite(p?.t) ? p.t : null; } catch { return null; } };
+  const savePos = (slug, t) => { try { if (t == null) localStorage.removeItem(POS + slug); else localStorage.setItem(POS + slug, JSON.stringify({ t: Math.floor(t), at: Date.now() })); } catch {} };
   const go = (slug) => { history.pushState(null, "", `/w/${slug}`); render(); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
   function render() {
@@ -115,6 +123,9 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
     const { slug, t } = current();
     const cur = videos.find((v) => v.slug === slug) ?? videos[0];
     document.title = `${cur.title} · OneVideo 放映室`;
+    const saved = t == null ? loadPos(cur.slug) : null;
+    const resume = saved != null && saved >= 10 && saved < cur.duration - 15 ? saved : null;
+    let start = t ?? resume;
     main.innerHTML = `
       <div class="player">
         <video id="vid" controls playsinline preload="metadata" poster="${esc(cur.poster)}">
@@ -124,7 +135,7 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
       </div>
       <div class="meta">
         <h2>${esc(cur.title)}</h2>
-        <div class="sub"><span>${esc(cur.date)}</span><span>${fmt(cur.duration)}</span><span>${(cur.size / 1048576).toFixed(1)} MB</span></div>
+        <div class="sub"><span>${esc(cur.date)}</span><span>${fmt(cur.duration)}</span><span>${(cur.size / 1048576).toFixed(1)} MB</span>${resume != null ? `<span class="resume">从 ${fmt(resume)} 继续 · <button type="button" id="restart">从头播放</button></span>` : ""}</div>
         ${cur.summary ? `<p class="summary">${esc(cur.summary)}</p>` : ""}
         ${cur.chapters.length ? `<ul class="chapters">${cur.chapters.map((c, i) => `<li><button data-i="${i}" data-t="${c.start}"><span class="t">${fmt(c.start)}</span>${esc(c.title)}</button></li>`).join("")}</ul>` : ""}
         <div class="actions"><a href="${esc(cur.video)}" download="${esc(cur.slug)}.mp4">下载 MP4</a><a href="${esc(cur.captions)}" download="${esc(cur.slug)}.vtt">字幕 VTT</a><a href="/w/${esc(cur.slug)}" id="share">复制链接</a></div>
@@ -146,7 +157,20 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
     };
     if (btns.length) { mark(); vid.addEventListener("timeupdate", mark); }
     btns.forEach((b) => b.addEventListener("click", () => { vid.currentTime = Number(b.dataset.t); vid.play().catch(() => {}); }));
-    if (t != null && Number.isFinite(t)) vid.addEventListener("loadedmetadata", () => { vid.currentTime = t; }, { once: true });
+    if (start != null && Number.isFinite(start)) vid.addEventListener("loadedmetadata", () => { if (start) vid.currentTime = start; }, { once: true });
+    const end = () => (Number.isFinite(vid.duration) ? vid.duration : cur.duration) - 15;
+    const keep = () => { if (vid.currentTime >= end()) savePos(cur.slug, null); else if (vid.currentTime >= 10) savePos(cur.slug, vid.currentTime); };
+    let kept = 0;
+    vid.addEventListener("timeupdate", () => { if (Math.abs(vid.currentTime - kept) >= 5) { kept = vid.currentTime; keep(); } });
+    vid.addEventListener("pause", keep);
+    vid.addEventListener("ended", () => savePos(cur.slug, null));
+    $("#restart")?.addEventListener("click", (e) => {
+      start = 0;
+      vid.currentTime = 0;
+      savePos(cur.slug, null);
+      e.target.closest(".resume").remove();
+      vid.play().catch(() => {});
+    });
     $("#share").addEventListener("click", (e) => {
       e.preventDefault();
       const url = `${location.origin}/w/${cur.slug}${vid.currentTime > 1 ? "?t=" + Math.floor(vid.currentTime) : ""}`;

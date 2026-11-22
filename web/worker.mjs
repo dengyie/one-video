@@ -1,8 +1,10 @@
 import { DriveLink, proxyVideo } from "./drive.mjs";
+import { FEEDS } from "./feed.mjs";
 import { SHARE, sharePage } from "./share.mjs";
 
-// /v/* and /w/* run through here (run_worker_first).
+// /v/*, /w/* and the feeds run through here (run_worker_first).
 // - /w/<slug> is the player page with that video's share tags (share.mjs).
+// - /feed.xml, /sitemap.xml, /robots.txt are built from videos.json for the requested origin (feed.mjs).
 // - Videos whose videos.json entry has `source: "drive"` are streamed from MangoDrive at play time,
 //   from the drive path that entry names (only those paths: the Worker is no open proxy into the
 //   drive). See drive.mjs. Secrets DRIVE_URL (public API base), DRIVE_USER, DRIVE_PASS: web/secrets.mjs.
@@ -11,7 +13,7 @@ import { SHARE, sharePage } from "./share.mjs";
 //   hit loads the asset into the colo's edge cache, and the cache answers Range with proper 206s.
 const VIDEO = /^\/v\/([a-z0-9][a-z0-9-]*)\/video\.mp4$/;
 const INDEX_TTL = 60_000;
-let index = null; // { at, videos: Map<slug, videos.json entry>, drive: Map<slug, drive path> }
+let index = null; // { at, list, generatedAt, videos: Map<slug, videos.json entry>, drive: Map<slug, drive path> }
 let link = null;
 const filling = new Set();
 
@@ -20,6 +22,12 @@ export default {
     const url = new URL(req.url);
     const share = SHARE.exec(url.pathname);
     if (share && (req.method === "GET" || req.method === "HEAD")) return sharePageResponse(env, share[1], url.origin, req.method);
+    const feed = FEEDS[url.pathname];
+    if (feed && (req.method === "GET" || req.method === "HEAD")) {
+      const { list, generatedAt } = await catalogue(env);
+      const body = feed.build(list, url.origin, generatedAt);
+      return new Response(req.method === "HEAD" ? null : body, { headers: { "Content-Type": feed.type, "Cache-Control": "public, max-age=300", "X-Content-Type-Options": "nosniff" } });
+    }
     const m = VIDEO.exec(url.pathname);
     const path = m && (req.method === "GET" || req.method === "HEAD") ? (await catalogue(env)).drive.get(m[1]) : null;
     if (path) {
@@ -43,13 +51,13 @@ export default {
 // The deployed videos.json: every entry by slug, and the drive path of those that live on the drive.
 async function catalogue(env) {
   if (index && Date.now() - index.at < INDEX_TTL) return index;
-  let list = [];
+  let list = [], generatedAt = null;
   try {
     const res = await env.ASSETS.fetch(new Request("https://assets.local/videos.json"));
-    if (res.ok) list = (await res.json()).videos ?? [];
+    if (res.ok) ({ videos: list = [], generatedAt = null } = await res.json());
   } catch {}
   const drive = new Map(list.filter((v) => v.source === "drive" && typeof v.drive === "string" && v.drive.startsWith("/")).map((v) => [v.slug, v.drive]));
-  index = { at: Date.now(), videos: new Map(list.map((v) => [v.slug, v])), drive };
+  index = { at: Date.now(), list, generatedAt, videos: new Map(list.map((v) => [v.slug, v])), drive };
   return index;
 }
 
