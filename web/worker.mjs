@@ -1,6 +1,8 @@
 import { DriveLink, proxyVideo } from "./drive.mjs";
+import { SHARE, sharePage } from "./share.mjs";
 
-// /v/* runs through here (run_worker_first).
+// /v/* and /w/* run through here (run_worker_first).
+// - /w/<slug> is the player page with that video's share tags (share.mjs).
 // - Videos whose videos.json entry has `source: "drive"` are streamed from MangoDrive at play time,
 //   from the drive path that entry names (only those paths: the Worker is no open proxy into the
 //   drive). See drive.mjs. Secrets DRIVE_URL (public API base), DRIVE_USER, DRIVE_PASS: web/secrets.mjs.
@@ -9,14 +11,17 @@ import { DriveLink, proxyVideo } from "./drive.mjs";
 //   hit loads the asset into the colo's edge cache, and the cache answers Range with proper 206s.
 const VIDEO = /^\/v\/([a-z0-9][a-z0-9-]*)\/video\.mp4$/;
 const INDEX_TTL = 60_000;
-let index = null; // { at, drive: Map<slug, drive path> }
+let index = null; // { at, videos: Map<slug, videos.json entry>, drive: Map<slug, drive path> }
 let link = null;
 const filling = new Set();
 
 export default {
   async fetch(req, env, ctx) {
-    const m = VIDEO.exec(new URL(req.url).pathname);
-    const path = m && (req.method === "GET" || req.method === "HEAD") ? (await drivePaths(env)).get(m[1]) : null;
+    const url = new URL(req.url);
+    const share = SHARE.exec(url.pathname);
+    if (share && (req.method === "GET" || req.method === "HEAD")) return sharePageResponse(env, share[1], url.origin, req.method);
+    const m = VIDEO.exec(url.pathname);
+    const path = m && (req.method === "GET" || req.method === "HEAD") ? (await catalogue(env)).drive.get(m[1]) : null;
     if (path) {
       if (req.method === "GET") {
         const hit = await caches.default.match(req);
@@ -35,16 +40,26 @@ export default {
   },
 };
 
-// slug → drive path of the videos that live on the drive, from the deployed videos.json.
-async function drivePaths(env) {
-  if (index && Date.now() - index.at < INDEX_TTL) return index.drive;
-  let drive = new Map();
+// The deployed videos.json: every entry by slug, and the drive path of those that live on the drive.
+async function catalogue(env) {
+  if (index && Date.now() - index.at < INDEX_TTL) return index;
+  let list = [];
   try {
     const res = await env.ASSETS.fetch(new Request("https://assets.local/videos.json"));
-    if (res.ok) drive = new Map(((await res.json()).videos ?? []).filter((v) => v.source === "drive" && typeof v.drive === "string" && v.drive.startsWith("/")).map((v) => [v.slug, v.drive]));
+    if (res.ok) list = (await res.json()).videos ?? [];
   } catch {}
-  index = { at: Date.now(), drive };
-  return drive;
+  const drive = new Map(list.filter((v) => v.source === "drive" && typeof v.drive === "string" && v.drive.startsWith("/")).map((v) => [v.slug, v.drive]));
+  index = { at: Date.now(), videos: new Map(list.map((v) => [v.slug, v])), drive };
+  return index;
+}
+
+async function sharePageResponse(env, slug, origin, method) {
+  const [{ videos }, page] = await Promise.all([catalogue(env), env.ASSETS.fetch(new Request("https://assets.local/"))]);
+  if (!page.ok) return page;
+  const video = videos.get(slug) ?? null;
+  const body = sharePage(await page.text(), video, origin);
+  const headers = { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "strict-origin-when-cross-origin" };
+  return new Response(method === "HEAD" ? null : body, { status: video ? 200 : 404, headers });
 }
 
 async function staticAsset(req, env) {

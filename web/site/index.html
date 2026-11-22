@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
+<base href="/">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>OneVideo 放映室</title>
 <meta name="description" content="OneVideo 流水线产出的视频">
@@ -99,15 +100,19 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
   const main = $("#main");
   let videos = [];
 
-  function slugFromHash() {
-    const h = decodeURIComponent(location.hash.slice(1));
-    const [slug, t] = h.split("@");
+  // /w/<slug>?t=<s> (share pages, see web/share.mjs); #<slug>@<s> from older links still works.
+  function current() {
+    const m = /^\/w\/([a-z0-9-]+)\/?$/.exec(location.pathname);
+    const q = new URLSearchParams(location.search).get("t");
+    if (m) return { slug: m[1], t: q ? Number(q) : null };
+    const [slug, t] = decodeURIComponent(location.hash.slice(1)).split("@");
     return { slug, t: t ? Number(t) : null };
   }
+  const go = (slug) => { history.pushState(null, "", `/w/${slug}`); render(); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
   function render() {
     if (!videos.length) { main.innerHTML = `<p class="empty">还没有已发布的视频</p>`; return; }
-    const { slug, t } = slugFromHash();
+    const { slug, t } = current();
     const cur = videos.find((v) => v.slug === slug) ?? videos[0];
     document.title = `${cur.title} · OneVideo 放映室`;
     main.innerHTML = `
@@ -122,11 +127,11 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
         <div class="sub"><span>${esc(cur.date)}</span><span>${fmt(cur.duration)}</span><span>${(cur.size / 1048576).toFixed(1)} MB</span></div>
         ${cur.summary ? `<p class="summary">${esc(cur.summary)}</p>` : ""}
         ${cur.chapters.length ? `<ul class="chapters">${cur.chapters.map((c, i) => `<li><button data-i="${i}" data-t="${c.start}"><span class="t">${fmt(c.start)}</span>${esc(c.title)}</button></li>`).join("")}</ul>` : ""}
-        <div class="actions"><a href="${esc(cur.video)}" download="${esc(cur.slug)}.mp4">下载 MP4</a><a href="${esc(cur.captions)}" download="${esc(cur.slug)}.vtt">字幕 VTT</a><a href="#${esc(cur.slug)}" id="share">复制链接</a></div>
+        <div class="actions"><a href="${esc(cur.video)}" download="${esc(cur.slug)}.mp4">下载 MP4</a><a href="${esc(cur.captions)}" download="${esc(cur.slug)}.vtt">字幕 VTT</a><a href="/w/${esc(cur.slug)}" id="share">复制链接</a></div>
         ${cur.description ? `<details><summary>说明与数据来源</summary><pre>${linkify(cur.description)}</pre></details>` : ""}
       </div>
       ${videos.length > 1 ? `<section class="list"><h3>全部视频</h3><div class="grid">${videos.map((v) => `
-        <a class="card" href="#${esc(v.slug)}" ${v.slug === cur.slug ? 'aria-current="true"' : ""}>
+        <a class="card" href="/w/${esc(v.slug)}" data-slug="${esc(v.slug)}" ${v.slug === cur.slug ? 'aria-current="true"' : ""}>
           <div class="thumb"><img src="${esc(v.poster)}" alt="" loading="lazy"><span class="dur">${fmt(v.duration)}</span></div>
           <div class="info"><b>${esc(v.title)}</b><span>${esc(v.date)}</span></div>
         </a>`).join("")}</div></section>` : ""}`;
@@ -144,13 +149,19 @@ footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; }
     if (t != null && Number.isFinite(t)) vid.addEventListener("loadedmetadata", () => { vid.currentTime = t; }, { once: true });
     $("#share").addEventListener("click", (e) => {
       e.preventDefault();
-      const url = `${location.origin}${location.pathname}#${cur.slug}${vid.currentTime > 1 ? "@" + Math.floor(vid.currentTime) : ""}`;
+      const url = `${location.origin}/w/${cur.slug}${vid.currentTime > 1 ? "?t=" + Math.floor(vid.currentTime) : ""}`;
       const done = () => { e.target.textContent = "已复制"; setTimeout(() => (e.target.textContent = "复制链接"), 1500); };
       if (navigator.clipboard) navigator.clipboard.writeText(url).then(done, () => prompt("链接", url));
       else prompt("链接", url);
     });
+    main.querySelectorAll(".card").forEach((a) => a.addEventListener("click", (e) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      go(a.dataset.slug);
+    }));
   }
 
+  window.addEventListener("popstate", render);
   window.addEventListener("hashchange", () => { render(); window.scrollTo({ top: 0, behavior: "smooth" }); });
   fetch("videos.json", { cache: "no-cache" })
     .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
