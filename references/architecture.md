@@ -83,10 +83,10 @@ commands                     → 以上任意
 | 文件 | 内容 |
 |---|---|
 | `sync.mjs` | 命令入口：选来源、写 `videos.json`、清掉下架的目录。**drive**（配了 `ONEVIDEO_DRIVE_*` 时默认）交给 `catalog.mjs`。**host**（`ONEVIDEO_WEB_FROM=host`）：从本机或 `ONEVIDEO_HOST` 上的项目复制，成片走静态资源，超 25 MiB 让同步失败 |
-| `catalog.mjs` | `driveCatalogue({ drive, root, vdir, previous })`：列出 MangoDrive 根目录下的项目，读 `plan/archive.json`，记录里有 `plan/publish.json` 的才上站；`publish.json` 的 `video`（成片对应的版本文件，如 `out/versions/v4.mp4`）留在 Drive 上由 Worker 播放时拉取，海报 `poster`、字幕、简介下载进 `vdir/<slug>/`，全部按归档记录的 sha256 校验（`.synced` 戳相同则不重下）；日期取 `publish.rendered`；单个项目出错（上传中途、网络）保留 `previous` 里的条目。`drive` 可注入，`tests/web-catalog.test.mjs` 用假 Drive 测 |
+| `catalog.mjs` | `driveCatalogue({ drive, root, vdir, previous })`：列出 MangoDrive 根目录下的项目，读 `plan/archive.json`，记录里有 `plan/publish.json` 的才上站；`publish.json` 的 `video`（成片对应的版本文件，如 `out/versions/v4.mp4`）留在 Drive 上由 Worker 播放时拉取，海报 `poster`、字幕、简介下载进 `vdir/<slug>/`，全部按归档记录的 sha256 校验（`.synced` 戳相同则不重下）；日期取 `publish.rendered`；`publish.renditions` 里已上传（记录里有 sha）的分档按高度降序列进条目的 `renditions`（`q`、`height`、`kbps` 峰值、`size`、`video: v/<slug>/video-<q>.mp4?v=<sha12>`、`drive`）；单个项目出错（上传中途、网络）保留 `previous` 里的条目。`drive` 可注入，`tests/web-catalog.test.mjs` 用假 Drive 测 |
 | `deploy.mjs` | sync + 变更检测 + 部署，可放进 timer |
 | `drive.mjs` | 纯 fetch：`DriveLink`（登录、签名直链缓存 5 分钟、token 过期重登；直链按文件签名，约 30 小时有效，支持 Range、`Access-Control-Allow-Origin: *`）、`directVideo`（302 到签名直链，`Cache-Control: private, max-age=300`，字节由 Drive 直接给浏览器）、`proxyVideo`（`?via=edge` 中转：透传 Range → 206/416，签名失效换链重试一次，Drive 出错 502；GET 时后台把整片灌进边缘缓存，≤200 MiB）。Worker 与 `tests/web-drive.test.mjs` 共用 |
-| `worker.mjs` | `/v/<slug>/video.mp4` 且已部署 `videos.json` 里该 slug 是 `source: "drive"` → 按条目的 `drive` 路径 302 到 Drive 直链（`directVideo`）；带 `?via=edge` 时先查边缘缓存，否则 `proxyVideo` 中转；`/w/<slug>` → `share.mjs` 改写的播放页（未知 slug 404）；其余走静态资源（边缘缓存补 206） |
+| `worker.mjs` | `/v/<slug>/video.mp4`（或分档 `/v/<slug>/video-<q>.mp4`，只认 `videos.json` 该条 `renditions` 里列出的）且已部署 `videos.json` 里该 slug 是 `source: "drive"` → 按条目的 `drive` 路径 302 到 Drive 直链（`directVideo`）；带 `?via=edge` 时先查边缘缓存，否则 `proxyVideo` 中转；`/w/<slug>` → `share.mjs` 改写的播放页（未知 slug 404）；其余走静态资源（边缘缓存补 206） |
 | `share.mjs` | 分享页：`/w/<slug>` 是 `site/index.html` 换上该视频的 `<title>`、description、Open Graph / Twitter 标签（海报、成片绝对地址、时长），贴进聊天能展开成视频卡片。纯字符串替换，`tests/web-share.test.mjs` 测。播放页按路径导航（`pushState`），旧链接 `/#slug@t` 仍可用 |
 | `feed.mjs` | `/feed.xml`（RSS 2.0：成片 enclosure、Media RSS 缩略图，guid = 分享页）、`/sitemap.xml`（首页 + 各分享页，Google video sitemap 标签）、`/robots.txt`（指向 sitemap；Cloudflare 区域的托管 robots 内容会被拼在前面）。按请求的 origin 从已部署 `videos.json` 现算，`tests/web-feed.test.mjs` 测 |
 | `secrets.mjs` | 把 `ONEVIDEO_DRIVE_USER/PASS` 和公网 API（`ONEVIDEO_WEB_DRIVE_URL`，默认 `https://api-drive.mangoqwq.com/api`）写成 Worker secret（`wrangler secret bulk`，经 stdin，不打印不落盘）；改密码后重跑 |
@@ -98,5 +98,7 @@ Drive 成片默认由浏览器直连 MangoDrive 播放（站点只发一次 302�
 播放页在 `localStorage`（`onevideo:pos:<slug>`）记每个视频看到哪（10s 到结尾前 15s 之间），回来时续播并给「从头播放」；`?t=` 链接优先。
 
 Worker 只为 `videos.json` 列出的路径签链 / 中转，不接受任意 Drive 路径。`web/site/.assetsignore` 排除点文件（同步戳 `.synced`、`.publish.json`）和 `description.txt`（已内联进 `videos.json`）。
+
+**网页分档与自适应播放**：`publish` 末尾由 `cli/lib/publish/web.mjs` 把成片转成 1080p/720p/480p（不超原片高度；H.264 CRF + `maxrate` 封顶 2400k/1100k/420k，音频 128k/96k/64k；GOP 固定 2s，`-sc_threshold 0`；`+faststart`）→ `out/publish/web-<q>.mp4`，比成片新则跳过，写进 `publish.json` 的 `renditions`，随 kit 归档。`--no-web` 不出分档；`publish --web-only` 只给 `publish.json` 已发布的那版成片补分档并归档，不重建 kit、不需要重新审批（老项目回填用）。播放页 `web/site/abr.mjs`（`tests/web-abr.test.mjs`）选档：手选的画质 > 本浏览器上次测得的吞吐（`onevideo:bw`，7 天内）> 720p（`navigator.connection` 只能往下调，Save-Data 直接最低档）；播放中每秒按缓冲增长 × 该档平均码率（size×8/时长）估吞吐，缓冲不足 6s 且增长慢于播放、或卡顿超过 3s 就降档（至少一档，8s 冷却），并记住估值。前跳超出缓冲且按当前速度补不上时整段重载到目标位置——Chrome 对 2 MB 内的前跳会等在途下载而不是发新 Range，低码率档上就是几十秒。画质菜单：自动 / 各档 / 原画；下载仍是成片。字节始终由浏览器直连 Drive（Worker 只发 302）。
 
 **发布链路**：渲染节点 `onevideo publish` → 写 `plan/publish.json`（`video`、`poster`）和 `out/publish/poster.jpg` → 自动 `archive` 到 Drive → 发布节点的 timer 从 Drive 同步并部署。**一个项目只归一台机器**：归档记录写 `host`，别的机器上的副本 `archive` 时被拒（`archive --all` 跳过并报出），换机器用 `archive --takeover`。
