@@ -85,14 +85,18 @@ commands                     → 以上任意
 | `sync.mjs` | 命令入口：选来源、写 `videos.json`、清掉下架的目录。**drive**（配了 `ONEVIDEO_DRIVE_*` 时默认）交给 `catalog.mjs`。**host**（`ONEVIDEO_WEB_FROM=host`）：从本机或 `ONEVIDEO_HOST` 上的项目复制，成片走静态资源，超 25 MiB 让同步失败 |
 | `catalog.mjs` | `driveCatalogue({ drive, root, vdir, previous })`：列出 MangoDrive 根目录下的项目，读 `plan/archive.json`，记录里有 `plan/publish.json` 的才上站；`publish.json` 的 `video`（成片对应的版本文件，如 `out/versions/v4.mp4`）留在 Drive 上由 Worker 播放时拉取，海报 `poster`、字幕、简介下载进 `vdir/<slug>/`，全部按归档记录的 sha256 校验（`.synced` 戳相同则不重下）；日期取 `publish.rendered`；单个项目出错（上传中途、网络）保留 `previous` 里的条目。`drive` 可注入，`tests/web-catalog.test.mjs` 用假 Drive 测 |
 | `deploy.mjs` | sync + 变更检测 + 部署，可放进 timer |
-| `drive.mjs` | 纯 fetch：`DriveLink`（登录、签名直链缓存 5 分钟、token 过期重登）、`proxyVideo`（透传 Range → 206/416，签名失效换链重试一次，Drive 出错 502；GET 时后台把整片灌进边缘缓存，≤200 MiB）。Worker 与 `tests/web-drive.test.mjs` 共用 |
-| `worker.mjs` | `/v/<slug>/video.mp4` 且已部署 `videos.json` 里该 slug 是 `source: "drive"` → 先查边缘缓存，否则按条目的 `drive` 路径 `proxyVideo`；`/w/<slug>` → `share.mjs` 改写的播放页（未知 slug 404）；其余走静态资源（边缘缓存补 206） |
+| `drive.mjs` | 纯 fetch：`DriveLink`（登录、签名直链缓存 5 分钟、token 过期重登；直链按文件签名，约 30 小时有效，支持 Range、`Access-Control-Allow-Origin: *`）、`directVideo`（302 到签名直链，`Cache-Control: private, max-age=300`，字节由 Drive 直接给浏览器）、`proxyVideo`（`?via=edge` 中转：透传 Range → 206/416，签名失效换链重试一次，Drive 出错 502；GET 时后台把整片灌进边缘缓存，≤200 MiB）。Worker 与 `tests/web-drive.test.mjs` 共用 |
+| `worker.mjs` | `/v/<slug>/video.mp4` 且已部署 `videos.json` 里该 slug 是 `source: "drive"` → 按条目的 `drive` 路径 302 到 Drive 直链（`directVideo`）；带 `?via=edge` 时先查边缘缓存，否则 `proxyVideo` 中转；`/w/<slug>` → `share.mjs` 改写的播放页（未知 slug 404）；其余走静态资源（边缘缓存补 206） |
 | `share.mjs` | 分享页：`/w/<slug>` 是 `site/index.html` 换上该视频的 `<title>`、description、Open Graph / Twitter 标签（海报、成片绝对地址、时长），贴进聊天能展开成视频卡片。纯字符串替换，`tests/web-share.test.mjs` 测。播放页按路径导航（`pushState`），旧链接 `/#slug@t` 仍可用 |
 | `feed.mjs` | `/feed.xml`（RSS 2.0：成片 enclosure、Media RSS 缩略图，guid = 分享页）、`/sitemap.xml`（首页 + 各分享页，Google video sitemap 标签）、`/robots.txt`（指向 sitemap；Cloudflare 区域的托管 robots 内容会被拼在前面）。按请求的 origin 从已部署 `videos.json` 现算，`tests/web-feed.test.mjs` 测 |
 | `secrets.mjs` | 把 `ONEVIDEO_DRIVE_USER/PASS` 和公网 API（`ONEVIDEO_WEB_DRIVE_URL`，默认 `https://api-drive.mangoqwq.com/api`）写成 Worker secret（`wrangler secret bulk`，经 stdin，不打印不落盘）；改密码后重跑 |
 
+Drive 成片默认由浏览器直连 MangoDrive 播放（站点只发一次 302）；直链失败（网络到不了 Drive、签名被吊销）时播放页在 `<source>` 的 error 上改用 `?via=edge` 重载一次，保留进度和播放状态。代价：不再用 Cloudflare 边缘缓存，离 Drive 远的观众首字节和吞吐取决于 Drive 出口（新加坡节点实测：直连 1 MB 约 0.9–1.5s，热缓存中转约 0.15s）。
+
+播放器下方「文稿」面板：取 `captions.vtt` 用 `site/vtt.mjs`（`parseVtt` / `cueAt`，`tests/web-vtt.test.mjs` 测）解析，按章节分组，跟随播放高亮、点句跳转、站内搜索高亮。
+
 播放页在 `localStorage`（`onevideo:pos:<slug>`）记每个视频看到哪（10s 到结尾前 15s 之间），回来时续播并给「从头播放」；`?t=` 链接优先。
 
-Worker 只代理 `videos.json` 列出的路径，不接受任意 Drive 路径。`web/site/.assetsignore` 排除点文件（同步戳 `.synced`、`.publish.json`）和 `description.txt`（已内联进 `videos.json`）。
+Worker 只为 `videos.json` 列出的路径签链 / 中转，不接受任意 Drive 路径。`web/site/.assetsignore` 排除点文件（同步戳 `.synced`、`.publish.json`）和 `description.txt`（已内联进 `videos.json`）。
 
 **发布链路**：渲染节点 `onevideo publish` → 写 `plan/publish.json`（`video`、`poster`）和 `out/publish/poster.jpg` → 自动 `archive` 到 Drive → 发布节点的 timer 从 Drive 同步并部署。**一个项目只归一台机器**：归档记录写 `host`，别的机器上的副本 `archive` 时被拒（`archive --all` 跳过并报出），换机器用 `archive --takeover`。
