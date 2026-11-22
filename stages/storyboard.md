@@ -60,6 +60,7 @@
   - 镜头停下时，灯塔、船、人不能被画框切一截（framing 门控），要么推近对准它，要么退开。
   - 站在悬崖上的东西（灯塔、小屋、人、火）要整个落在崖顶上，越过崖边就悬在海上（grounding 门控）。
   - 不在海边的故事用内陆元素搭世界：`hills`（远山分层、`cap` 积雪）+ `fog` + `town`（关键帧推 `lit` 让窗灯一盏盏亮起）+ `trees` + `shore` 当前景地面，再加 `birds` `snow`；人在山上走写 `on: "hills", anchor: "ridge"` 只给 x，脚下自动贴着脊线；参考 `examples/postman`（《山中邮差》），字段见 `references/scene-catalog.md`。
+  - 按 16:9 构图写就行：出竖屏 / 方屏时画面是 16:9 舞台上的一扇窗，手写 x 的镜头键会自动横移到那一镜的主体上（人优先），标题居中缩到放得下；`render --aspect 9:16` 前先 `stills --aspect 9:16` 看一眼。
   - 旁白节奏靠 `tts.style` 写明“语速自然偏快、不拖音”，配音前先 `onevideo tts --audition` 试几种声音。
 
 ## 版面（layout 门控，timeline 时检查）

@@ -3,17 +3,20 @@
 // gallery), and a camera key `on` an element (or several) is solved through the parallax so that
 // point lands where the key says — no hand-computed focus that drifts when a piece moves. On
 // hills an element stands on a ridgeline at its own x and keeps to it as it moves (`follow`).
-import { BODIES, KINDS, cameraFor, elementAt, elementGeometry, horizonAt, ridgeDepth, ridgeTop, stateAt, zoomToFit } from "../../../shared/tableau.mjs";
+// In a frame narrower than the 16:9 stage (9:16…) the keys that give x/y by hand are reframed onto
+// what they were showing, so the vertical cut follows the people, not the middle of the stage.
+import { BODIES, KINDS, SOLID, boxOnScreen, cameraAt, cameraFor, insideShare, stageOf, elementAt, elementGeometry, horizonAt, ridgeDepth, ridgeTop, stateAt, zoomToFit } from "../../../shared/tableau.mjs";
 import { r3 } from "./util.mjs";
 
 export const DEFAULT_FILL = 0.5;
 const MAX_AUTO_ZOOM = 3;
 
-export function resolveTableauRefs(props, { width, height }, errors, where) {
+export function resolveTableauRefs(props, { width, height, duration = 0 }, errors, where) {
   const els = props.elements ?? [];
   const byId = new Map(els.filter((e) => e.id).map((e) => [e.id, e]));
   const names = () => els.filter((e) => BODIES.includes(e.type)).map((e) => e.id).join(", ") || "none";
   const resolving = new Set(), failed = new Set();
+  const { kx } = stageOf(width, height);
 
   // An element on another one sits where that one is: resolve the target first (chains allowed).
   const place = (el, label) => {
@@ -79,11 +82,96 @@ export function resolveTableauRefs(props, { width, height }, errors, where) {
     const depth = geos.reduce((a, g) => a + g.depth, 0) / geos.length;
     const p = ids.length === 1 ? anchorPoint(geos[0], k.anchor, ids[0], label) : [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2];
     if (!p) continue;
-    const zoom = k.zoom ?? r3(Math.min(MAX_AUTO_ZOOM, zoomToFit(box, depth, k.fill ?? DEFAULT_FILL)));
-    const c = cameraFor(p, depth, zoom, k.place);
+    const zoom = k.zoom ?? r3(Math.min(MAX_AUTO_ZOOM, zoomToFit(box, depth, k.fill ?? DEFAULT_FILL, kx)));
+    const c = cameraFor(p, depth, zoom, k.place, kx);
     k.x = r3(c.x);
     k.y = r3(c.y);
     k.zoom = zoom;
     for (const f of ["on", "anchor", "place", "fill"]) delete k[f];
+    k.aimed = ids;
+  }
+  if (kx > 1.01) reframe(props.camera ?? [], els, { W: width, H: height }, kx, duration);
+  for (const k of props.camera ?? []) delete k.aimed;
+}
+
+// What a narrow frame should keep from a stage-wide shot, most telling first.
+const SUBJECT = ["figure", "boat", "fire", "lighthouse", "hut", "town", "sun", "moon"];
+const EDGE = 0.05;
+
+// A key with hand-set x/y was composed for the whole stage. Where the camera comes to rest on it,
+// take the bodies that shot shows (as the 16:9 frame sees them), most telling first, as many as fit
+// the narrow window together, and slide the key sideways so they sit in it — until the next key
+// takes over, so a walking figure stays in too. A key aimed with `on`
+// keeps its target where it was put. Either way the slide avoids leaving another body half in the
+// frame (it goes wholly in or wholly out); y and zoom stay.
+function reframe(keys, els, frame, kx, duration) {
+  const T = (k) => k.t ?? 0;
+  const rest = keys.map((k, i) => (i + 1 < keys.length && !keys[i + 1].cut ? Math.min(T(keys[i + 1]), T(k) + (k.dur ?? 2)) : T(k) + (i === 0 || k.cut ? 0 : k.dur ?? 2)));
+  // Bodies at t with the camera across at k's x (its y and zoom as the keys have them then — the next
+  // key's x is still the 16:9 one); f: how far one unit of x slides each on screen (its layer's parallax).
+  const bodiesAt = (k, t, aimed) => {
+    const cam = { ...cameraAt(keys, t), x: k.x, sway: 0 };
+    const out = [];
+    for (const el of els) {
+      const aimedAt = Array.isArray(aimed) && aimed.includes(el.id);
+      if (!aimedAt && !SUBJECT.includes(el.type)) continue;
+      const s = stateAt(el, els, t);
+      if (!s.shown || (s.opacity ?? 1) < 0.5) continue;
+      const g = elementGeometry(s, { ...frame, horizon: horizonAt(els, t) });
+      if (!g) continue;
+      const kd = 0.25 + 0.75 * Math.min(1, Math.max(0, g.depth));
+      out.push({ id: el.id, g, aimedAt, wide: boxOnScreen(cam, g.depth, g.box), b: boxOnScreen(cam, g.depth, g.box, kx), f: kd * (1 + (cam.zoom - 1) * kd) * kx, rank: aimedAt ? -1 : SUBJECT.indexOf(el.type), solid: SOLID.includes(el.type) });
+    }
+    return out;
+  };
+  // The slides that keep a set inside [EDGE, 1 - EDGE].
+  const span = (set) => [Math.max(...set.map((o) => (o.b[2] - 1 + EDGE) / o.f)), Math.min(...set.map((o) => (o.b[0] - EDGE) / o.f))];
+  for (const [i, k] of keys.entries()) {
+    if (k.x === undefined) continue;
+    const t = rest[i];
+    const bodies = bodiesAt(k, t, k.aimed);
+    const keep = k.aimed ? bodies.filter((o) => o.aimedAt) : bodies.filter((o) => insideShare(o.wide) > 0.5).sort((a, b) => a.rank - b.rank);
+    if (!keep.length) continue;
+    const main = keep[0];
+    // The kept set: the main subject, then each next one while they all fit the window together.
+    const kept = [main];
+    for (const o of keep.slice(1)) {
+      const [lo, hi] = span([...kept, o]);
+      if (k.aimed || lo <= hi) kept.push(o);
+    }
+    let [lo, hi] = span(kept);
+    if (lo <= hi) {
+      // From the rest until the next key is halfway there (this key still leads the camera), keep the longest run of the kept set that fits at every moment.
+      const nx = keys[i + 1];
+      const end = nx && !nx.cut ? Math.max(t, (T(nx) + rest[i + 1]) / 2) : nx ? Math.max(t, T(nx)) : Math.max(t, duration || t + 2);
+      const ts = [];
+      for (let n = 0; n <= 6; n++) ts.push(t + ((end - t) * n) / 6);
+      const seen = ts.map((u) => bodiesAt(k, u, k.aimed));
+      for (let L = kept.length; L >= 1; L--) {
+        const ids = new Set(kept.slice(0, L).map((o) => o.id));
+        let [l, h] = span(kept.slice(0, L));
+        for (const set of seen) {
+          const sub = set.filter((o) => ids.has(o.id));
+          if (!sub.length) continue;
+          const [a, b] = span(sub);
+          if (Math.max(l, a) <= Math.min(h, b)) [l, h] = [Math.max(l, a), Math.min(h, b)];
+          else if (L > 1) { l = Infinity; break; } // too many to hold: try one fewer (the main one alone skips such moments)
+        }
+        if (l <= h) { kept.length = L; [lo, hi] = [l, h]; break; }
+      }
+    } else {
+      // Wider than the window (a whole town, or an aimed set that cannot fit): stay inside the main one.
+      [lo, hi] = [main.b[0] / main.f, (main.b[2] - 1) / main.f];
+      if (lo > hi) [lo, hi] = [hi, lo];
+    }
+    const a0 = Math.min(...kept.map((q) => q.b[0])), a1 = Math.max(...kept.map((q) => q.b[2]));
+    const want = k.aimed ? 0 : ((a0 + a1) / 2 - 0.5) / main.f;
+    const clampDx = (v) => Math.min(hi, Math.max(lo, v));
+    const others = bodies.filter((o) => !kept.includes(o) && o.solid);
+    const cuts = (dx) => others.filter((o) => { const l = o.b[0] - dx * o.f, r = o.b[2] - dx * o.f; return l < 1 && r > 0 && (l < 0 || r > 1); }).length;
+    const tries = [want, ...others.flatMap((o) => [(o.b[2] + 0.01) / o.f, (o.b[0] - 1.01) / o.f, (o.b[0] - EDGE) / o.f, (o.b[2] - 1 + EDGE) / o.f])].map(clampDx);
+    const dx = tries.reduce((p, v) => (cuts(v) < cuts(p) || (cuts(v) === cuts(p) && Math.abs(v - want) < Math.abs(p - want)) ? v : p), tries[0]);
+    // Applied at once: the next key's move starts from where this one now rests.
+    if (Math.abs(dx) > 1e-3) k.x = r3(k.x + dx);
   }
 }

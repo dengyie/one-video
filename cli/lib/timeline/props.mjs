@@ -42,6 +42,8 @@ export function resolvePropTimes(type, props, ctx, errors, where) {
       for (const [j, k] of (el.strikes ?? []).entries()) { fix(k, `${name} strike ${j}`, "beat"); k.t ??= 0; }
     }
     for (const [i, v] of (props.camera ?? []).entries()) { fix(v, `camera ${i}`, i === 0 ? null : v.cut ? "bar" : "beat"); v.t ??= 0; }
+    // Cues may resolve out of the order the keys were written in; the camera plays them by time.
+    props.camera?.sort((a, b) => a.t - b.t);
   }
   if (type === "footage") {
     // A keyframe without a time starts at 0, as the player reads it; cues may resolve out of order.

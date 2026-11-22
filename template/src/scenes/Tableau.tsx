@@ -3,7 +3,7 @@ import { AbsoluteFill } from "remotion";
 import { useLayout, useScene, useTheme, useTime } from "../engine/context";
 import {
   SEA_BANDS, bandBase, bandDepth, bandFor, boltPath, cameraAt, cameraMoving, elementAt, flashAt, flashTotal, hash, lampLevel,
-  layerView, mixHex, noise, paletteAt, ridgeDepth, stateAt, ridgeTop, townBlocks, treeRow, waveY, windowOn,
+  layerView, mixHex, noise, paletteAt, ridgeDepth, stateAt, stageOf, ridgeTop, townBlocks, treeRow, waveY, windowOn,
 } from "../../../shared/tableau.mjs";
 
 // Tableau: an illustrated place drawn by code, in layers at their own depth — sky, stars, moon or
@@ -26,9 +26,11 @@ const rimNeed = (pal: { top: string }) => {
 const pts = (p: [number, number][]) => p.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
 
 // One layer's transform: points of the layer (frame px) move by its share of the camera.
-function layerTransform(cam: ReturnType<typeof cameraAt>, depth: number, W: number, H: number) {
+// A layer drawn on the stage (SW wide; = W unless the frame is narrower than 16:9) seen through the
+// frame: the camera focus lands at the frame's centre.
+function layerTransform(cam: ReturnType<typeof cameraAt>, depth: number, W: number, H: number, SW: number) {
   const v = layerView(cam, depth);
-  return `translate(${(W / 2).toFixed(1)} ${(H / 2).toFixed(1)}) scale(${v.scale.toFixed(4)}) translate(${(-v.cx * W).toFixed(1)} ${(-v.cy * H).toFixed(1)})`;
+  return `translate(${(W / 2).toFixed(1)} ${(H / 2).toFixed(1)}) scale(${v.scale.toFixed(4)}) translate(${(-v.cx * SW).toFixed(1)} ${(-v.cy * H).toFixed(1)})`;
 }
 
 const Stars: React.FC<{ c: Ctx; s: any }> = ({ c, s }) => {
@@ -436,13 +438,18 @@ const Snow: React.FC<{ c: Ctx; s: any }> = ({ c, s }) => {
   );
 };
 
-const Title: React.FC<{ c: Ctx; s: any }> = ({ c, s }) => (
-  <text x={s.x * c.W} y={s.y * c.H} textAnchor="middle" dominantBaseline="middle" fontFamily={c.fonts.body} fontWeight={700}
-    fontSize={s.size * c.S} letterSpacing={`${0.18 * s.size * c.S}px`} fill={mixHex("#f4eedc", c.pal.rim, 0.25)}
-    opacity={s.opacity * s.enter} style={{ filter: `drop-shadow(0 0 ${(s.size * c.S * 0.35).toFixed(1)}px rgba(0,0,0,0.6))` }}>
-    {s.text}
-  </text>
-);
+// A title keeps its size against the stage, but never runs wider than 90% of the frame it is drawn in
+// (each glyph plus its letter spacing is ~1.18 em).
+const Title: React.FC<{ c: Ctx; s: any }> = ({ c, s }) => {
+  const fs = Math.min(s.size * c.S, (0.9 * c.W) / (Math.max(1, [...String(s.text ?? "")].length) * 1.18));
+  return (
+    <text x={s.x * c.W} y={s.y * c.H} textAnchor="middle" dominantBaseline="middle" fontFamily={c.fonts.body} fontWeight={700}
+      fontSize={fs} letterSpacing={`${0.18 * fs}px`} fill={mixHex("#f4eedc", c.pal.rim, 0.25)}
+      opacity={s.opacity * s.enter} style={{ filter: `drop-shadow(0 0 ${(fs * 0.35).toFixed(1)}px rgba(0,0,0,0.6))` }}>
+      {s.text}
+    </text>
+  );
+};
 
 const Rain: React.FC<{ c: Ctx; s: any }> = ({ c, s }) => {
   const a = s.intensity * s.opacity * s.enter;
@@ -491,7 +498,9 @@ export const TableauScene: React.FC<Props> = ({ elements = [], camera = [] }) =>
   const sea = states.find((x) => x.el.type === "sea")?.s;
   const hills = states.find((x) => x.el.type === "hills")?.s;
   const horizon = sea?.y ?? hills?.y ?? 0.66;
-  const c: Ctx = { W, H, S: Math.min(W, H), t, pal, horizon, swell: sea?.swell ?? 0.3, id, fonts: theme.fonts };
+  // Pieces draw on the 16:9 stage; weather overlays (rain, snow) draw on the frame itself.
+  const SW = stageOf(W, H).W;
+  const c: Ctx = { W: SW, H, S: Math.min(SW, H), t, pal, horizon, swell: sea?.swell ?? 0.3, id, fonts: theme.fonts };
   const flash = flashTotal(elements, t);
   const shore = states.find((x) => x.el.type === "shore")?.s;
   const moon = states.find((x) => x.el.type === "moon")?.s ?? states.find((x) => x.el.type === "sun")?.s;
@@ -502,7 +511,7 @@ export const TableauScene: React.FC<Props> = ({ elements = [], camera = [] }) =>
 
   // Draw back to front: every piece in its depth's layer; the sea is one layer per band, and a
   // shore in front replaces the bands it would cover.
-  type Draw = { depth: number; order: number; node: React.ReactNode };
+  type Draw = { depth: number; order: number; node: React.ReactNode; screen?: boolean };
   const draws: Draw[] = [];
   const walkingOf = (el: El) => Math.abs(elementAt(el, t + 0.1).x - elementAt(el, t - 0.1).x) > 0.0005 ? 1 : 0;
   states.forEach(({ el, s }, order) => {
@@ -519,7 +528,11 @@ export const TableauScene: React.FC<Props> = ({ elements = [], camera = [] }) =>
         case "shore": return <Shore c={c} s={s} />;
         case "figure": return <Figure c={c} s={s} walking={walkingOf(el)} />;
         case "fire": return <Fire c={c} s={s} />;
-        case "title": return <Title c={c} s={s} />;
+        case "title": {
+          // On a stage wider than the frame the title stays in the frame (centred, not off at the stage's middle).
+          if (SW > W) { draws.push({ depth: s.depth, order, node: <Title c={{ ...c, W }} s={{ ...s, x: 0.5 }} />, screen: true }); return null; }
+          return <Title c={c} s={s} />;
+        }
         case "lightning": return <Bolts c={c} s={{ ...s, strikes: el.strikes }} />;
         case "fog": return <Fog c={c} s={s} />;
         case "town": return <Town c={c} s={s} />;
@@ -607,11 +620,11 @@ export const TableauScene: React.FC<Props> = ({ elements = [], camera = [] }) =>
           </radialGradient>
         </defs>
         <rect width={W} height={H} fill={`url(#${id}-sky)`} />
-        {draws.filter((d) => d.depth < bandDepth(0) - 0.05).map((d, i) => <g key={`b${i}`} transform={layerTransform(cam, d.depth, W, H)}>{d.node}</g>)}
+        {draws.filter((d) => d.depth < bandDepth(0) - 0.05).map((d, i) => <g key={`b${i}`} transform={d.screen ? undefined : layerTransform(cam, d.depth, W, H, SW)}>{d.node}</g>)}
         <rect x={0} y={(hz - 0.07) * H} width={W} height={0.14 * H} fill={`url(#${id}-haze)`} />
-        {draws.filter((d) => d.depth >= bandDepth(0) - 0.05).map((d, i) => <g key={`f${i}`} transform={layerTransform(cam, d.depth, W, H)}>{d.node}</g>)}
-        {rain && <Rain c={c} s={rain} />}
-        {snow && <Snow c={c} s={snow} />}
+        {draws.filter((d) => d.depth >= bandDepth(0) - 0.05).map((d, i) => <g key={`f${i}`} transform={d.screen ? undefined : layerTransform(cam, d.depth, W, H, SW)}>{d.node}</g>)}
+        {rain && <Rain c={{ ...c, W }} s={rain} />}
+        {snow && <Snow c={{ ...c, W }} s={snow} />}
         <rect width={W} height={H} fill={`url(#${id}-vignette)`} />
         {/* A strike lights the whole sky at once: over the vignette (under it the edges stay dark
             and the flash reads as a bright ellipse), strongest at the top, the foreground less. */}

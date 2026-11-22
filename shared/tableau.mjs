@@ -270,12 +270,21 @@ export function tableauTimes(props) {
 // Camera keys (`on`) aim at these points, an element placed `on` another stands on one, and the
 // framing gate checks the box against the frame. Kinds without a body (sky, sea, rain…) give null.
 /** @typedef {{ box: [number, number, number, number], anchors: Record<string, [number, number]>, depth: number }} Geometry */
+// A tableau world is laid out on a 16:9 stage. A narrower frame (9:16, 1:1, 4:5) is a window on that
+// stage which the camera carries, the same height of world and a slice of its width — never the
+// world squeezed sideways (peaks into needles, a town into a strip, the lower half bare ground).
+export const STAGE_ASPECT = 16 / 9;
+/** Stage size in px for a frame, and `kx`: how much wider the stage is than the frame. @param {number} W @param {number} H */
+export function stageOf(W, H) {
+  const SW = Math.max(W, H * STAGE_ASPECT);
+  return { W: SW, H, kx: SW / W };
+}
 export const SOLID = ["lighthouse", "hut", "boat", "figure", "fire", "moon", "sun"];
 /** Kinds a camera key or an `on` can name: the solid ones plus rows meant to run off the frame. */
 export const BODIES = [...SOLID, "town", "trees"];
 /** @param {any} s an element state (elementAt) @param {{ W: number, H: number, horizon?: number }} frame @returns {Geometry | null} */
-export function elementGeometry(s, { W, H, horizon = 0.66 }) {
-  const S = Math.min(W, H), sx = S / W, sy = S / H;
+export function elementGeometry(s, { W: frameW, H, horizon = 0.66 }) {
+  const W = stageOf(frameW, H).W, S = Math.min(W, H), sx = S / W, sy = S / H;
   const x = s.x ?? 0.5, f = s.facing ?? 1, depth = s.depth ?? KINDS[s.type]?.depth ?? 0.5;
   /** @param {[number, number, number, number]} box @param {Record<string, [number, number]>} extra */
   const geo = (box, extra) => /** @type {Geometry} */ ({ box, depth, anchors: { center: [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2], top: [(box[0] + box[2]) / 2, box[1]], ...extra } });
@@ -312,31 +321,26 @@ export function elementGeometry(s, { W, H, horizon = 0.66 }) {
   }
 }
 
-/** Where a layer point lands on screen under a camera. @param {Cam} cam @param {number} depth @param {[number, number]} p @returns {[number, number]} */
-export function onScreen(cam, depth, [px, py]) {
+/** Where a layer point lands on screen under a camera; `kx` = stageOf(…).kx for a frame narrower than the stage. @param {Cam} cam @param {number} depth @param {[number, number]} p @returns {[number, number]} */
+export function onScreen(cam, depth, [px, py], kx = 1) {
   const v = layerView(cam, depth);
-  return [(px - v.cx) * v.scale + 0.5, (py - v.cy) * v.scale + 0.5];
+  return [(px - v.cx) * v.scale * kx + 0.5, (py - v.cy) * v.scale + 0.5];
 }
-/** A layer box on screen. @param {Cam} cam @param {number} depth @param {[number, number, number, number]} box */
-export function boxOnScreen(cam, depth, box) {
-  const [a, b] = onScreen(cam, depth, [box[0], box[1]]), [c, d] = onScreen(cam, depth, [box[2], box[3]]);
+/** @param {Cam} cam @param {number} depth @param {[number, number, number, number]} box */
+export function boxOnScreen(cam, depth, box, kx = 1) {
+  const [a, b] = onScreen(cam, depth, [box[0], box[1]], kx), [c, d] = onScreen(cam, depth, [box[2], box[3]], kx);
   return /** @type {[number, number, number, number]} */ ([a, b, c, d]);
 }
-
-/**
- * The camera (focus x/y) that puts layer point `p` at depth `depth` on screen at `place` with
- * `zoom` — layerView solved backwards, so a key can name what it looks at instead of where.
- * @param {[number, number]} p @param {number} depth @param {number} zoom @param {[number, number]} [place]
- */
-export function cameraFor([px, py], depth, zoom, [sx, sy] = [0.5, 0.5]) {
+/** The camera x/y that puts layer point p at screen point `place` at this zoom. @param {[number, number]} p @param {number} depth @param {number} zoom */
+export function cameraFor([px, py], depth, zoom, [sx, sy] = [0.5, 0.5], kx = 1) {
   const k = 0.25 + 0.75 * clamp01(depth), scale = 1 + (zoom - 1) * k;
-  const solve = (/** @type {number} */ p, /** @type {number} */ s) => 0.5 + (p - (s - 0.5) / scale - 0.5) / k;
-  return { x: solve(px, sx), y: solve(py, sy) };
+  const solve = (/** @type {number} */ p, /** @type {number} */ s, /** @type {number} */ m) => 0.5 + (p - (s - 0.5) / (scale * m) - 0.5) / k;
+  return { x: solve(px, sx, kx), y: solve(py, sy, 1) };
 }
-/** The zoom at which a layer box `fill`s that share of the frame's height (and fits its width). @param {[number, number, number, number]} box @param {number} depth @param {number} fill */
-export function zoomToFit(box, depth, fill) {
+/** The zoom at which a box fills `fill` of the frame height (and no more than 90% of its width). @param {[number, number, number, number]} box @param {number} depth @param {number} fill */
+export function zoomToFit(box, depth, fill, kx = 1) {
   const k = 0.25 + 0.75 * clamp01(depth);
-  const scale = Math.min(fill / Math.max(1e-3, box[3] - box[1]), 0.9 / Math.max(1e-3, box[2] - box[0]));
+  const scale = Math.min(fill / Math.max(1e-3, box[3] - box[1]), 0.9 / Math.max(1e-3, (box[2] - box[0]) * kx));
   return Math.max(1, 1 + (scale - 1) / k);
 }
 

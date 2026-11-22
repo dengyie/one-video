@@ -5,7 +5,7 @@ import { join } from "node:path";
 import {
   KIND_NAMES, PALETTES, bandDepth, bandFor, cameraAt, cameraMoving, elementAt, flashAt, flashTotal, lampLevel, layerView,
   mixHex, paletteAt, settledElement, tableauTimes, waveY, SEA_BANDS,
-  boxOnScreen, cameraFor, elementGeometry, insideShare, onScreen, zoomToFit,
+  boxOnScreen, cameraFor, elementGeometry, insideShare, onScreen, stageOf, zoomToFit, STAGE_ASPECT,
   horizonAt, ridgeDepth, ridgeTop, stateAt, townBlocks, treeRow, windowOn,
 } from "../shared/tableau.mjs";
 import { resolveTableauRefs, boundaryTransition } from "../cli/lib/timeline/index.mjs";
@@ -13,7 +13,8 @@ import { framingGate, groundingGate, rhythmGate } from "../cli/lib/review/gates.
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { schemaGate } from "../cli/lib/review/gates.mjs";
 import { beatsFile, gridBeats } from "../cli/lib/audio/beats.mjs";
-import { example } from "./helpers.mjs";
+import { example, ROOT, estimatedTimings } from "./helpers.mjs";
+import { readFileSync } from "node:fs";
 
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} ≉ ${b}`);
 
@@ -335,3 +336,64 @@ test("groundingGate: a piece set on a cliff's top but past its edge hangs over t
   moved.scenes[1].props.elements.push({ id: "hut", to: [{ at: 0.5, x: 0.2 }] });
   assert.equal(groundingGate(world([cliff, hut]), {}, moved)[0].fix, undefined);
 });
+
+test("tableau stage: a frame narrower than 16:9 looks through a window on a 16:9 stage", () => {
+  assert.deepEqual(stageOf(1920, 1080), { W: 1920, H: 1080, kx: 1 });
+  assert.deepEqual(stageOf(1080, 1080), { W: 1080 * 0 + 1080 * STAGE_ASPECT, H: 1080, kx: STAGE_ASPECT });
+  const { W, kx } = stageOf(1080, 1920);
+  near(W, 1920 * STAGE_ASPECT, 1e-9);
+  near(kx, W / 1080, 1e-9);
+  // The same stage point sits kx times farther from the frame's centre across, the same up and down.
+  const cam = { x: 0.5, y: 0.5, zoom: 1.2 };
+  const [wx, wy] = onScreen(cam, 1, [0.6, 0.3]), [nx, ny] = onScreen(cam, 1, [0.6, 0.3], kx);
+  near(nx - 0.5, (wx - 0.5) * kx, 1e-9);
+  near(ny, wy, 1e-9);
+  // cameraFor and zoomToFit take the window into account: the point lands where asked, the box fits across.
+  const c = cameraFor([0.3, 0.6], 0.8, 1.4, [0.4, 0.5], kx);
+  const [px] = onScreen({ ...c, zoom: 1.4 }, 0.8, [0.3, 0.6], kx);
+  near(px, 0.4, 1e-9);
+  const box = /** @type {[number, number, number, number]} */ ([0.4, 0.5, 0.5, 0.7]);
+  const z = zoomToFit(box, 1, 0.9, kx), b = boxOnScreen({ ...cameraFor([0.45, 0.6], 1, z, [0.5, 0.5], kx), zoom: z }, 1, box, kx);
+  assert.ok(b[2] - b[0] <= 0.9 + 1e-9 && b[0] >= 0 && b[2] <= 1, JSON.stringify(b));
+});
+
+test("tableau 9:16: hand-set camera keys slide onto the subject, nothing is cut, walkers stay in", async () => {
+  const scene = {
+    id: "s", type: "tableau",
+    props: {
+      elements: [{ id: "sea", type: "sea" }, { id: "lh", type: "lighthouse", x: 0.2 }, { id: "man", type: "figure", x: 0.66, y: 0.9, size: 0.3, to: [{ at: 1, dur: 4, x: 0.8 }] }],
+      camera: [{ at: 0, x: 0.5, y: 0.6, zoom: 1.1 }],
+    },
+  };
+  const script = { scenes: [{ id: "s", narration: "海边有一座灯塔，守塔的人每天傍晚沿着海岸走一圈。" }] };
+  const tl = async (aspect) => {
+    const config = { aspect, fps: 30 };
+    return compileTimeline({ script, storyboard: { scenes: [structuredClone(scene)] }, timings: await estimatedTimings(script, config), config, root: ROOT });
+  };
+  const wide = await tl("16:9"), tall = await tl("9:16");
+  assert.deepEqual(wide.errors, []);
+  assert.deepEqual(tall.errors, []);
+  // 16:9 keeps the key as written; the narrow frame moves it toward the figure (the most telling body).
+  assert.equal(wide.timeline.scenes[0].props.camera[0].x, 0.5);
+  const s = tall.timeline.scenes[0], k = s.props.camera[0];
+  assert.ok(k.x > 0.5, String(k.x));
+  const { kx } = stageOf(tall.timeline.width, tall.timeline.height);
+  const man = s.props.elements.find((e) => e.id === "man");
+  for (const t of [0, 2, 4, 6]) {
+    const st = stateAt(man, s.props.elements, t);
+    const g = elementGeometry(st, { W: tall.timeline.width, H: tall.timeline.height, horizon: horizonAt(s.props.elements, t) });
+    const b = boxOnScreen(cameraAt(s.props.camera, t), g.depth, g.box, kx);
+    assert.ok(b[0] >= 0 && b[2] <= 1, `t=${t} ${b}`);
+  }
+  assert.deepEqual(framingGate(tall.timeline, {}), []);
+});
+
+for (const name of ["keeper", "postman"]) {
+  test(`${name} example: 9:16 compiles with nothing cut by the window`, async () => {
+    const dir = join(ROOT, "examples", name), j = (p) => JSON.parse(readFileSync(join(dir, p), "utf8"));
+    const config = { ...j("onevideo.json"), aspect: "9:16" }, script = j("plan/script.json");
+    const r = compileTimeline({ script, storyboard: j("plan/storyboard.json"), timings: await estimatedTimings(script, config), config, root: dir });
+    assert.deepEqual(r.errors, []);
+    assert.deepEqual(framingGate(r.timeline, config).map((i) => i.msg), []);
+  });
+}

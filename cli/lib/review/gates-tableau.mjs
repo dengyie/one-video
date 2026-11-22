@@ -3,7 +3,7 @@
 // edge reads as a framing mistake (the keeper's lighthouse lost its lamp at the top of a still).
 // An element meant to bleed off the edge says so with `crop: true`; one that fills most of the frame
 // (a close-up on the keeper at the gallery crops the tower) could not have fitted, so it is the set.
-import { SOLID, boxOnScreen, cameraAt, cameraMoving, elementAt, elementGeometry, horizonAt, insideShare, stateAt } from "../../../shared/tableau.mjs";
+import { SOLID, boxOnScreen, cameraAt, cameraMoving, elementAt, elementGeometry, horizonAt, insideShare, stageOf, stateAt } from "../../../shared/tableau.mjs";
 import { issue } from "./issue.mjs";
 
 export const FRAMING_DEFAULTS = { framingStep: 0.25, framingCut: [0.15, 0.9], framingSet: 0.75 };
@@ -11,7 +11,7 @@ export const FRAMING_DEFAULTS = { framingStep: 0.25, framingCut: [0.15, 0.9], fr
 export function framingGate(timeline, config = {}) {
   const g = { ...FRAMING_DEFAULTS, ...(config.gates ?? {}) };
   const [lo, hi] = g.framingCut;
-  const { width: W, height: H } = timeline;
+  const { width: W, height: H } = timeline, { kx } = stageOf(W, H);
   const out = [];
   for (const sc of timeline.scenes) {
     if (sc.type !== "tableau") continue;
@@ -29,7 +29,7 @@ export function framingGate(timeline, config = {}) {
         if (!s.shown || (s.opacity ?? 1) * s.enter < 0.5) continue;
         const geo = elementGeometry(s, { W, H, horizon });
         if (!geo) continue;
-        const b = boxOnScreen(cam, geo.depth, geo.box);
+        const b = boxOnScreen(cam, geo.depth, geo.box, kx);
         if (b[2] - b[0] > g.framingSet || b[3] - b[1] > g.framingSet) continue;
         const share = insideShare(b);
         const key = el.id ?? `${el.type}#${i}`;
