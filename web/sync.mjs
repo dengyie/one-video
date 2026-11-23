@@ -81,9 +81,14 @@ for (const slug of fs.readdirSync(root)) {
     if (p.missing) {
       const prev = previous.get(p.slug);
       const cached = readJsonFile(stamp);
-      const keep = prev?.source === "static" && cached?.from === "host" && cached.video === p.missing
-        && prev.video === `v/${p.slug}/video.mp4?v=${hostVersion(JSON.stringify(cached))}` && hasCopy(prev.size);
-      console.warn(`! ${p.slug}: ${p.missing} missing on host${keep ? " — keeping the listed version" : ""}`);
+      const listed = prev?.source === "static" && cached?.from === "host" && cached.size === prev.size && hasCopy(prev.size);
+      const url = `v/${p.slug}/video.mp4?v=`;
+      const matches = listed && cached.video === p.missing && prev.video === url + hostVersion(JSON.stringify(cached));
+      const legacy = listed && !Object.hasOwn(cached, "video") && Number.isFinite(cached.mtime)
+        && prev.video === url + Math.round(cached.mtime).toString(36);
+      const keep = matches || legacy;
+      const note = legacy ? " — keeping the listed legacy copy; published cut cannot be verified" : keep ? " — keeping the listed version" : "";
+      console.warn(`! ${p.slug}: ${p.missing} missing on host${note}`);
       if (keep) out.push(prev);
       continue;
     }

@@ -69,6 +69,17 @@ test("host sync retains the published site copy after a draft prunes the version
     assert.equal(readFileSync(join(vdir, "demo", "video.mp4"), "utf8"), "approved");
     assert.deepEqual(fromHost(opts), [], "a missing cut cannot be newly listed");
 
+    const stamp = join(vdir, "demo", ".synced");
+    const modern = readFileSync(stamp, "utf8");
+    const { mtime, size } = JSON.parse(modern);
+    const legacy = JSON.stringify({ mtime, size, from: "host" });
+    put(stamp, legacy);
+    const legacyEntry = { ...entries[0], video: `v/demo/video.mp4?v=${Math.round(mtime).toString(36)}` };
+    assert.deepEqual(fromHost({ ...opts, previous: new Map([["demo", legacyEntry]]) }), [legacyEntry]);
+    assert.equal(readFileSync(stamp, "utf8"), legacy, "an unverifiable legacy copy must not be relabelled");
+    assert.equal(readFileSync(join(vdir, "demo", "video.mp4"), "utf8"), "approved");
+    put(stamp, modern);
+
     const next = join(versions, "v3.mp4");
     put(next, "newly approved");
     recordRender(project, { v: 3, file: next }, { alias: main });
