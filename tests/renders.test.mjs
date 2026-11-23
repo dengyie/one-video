@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { adoptLegacy, frameRange, readRenders, recordRender, resolveVideo, versionFile } from "../cli/lib/publish/renders.mjs";
+import { qcBoundsPath, readQcBounds, writeQcBounds } from "../cli/lib/core/qc-bounds.mjs";
 
 const TL = { fps: 30, duration: 10, scenes: [{ id: "a", from: 0, durationInFrames: 90 }, { id: "b", from: 90, durationInFrames: 120 }, { id: "c", from: 210, durationInFrames: 90 }] };
 
@@ -36,6 +37,24 @@ function render(p, opts = {}, content) {
   const alias = join(p.paths.out, `demo${opts.part ? ".part" : opts.draft ? ".draft" : ""}.mp4`);
   return recordRender(p, { v, file, draft: Boolean(opts.draft), part: Boolean(opts.part), offset: opts.offset ?? 0, frames: [0, 9], timeline: "h" }, { alias });
 }
+
+test("render bounds follow the alias, reject substituted MP4s, and are pruned with the version", () => {
+  const p = project();
+  const { file, v } = versionFile(p, {});
+  const alias = join(p.paths.out, "demo.mp4");
+  const bounds = { step: 15, samples: [[], [[0.25, 0.8, 0.75, 0.9]], null] };
+  writeFileSync(file, "first");
+  writeQcBounds(file, bounds);
+  recordRender(p, { file, v }, { alias });
+  assert.deepEqual(readQcBounds(alias), bounds);
+  assert.deepEqual(readQcBounds(file), bounds);
+  writeFileSync(file, "other");
+  assert.equal(readQcBounds(file), null, "same-size replacement must not reuse the bounds");
+  render(p);
+  assert.equal(existsSync(qcBoundsPath(alias)), false);
+  render(p);
+  assert.equal(existsSync(qcBoundsPath(file)), false);
+});
 
 test("recordRender: numbered versions, alias to the newest, old ones pruned but logged", () => {
   const p = project();

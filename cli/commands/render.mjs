@@ -1,14 +1,16 @@
 // render / stills / studio / qc / publish / build / doctor
 import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { basename, join, relative } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 import { availableParallelism, tmpdir, totalmem } from "node:os";
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { UserError, loadProject, pipelineDef, readJson, writeJson, log, warn, ONEVIDEO_ROOT } from "../lib/core/project.mjs";
 import { archiveProject, driveConfig } from "../lib/archive/index.mjs";
 import { productsHash, reviewSubject, stageStatus } from "../lib/core/state.mjs";
 import { checkProject, printIssues } from "../lib/review/check.mjs";
 import { REMOTION_BIN, TEMPLATE_DIR, requireRemotion, run, ffmpeg, ffprobe } from "../lib/core/ffmpeg.mjs";
-import { runQc } from "../lib/vision/qc.mjs";
+import { qcSampleStep, runQc } from "../lib/vision/qc.mjs";
+import { qcBoundsPath, readQcBounds, writeQcBounds } from "../lib/core/qc-bounds.mjs";
 import { readWav } from "../lib/audio/wav.mjs";
 import { aspectTag, DIMENSIONS, withAspect } from "../lib/timeline/index.mjs";
 import { buildPublishKit, posterTime, stemGroups } from "../lib/publish/kit.mjs";
@@ -70,6 +72,29 @@ function commonFlags(project) {
   return [`--props=${project.paths.timeline}`, `--public-dir=${project.p("public")}`];
 }
 
+async function renderWithBounds(project, flags, tl, file, range) {
+  const id = `qc-${randomUUID()}`;
+  const start = range?.[0] ?? 0;
+  const end = range?.[1] ?? tl.totalFrames - 1;
+  const step = qcSampleStep(tl.fps, project.config.qc);
+  const dir = mkdtempSync(join(tmpdir(), "onevideo-render-"));
+  const artifacts = join(TEMPLATE_DIR, "out", COMPOSITION, id);
+  const props = join(dir, "props.json");
+  const video = resolve(TEMPLATE_DIR, file);
+  try {
+    writeFileSync(props, JSON.stringify({ ...tl, qcBounds: { id, start, step } }));
+    rmSync(qcBoundsPath(video), { force: true });
+    await run(REMOTION_BIN, [...flags, `--props=${props}`, `--public-dir=${project.p("public")}`], { cwd: TEMPLATE_DIR, stdio: "inherit" });
+    const samples = [];
+    for (let frame = start; frame <= end; frame += step) samples.push(readJson(join(artifacts, `${frame}.json`), null));
+    if (samples.some((boxes) => boxes === null)) warn("some QC overlay bounds are missing; those samples will use legacy detection");
+    writeQcBounds(video, { step, samples });
+  } finally {
+    rmSync(artifacts, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 export async function render(args) {
   requireRemotion();
   const project = withAspect(loadProject(), args.aspect);
@@ -97,7 +122,7 @@ export async function render(args) {
   }
   const { v, file } = args.out || variant ? { v: null, file: args.out ?? variant } : versionFile(project, { draft, part });
   const flags = [
-    "render", ENTRY, COMPOSITION, file, ...commonFlags(project),
+    "render", ENTRY, COMPOSITION, file,
     "--codec=h264", "--audio-codec=aac", "--audio-bitrate=192k",
     `--concurrency=${args.concurrency ?? project.config.render?.concurrency ?? autoConcurrency()}`,
     `--crf=${draft ? 30 : project.config.render?.crf ?? 18}`,
@@ -114,7 +139,7 @@ export async function render(args) {
   const span = range ? `${(range[0] / tl.fps).toFixed(1)}–${((range[1] + 1) / tl.fps).toFixed(1)}s of ` : "";
   log(`rendering ${span}${tl.duration.toFixed(1)}s ${tl.width}x${tl.height}${draft ? " (draft, half scale)" : ""}${v ? ` as v${v}` : ""} → ${file}`);
   const t0 = Date.now();
-  await run(REMOTION_BIN, flags, { cwd: TEMPLATE_DIR, stdio: "inherit" });
+  await renderWithBounds(project, flags, tl, file, range);
   const secs = Math.round((Date.now() - t0) / 1000);
   if (!v) { log(`rendered in ${secs}s → ${file}`); return file; }
   const prev = readRenders(project).at(-1);
@@ -232,7 +257,7 @@ export async function qc(args) {
   const subject = isMain ? reviewSubject(project) : null;
   const outDir = isMain ? join(project.paths.out, "qc") : join(project.paths.out, "qc", entry ? `v${entry.v}` : basename(video, ".mp4"));
   const span = entry?.part && entry.frames ? (entry.frames[1] - entry.frames[0] + 1) / tl.fps : undefined;
-  const review = await runQc({ video, timeline: tl, outDir, readVoice: (file) => readWav(project.p("public", file)), thresholds: project.config.qc, offset, span });
+  const review = await runQc({ video, timeline: tl, outDir, bounds: readQcBounds(video), readVoice: (file) => readWav(project.p("public", file)), thresholds: project.config.qc, offset, span });
   const reportPath = isMain ? project.paths.review : join(outDir, "review.json");
   writeJson(reportPath, isMain ? { ...review, subject } : review);
   const icon = { pass: "✓", warn: "⚠", fail: "✗" };

@@ -5,6 +5,7 @@ import { copyFileSync, existsSync, linkSync, mkdirSync, renameSync, rmSync, stat
 import { createHash } from "node:crypto";
 import { join, relative, resolve, sep } from "node:path";
 import { UserError, readJson, writeJson } from "../core/project.mjs";
+import { qcBoundsPath, readQcBounds, writeQcBounds } from "../core/qc-bounds.mjs";
 
 export const KEEP_VERSIONS = 8;
 const logPath = (project) => join(project.paths.out, "renders.json");
@@ -57,13 +58,19 @@ function point(alias, file) {
 }
 
 export function recordRender(project, entry, { alias, keep = project.config.render?.keepVersions ?? KEEP_VERSIONS } = {}) {
-  if (alias) point(alias, entry.file);
+  if (alias) {
+    point(alias, entry.file);
+    const bounds = readQcBounds(entry.file);
+    if (bounds) writeQcBounds(alias, bounds);
+    else rmSync(qcBoundsPath(alias), { force: true });
+  }
   const rel = (f) => relative(project.root, f);
   const renders = [...readRenders(project), { ...entry, file: rel(entry.file), ...(alias ? { alias: rel(alias) } : {}), bytes: statSync(entry.file).size }];
   // Old versions beyond `keep` lose their file but keep their log line.
   const live = renders.filter((r) => !r.pruned);
   for (const r of live.slice(0, Math.max(0, live.length - keep))) {
     rmSync(join(project.root, r.file), { force: true });
+    rmSync(qcBoundsPath(join(project.root, r.file)), { force: true });
     r.pruned = true;
   }
   mkdirSync(project.paths.out, { recursive: true });
@@ -82,6 +89,7 @@ export function adoptLegacy(project, alias, { draft = false, part = false } = {}
   const { v, file } = versionFile(project, { draft, part });
   mkdirSync(join(project.paths.out, "versions"), { recursive: true });
   renameSync(alias, file);
+  if (existsSync(qcBoundsPath(alias))) renameSync(qcBoundsPath(alias), qcBoundsPath(file));
   const at = statSync(file).mtime.toISOString();
   return recordRender(project, { v, file, at, draft, part, offset: 0, timeline: null, legacy: true, note: "imported: rendered before versioning" }, { alias: null });
 }

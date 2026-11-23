@@ -121,4 +121,5 @@ export type Timeline = {
   stem?: "voice" | "music" | "sfx";
   // Set only for onevideo stills / preview: each frame logs its overlay and text boxes (see Overlay.tsx).
   probe?: boolean;
+  qcBounds?: { id: string; start: number; step: number };
 };

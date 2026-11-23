@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { deflateSync } from "node:zlib";
+import { deflateSync, inflateSync } from "node:zlib";
 import { ffmpeg } from "../cli/lib/core/ffmpeg.mjs";
 import { decodeGrayPng, runs, analyzeFrames, QC_DEFAULTS, runQc, sampleGrayFrames, voiceGaps } from "../cli/lib/vision/qc.mjs";
 import { readWav, writeWav } from "../cli/lib/audio/wav.mjs";
@@ -103,6 +103,35 @@ test("black-frame QC sees a dark subject even at either edge of the picture", ()
     return x >= 27 && x < 34 && y >= top && y < top + 5 ? 33 : 2;
   });
   const report = analyzeFrames([frame(80), frame(80), subject(2), subject(2), subject(29), subject(29), frame(80), frame(80)], 2);
+  assert.deepEqual(report.black, []);
+  const watermark = [[0.8, 0.02, 0.97, 0.12]];
+  assert.deepEqual(analyzeFrames([frame(80), frame(80), subject(2), subject(2), subject(29), subject(29), frame(80), frame(80)],
+    2, QC_DEFAULTS, [[], [], watermark, watermark, watermark, watermark, []]).black, []);
+});
+
+test("measured caption and watermark boxes expose the previously missed 1.0–2.5s black stretch", () => {
+  const light = Buffer.alloc(64 * 36, 90), captioned = Buffer.alloc(64 * 36);
+  for (let x = 22; x < 43; x++) {
+    captioned[30 * 64 + x] = 110;
+    if (x % 4 === 0) captioned[29 * 64 + x] = 120;
+  }
+  captioned.fill(180, 64 + 54, 64 + 62);
+  const boxes = [[22 / 64, 29 / 36, 43 / 64, 30 / 36], [54 / 64, 1 / 36, 62 / 64, 2 / 36]];
+  const samples = [light, light, captioned, captioned, captioned, light, light];
+  assert.deepEqual(analyzeFrames(samples, 2).black, []);
+  assert.deepEqual(analyzeFrames(samples, 2, QC_DEFAULTS, [[], [], boxes, boxes, boxes, [], []]).black, [[1, 2.5]]);
+  assert.deepEqual(analyzeFrames(samples, 2).black, [], "masking does not mutate decoded frames");
+});
+
+test("masking the watermark preserves the dark SpaceX IPO quote", () => {
+  // A 64×36 grayscale sample from 81.0s in the original SpaceX IPO cut.
+  const encoded = readFileSync(new URL("./fixtures/spacex-ipo-quote-gray.b64", import.meta.url), "utf8");
+  const quote = inflateSync(Buffer.from(encoded, "base64"));
+  const light = frame(90, quote.length);
+  const mark = [[0.78, 0.015, 0.99, 0.10]];
+  const report = analyzeFrames([light, light, quote, quote, quote, light, light], 2,
+    QC_DEFAULTS, [[], [], mark, mark, mark, [], []]);
+  assert.ok(report.means[2] < QC_DEFAULTS.black.luma);
   assert.deepEqual(report.black, []);
 });
 

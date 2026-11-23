@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import { AbsoluteFill, Html5Audio, Sequence, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { noise2D } from "@remotion/noise";
 import type { Camera, Direction, Focus, Scene, Shot, Timeline, Transition } from "./types";
@@ -12,6 +12,7 @@ import { Header } from "../components/Header";
 import { Watermark } from "../components/Watermark";
 import { FilmLook, Overlays } from "../components/Overlay";
 import { Captions } from "./Captions";
+import { QcBounds } from "./QcBounds";
 import { SCENES } from "../scenes";
 import { canvasBackdrop } from "../scenes/Canvas";
 import { dipOpacity, whipBlur, zoomScale } from "../../../shared/transition.mjs";
@@ -199,12 +200,16 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
 
 export const Video: React.FC<Timeline> = (timeline) => {
   const { fps } = useVideoConfig();
+  const frame = useCurrentFrame();
+  const root = useRef<HTMLDivElement>(null);
+  const sample = timeline.qcBounds;
+  const capture = sample && frame >= sample.start && (frame - sample.start) % sample.step === 0;
   const { theme, music } = timeline;
   // A stem render (onevideo stems) plays one sound group and mutes the rest.
   const play = (group: NonNullable<Timeline["stem"]>) => !timeline.stem || timeline.stem === group;
   return (
     <TimelineContext.Provider value={timeline}>
-      <AbsoluteFill data-probe="frame" style={{ backgroundColor: theme.colors.bg, fontFamily: theme.fonts.body, color: theme.colors.text }}>
+      <AbsoluteFill ref={root} data-probe="frame" style={{ backgroundColor: theme.colors.bg, fontFamily: theme.fonts.body, color: theme.colors.text }}>
         <Backdrop variant={theme.background} />
         {timeline.scenes.map((scene) => {
           const Comp = SCENES[scene.type];
@@ -254,6 +259,7 @@ export const Video: React.FC<Timeline> = (timeline) => {
         <div data-probe="skip" style={{ display: "contents" }}>
           {timeline.watermark && <Watermark mark={timeline.watermark} />}
         </div>
+        {capture && <QcBounds key={frame} root={root} filename={`${sample.id}/${frame}.json`} />}
       </AbsoluteFill>
     </TimelineContext.Provider>
   );
