@@ -197,7 +197,7 @@ test("device: steps get times, rect names resolve on the screen showing, results
   const [a, b] = ex.fetchedAssets.items.map((x) => x.id);
   const items = ex.fetchedAssets.items.map((x) => (x.id === a ? { ...x, rects: { buy: [0.1, 0.6, 0.8, 0.1] } } : x.id === b ? { ...x, rects: { card: [0.05, 0.3, 0.9, 0.2] } } : x));
   const sb = structuredClone(ex.storyboard);
-  const dev = (id, steps) => ({ ...sb.scenes[0], id, type: "device", backdrop: undefined, shots: undefined, props: { device: "phone", screens: [{ id: "home", asset: a }, { id: "detail", asset: b }], steps } });
+  const dev = (id, steps) => ({ ...sb.scenes[0], id, type: "device", backdrop: undefined, shots: undefined, overlays: undefined, props: { device: "phone", screens: [{ id: "home", asset: a }, { id: "detail", asset: b }], steps } });
   sb.scenes[0] = dev(sb.scenes[0].id, [{ at: 0.5, tap: "buy", label: "下单" }, { at: 1.2, screen: "detail", expand: { rect: "card" } }, { at: 1.6, collapse: true }]);
   sb.scenes[1] = { ...dev(sb.scenes[1].id, [{ tap: [0.5, 0.5] }, { screen: 1 }]), enter: undefined };
   const { timeline, errors } = compileTimeline({ ...ex, storyboard: sb, assets: { items }, config: { ...ex.config, beats: { snap: false } } });

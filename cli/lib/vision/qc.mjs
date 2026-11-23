@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { inflateSync } from "node:zlib";
 import { ffmpeg, ffprobe } from "../core/ffmpeg.mjs";
 import { pool } from "../core/http.mjs";
-import { readWav } from "../audio/wav.mjs";
 
 export const QC_DEFAULTS = {
   loudness: { target: -16, tolerance: 2, maxTruePeak: -1 },
@@ -110,7 +109,7 @@ function parseSilence(stderr) {
   return out;
 }
 
-export function voiceGaps(timeline, { publicDir, offset = 0, span = timeline.duration - offset, silence = QC_DEFAULTS.silence } = {}) {
+export function voiceGaps(timeline, { readVoice, offset = 0, span = timeline.duration - offset, silence = QC_DEFAULTS.silence } = {}) {
   const gaps = [];
   const level = 32768 * 10 ** (silence.noiseDb / 20);
   for (const scene of timeline.scenes) {
@@ -120,7 +119,7 @@ export function voiceGaps(timeline, { publicDir, offset = 0, span = timeline.dur
     if (!lines.length) continue;
     let voice;
     try {
-      if (publicDir && scene.audio) voice = readWav(join(publicDir, scene.audio));
+      if (scene.audio) voice = readVoice?.(scene.audio);
     } catch { /* An unreadable source cannot contribute any narration. */ }
     for (const [start, end] of lines) {
       const at = scene.start - offset;
@@ -165,7 +164,7 @@ export async function sampleGrayFrames(video, step) {
 
 // A part render starts `offset` seconds into the timeline and runs `span` seconds: the duration
 // check, the narration intervals and the scene samples are taken on the file's own clock.
-export async function runQc({ video, timeline, outDir, publicDir, thresholds = {}, offset = 0, span = timeline.duration - offset }) {
+export async function runQc({ video, timeline, outDir, readVoice, thresholds = {}, offset = 0, span = timeline.duration - offset }) {
   const t = deepMerge(QC_DEFAULTS, thresholds);
   const checks = [];
   const add = (id, status, detail) => checks.push({ id, status, detail });
@@ -199,7 +198,7 @@ export async function runQc({ video, timeline, outDir, publicDir, thresholds = {
     } else add("loudness", "warn", "loudnorm produced no measurement");
     add("dead-air", silences.length ? "warn" : "pass", silences.length ? fmt(silences) : `no gap > ${t.silence.maxGap}s`);
   }
-  const inSpeech = voiceGaps(timeline, { publicDir, offset, span, silence: t.silence });
+  const inSpeech = voiceGaps(timeline, { readVoice, offset, span, silence: t.silence });
   const hasVoice = timeline.scenes.some((s) => (s.lines ?? []).some((l) => s.start + l.end > offset && s.start + l.start < offset + span));
   add("silence-in-narration", inSpeech.length ? "fail" : "pass", inSpeech.length
     ? `silent or missing voice stem: ${fmt(inSpeech)}`
