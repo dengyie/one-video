@@ -231,7 +231,7 @@ export async function qc(args) {
   const subject = isMain ? reviewSubject(project) : null;
   const outDir = isMain ? join(project.paths.out, "qc") : join(project.paths.out, "qc", entry ? `v${entry.v}` : basename(video, ".mp4"));
   const span = entry?.part && entry.frames ? (entry.frames[1] - entry.frames[0] + 1) / tl.fps : undefined;
-  const review = await runQc({ video, timeline: tl, outDir, thresholds: project.config.qc, offset, span });
+  const review = await runQc({ video, timeline: tl, outDir, publicDir: project.p("public"), thresholds: project.config.qc, offset, span });
   const reportPath = isMain ? project.paths.review : join(outDir, "review.json");
   writeJson(reportPath, isMain ? { ...review, subject } : review);
   const icon = { pass: "✓", warn: "⚠", fail: "✗" };

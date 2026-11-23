@@ -5,7 +5,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import { ffmpeg } from "../cli/lib/core/ffmpeg.mjs";
-import { decodeGrayPng, runs, analyzeFrames, QC_DEFAULTS, runQc, sampleGrayFrames } from "../cli/lib/vision/qc.mjs";
+import { decodeGrayPng, runs, analyzeFrames, QC_DEFAULTS, runQc, sampleGrayFrames, voiceGaps } from "../cli/lib/vision/qc.mjs";
+import { writeWav } from "../cli/lib/audio/wav.mjs";
+
+test("voice QC catches silent lines at the edges and confines findings to the rendered part", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ov-voice-qc-"));
+  try {
+    const audio = "narrator.wav", sampleRate = 8000;
+    const samples = Int16Array.from({ length: 4 * sampleRate }, (_, i) => i >= sampleRate && i < 2 * sampleRate ? 6500 * Math.sin(i / 10) : 0);
+    writeWav(join(dir, audio), { channels: 1, sampleRate, samples });
+    const timeline = { duration: 7, scenes: [{ start: 3, duration: 4, audio, lines: [
+      { start: 0, end: 1 }, { start: 1, end: 2 }, { start: 3, end: 4 },
+    ] }] };
+    assert.deepEqual(voiceGaps(timeline, { publicDir: dir }), [[3, 4], [6, 7]]);
+    assert.deepEqual(voiceGaps(timeline, { publicDir: dir, offset: 4, span: 2.5 }), [[2, 2.5]]);
+    assert.deepEqual(voiceGaps(timeline, { publicDir: join(dir, "missing") }), [[3, 4], [4, 5], [6, 7]]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 function crcTable() {
   return Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
@@ -95,10 +111,11 @@ test("bundled FFmpeg QC samples the same frames as the PNG pipeline", async () =
       .map((file) => decodeGrayPng(readFileSync(join(png, file))).pixels);
     const samples = await sampleGrayFrames(video, 4);
     assert.deepEqual(samples.map((x) => new Uint8Array(x)), legacy);
-    const timeline = { width: 64, height: 36, fps: 8, duration: 4, scenes: [{ id: "one", type: "test", start: 0, duration: 4 }] };
-    const report = await runQc({ video, timeline, outDir });
+    const timeline = { width: 64, height: 36, fps: 8, duration: 4, scenes: [{ id: "one", type: "test", start: 0, duration: 4, lines: [{ start: 0.5, end: 2.5 }] }] };
+    const report = await runQc({ video, timeline, outDir, publicDir: dir });
     assert.equal(report.verdict, "fail");
     assert.deepEqual(report.checks.find((c) => c.id === "black-frames"), { id: "black-frames", status: "fail", detail: "1.0–2.0s" });
+    assert.deepEqual(report.checks.find((c) => c.id === "silence-in-narration"), { id: "silence-in-narration", status: "fail", detail: "silent or missing voice stem: 0.5–2.5s" });
     assert.equal(report.frames.length, 1);
     assert.deepEqual(readdirSync(outDir), ["frames"]);
   } finally { rmSync(dir, { recursive: true, force: true }); }

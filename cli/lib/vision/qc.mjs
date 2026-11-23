@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { inflateSync } from "node:zlib";
 import { ffmpeg, ffprobe } from "../core/ffmpeg.mjs";
 import { pool } from "../core/http.mjs";
+import { readWav } from "../audio/wav.mjs";
 
 export const QC_DEFAULTS = {
   loudness: { target: -16, tolerance: 2, maxTruePeak: -1 },
@@ -109,6 +110,40 @@ function parseSilence(stderr) {
   return out;
 }
 
+export function voiceGaps(timeline, { publicDir, offset = 0, span = timeline.duration - offset, silence = QC_DEFAULTS.silence } = {}) {
+  const gaps = [];
+  const level = 32768 * 10 ** (silence.noiseDb / 20);
+  for (const scene of timeline.scenes) {
+    const lines = (scene.lines ?? [])
+      .map(({ start, end }) => [Math.max(start, offset - scene.start), Math.min(end, scene.duration, offset + span - scene.start)])
+      .filter(([start, end]) => end - start >= 0.05);
+    if (!lines.length) continue;
+    let voice;
+    try {
+      if (publicDir && scene.audio) voice = readWav(join(publicDir, scene.audio));
+    } catch { /* An unreadable source cannot contribute any narration. */ }
+    for (const [start, end] of lines) {
+      const at = scene.start - offset;
+      if (!voice) { gaps.push([start + at, end + at]); continue; }
+      const { samples, channels, sampleRate } = voice;
+      const first = Math.round(start * sampleRate), last = Math.round(end * sampleRate);
+      const min = Math.ceil(Math.min(silence.maxGap, 0.8 * (end - start)) * sampleRate);
+      let quiet = first;
+      const record = (i) => { if (i - quiet >= min) gaps.push([quiet / sampleRate + at, i / sampleRate + at]); };
+      for (let i = first; i < last; i++) {
+        for (let c = 0; c < channels; c++) {
+          if (Math.abs(samples[i * channels + c] ?? 0) < level) continue;
+          record(i);
+          quiet = i + 1;
+          break;
+        }
+      }
+      record(last);
+    }
+  }
+  return gaps;
+}
+
 export async function sampleGrayFrames(video, step) {
   const bytesPerFrame = 64 * 36;
   const frames = [];
@@ -130,7 +165,7 @@ export async function sampleGrayFrames(video, step) {
 
 // A part render starts `offset` seconds into the timeline and runs `span` seconds: the duration
 // check, the narration intervals and the scene samples are taken on the file's own clock.
-export async function runQc({ video, timeline, outDir, thresholds = {}, offset = 0, span = timeline.duration - offset }) {
+export async function runQc({ video, timeline, outDir, publicDir, thresholds = {}, offset = 0, span = timeline.duration - offset }) {
   const t = deepMerge(QC_DEFAULTS, thresholds);
   const checks = [];
   const add = (id, status, detail) => checks.push({ id, status, detail });
@@ -151,27 +186,28 @@ export async function runQc({ video, timeline, outDir, thresholds = {}, offset =
   else add("audio-codec", a.codec_name === "aac" ? "pass" : "warn", `${a.codec_name} ${a.sample_rate}Hz ${a.channels}ch`);
   add("duration", Math.abs(duration - span) <= t.durationTolerance ? "pass" : "fail", `${duration.toFixed(2)}s (${offset ? `part from ${offset}s: ${+span.toFixed(2)}` : `timeline ${timeline.duration}`}s)`);
 
-  let loud = null, silences = [];
+  const fmt = (rs) => rs.map(([s, e]) => `${s.toFixed(1)}–${e.toFixed(1)}s`).join(", ");
+  let loud = null;
   if (a) {
     const { stderr } = await ffmpeg(["-i", video, "-vn", "-af", `silencedetect=noise=${t.silence.noiseDb}dB:d=${t.silence.maxGap},loudnorm=I=${t.loudness.target}:TP=${t.loudness.maxTruePeak}:print_format=json`, "-f", "null", "-"]);
     loud = parseLoudnorm(stderr);
-    silences = parseSilence(stderr).filter(([s, e]) => s > 0.5 && e < duration - 1);
+    const silences = parseSilence(stderr).filter(([s, e]) => s > 0.5 && e < duration - 1);
     if (loud) {
       const off = Math.abs(loud.integrated - t.loudness.target);
       add("loudness", off <= t.loudness.tolerance ? "pass" : off <= t.loudness.tolerance * 2 ? "warn" : "fail", `${loud.integrated.toFixed(1)} LUFS (target ${t.loudness.target}±${t.loudness.tolerance})`);
       add("true-peak", loud.truePeak <= t.loudness.maxTruePeak ? "pass" : "warn", `${loud.truePeak.toFixed(1)} dBTP (max ${t.loudness.maxTruePeak})`);
     } else add("loudness", "warn", "loudnorm produced no measurement");
-    // Silence during a narration interval means a dropped TTS line: fail. Elsewhere it is only dead air.
-    const inSpeech = silences.filter(([s, e]) => (timeline.narration ?? []).some(([a, b]) => s < b - offset - 0.2 && e > a - offset + 0.2));
-    const fmtS = (rs) => rs.map(([s, e]) => `${s.toFixed(1)}–${e.toFixed(1)}s`).join(", ");
-    add("silence-in-narration", inSpeech.length ? "fail" : "pass", inSpeech.length ? fmtS(inSpeech) : "narration audible throughout");
-    add("dead-air", silences.length > inSpeech.length ? "warn" : "pass", silences.length ? fmtS(silences) : `no gap > ${t.silence.maxGap}s`);
+    add("dead-air", silences.length ? "warn" : "pass", silences.length ? fmt(silences) : `no gap > ${t.silence.maxGap}s`);
   }
+  const inSpeech = voiceGaps(timeline, { publicDir, offset, span, silence: t.silence });
+  const hasVoice = timeline.scenes.some((s) => (s.lines ?? []).some((l) => s.start + l.end > offset && s.start + l.start < offset + span));
+  add("silence-in-narration", inSpeech.length ? "fail" : "pass", inSpeech.length
+    ? `silent or missing voice stem: ${fmt(inSpeech)}`
+    : hasVoice ? "no gaps in the voice stem" : "no narration scheduled");
 
   const step = Math.max(1, Math.round(timeline.fps / t.sampleFps));
   const frames = await sampleGrayFrames(video, step);
   const fa = analyzeFrames(frames, timeline.fps / step, t);
-  const fmt = (rs) => rs.map(([s, e]) => `${s.toFixed(1)}–${e.toFixed(1)}s`).join(", ");
   add("black-frames", fa.black.length ? "fail" : "pass", fa.black.length ? fmt(fa.black) : "none");
   add("frozen-segments", fa.frozen.length ? "warn" : "pass", fa.frozen.length ? `${fmt(fa.frozen)} (> ${t.frozen.maxRun}s without motion)` : "none");
   add("static-ratio", fa.staticRatio <= t.staticRatioMax ? "pass" : "warn", `${(fa.staticRatio * 100).toFixed(0)}% of samples nearly static (max ${(t.staticRatioMax * 100).toFixed(0)}%)`);
