@@ -6,20 +6,20 @@ import { join, relative } from "node:path";
 import { UserError, readJson, writeJson } from "./project.mjs";
 
 // Paths enter the hash relative to the project root, so a moved or copied project keeps its approvals.
-function hashPath(root, path, h) {
+function hasProduct(root, path, h) {
   if (!existsSync(path)) return false;
   if (statSync(path).isDirectory()) {
     // An empty directory (e.g. a fresh out/) is not a product yet.
     const files = readdirSync(path).filter((f) => !f.startsWith(".")).sort();
     if (!files.length) return false;
-    for (const f of files) hashPath(root, join(path, f), h);
-  } else h.update(relative(root, path).split("\\").join("/")).update(readFileSync(path));
+    if (h) for (const f of files) hasProduct(root, join(path, f), h);
+  } else h?.update(relative(root, path).split("\\").join("/")).update(readFileSync(path));
   return true;
 }
 
 export function productsHash(root, products) {
   const h = createHash("sha1");
-  for (const p of products) if (!hashPath(root, join(root, p), h)) return null;
+  for (const p of products) if (!hasProduct(root, join(root, p), h)) return null;
   return h.digest("hex").slice(0, 16);
 }
 
@@ -70,13 +70,16 @@ export function stageStatus(project, pipeline, state = loadState(project)) {
   let blocked = false;
   for (const stage of pipeline.stages) {
     const products = stageProducts(project, stage);
-    const hash = products.length ? productsHash(project.root, products) : null;
+    const hash = stage.approval && products.length ? productsHash(project.root, products) : null;
+    const ready = stage.approval
+      ? hash !== null
+      : products.length > 0 && products.every((p) => hasProduct(project.root, join(project.root, p)));
     const rec = state.stages[stage.id];
-    const outdated = hash !== null ? outdatedFor(project, products) : null;
+    const outdated = ready ? outdatedFor(project, products) : null;
     let status;
     // A story (config.fiction) has no facts to source: research is there only if one is written.
     const optional = stage.optional || (stage.id === "research" && project.config?.fiction === true);
-    if (hash === null) status = optional ? "optional" : "pending";
+    if (!ready) status = optional ? "optional" : "pending";
     else if (outdated) status = "stale";
     else if (!stage.approval) status = "done";
     else if (rec?.hash === hash) status = "approved";

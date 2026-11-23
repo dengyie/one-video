@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import fs, { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { approveStage, previewOutdated, productsHash, reviewOutdated, reviewSubject, stageStatus } from "../cli/lib/core/state.mjs";
@@ -43,6 +44,37 @@ test("stageStatus expands {name} in products: stills alone do not complete rende
   assert.equal(stageStatus(project, pipeline)[0].status, "pending");
   writeFileSync(join(root, "out", "demo.mp4"), "v");
   assert.equal(stageStatus(project, pipeline)[0].status, "done");
+});
+
+test("stageStatus reads only approval products and detects same-size edits to them", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "ov-state-"));
+  const project = { root, config: { name: "demo" }, paths: { state: join(root, "state.json") } };
+  const pipeline = { name: "p", stages: [
+    { id: "render", produces: ["render.mp4"] },
+    { id: "script", produces: ["script.json"], approval: true },
+    { id: "extras", produces: ["extras"] },
+  ] };
+  const render = join(root, "render.mp4"), script = join(root, "script.json");
+  const read = fs.readFileSync;
+  const spy = t.mock.method(fs, "readFileSync", (path, ...args) => {
+    assert.notEqual(path, render, "status must not read the render bytes");
+    return read(path, ...args);
+  });
+  syncBuiltinESMExports();
+  try {
+    writeFileSync(render, "video");
+    writeFileSync(script, "[1]");
+    mkdirSync(join(root, "extras"));
+    writeFileSync(join(root, "extras", ".hidden"), "not an output");
+    approveStage(project, pipeline, "script");
+    assert.deepEqual(stageStatus(project, pipeline).map((stage) => stage.status), ["done", "approved", "pending"]);
+    writeFileSync(script, "[2]");
+    assert.equal(stageStatus(project, pipeline)[1].status, "stale");
+  } finally {
+    spy.mock.restore();
+    syncBuiltinESMExports();
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("a QC review goes stale when the main render or the timeline changes", () => {
