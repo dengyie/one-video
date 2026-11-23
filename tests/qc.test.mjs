@@ -62,6 +62,14 @@ test("analyzeFrames finds interior black runs and long frozen segments", () => {
   assert.ok(r.staticRatio > 0.5);
 });
 
+test("black-frame QC separates dark content from near-black noise", () => {
+  const dark = Uint8Array.from({ length: 64 * 36 }, (_, i) => i < 12 ? 52 : 4);
+  const blank = Uint8Array.from({ length: 64 * 36 }, (_, i) => i === 0 ? 48 : i % 5);
+  const report = analyzeFrames([frame(80), frame(80), dark, dark, blank, blank, frame(80), frame(80)], 2);
+  assert.ok(report.means[2] < QC_DEFAULTS.black.luma);
+  assert.deepEqual(report.black, [[2, 3]]);
+});
+
 test("analyzeFrames compares against the frame one window back, so slow drift is motion", () => {
   const fps = 2;
   // One more pixel brightens each sample: mean diff 0.5 vs the previous sample (< 0.6), 1.0 vs two back.

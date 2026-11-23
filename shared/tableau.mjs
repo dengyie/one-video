@@ -49,11 +49,11 @@ export const KINDS = {
   clouds: { depth: 0.18, y: 0.24, cover: 0.5, speed: 0.012, opacity: 1, seed: 3 },
   sea: { depth: 0.3, y: 0.66, swell: 0.3, opacity: 1, reflect: 1 },
   cliff: { depth: 0.62, side: "left", x: 0.24, y: 0.6, opacity: 1, seed: 7 },
-  lighthouse: { depth: 0.62, x: 0.2, y: 0.6, h: 0.36, lit: 1, beam: 1, sweep: 40, opacity: 1 },
+  lighthouse: { depth: 0.62, x: 0.2, y: 0.6, h: 0.36, lit: 1, beam: 1, sweep: 40, opacity: 1, keyLight: 0 },
   hut: { depth: 0.62, x: 0.32, y: 0.6, size: 0.09, window: 1, opacity: 1 },
   boat: { depth: 0.82, x: 0.62, size: 0.13, rock: 1, lantern: 1, opacity: 1, facing: 1 },
   shore: { depth: 0.94, y: 0.86, opacity: 1 },
-  figure: { depth: 0.96, x: 0.4, y: 0.86, size: 0.22, lantern: 0, opacity: 1, facing: 1 },
+  figure: { depth: 0.96, x: 0.4, y: 0.86, size: 0.22, lantern: 0, opacity: 1, facing: 1, keyLight: 0 },
   fire: { depth: 0.96, x: 0.5, y: 0.86, r: 0.06, intensity: 1, opacity: 1 },
   rain: { depth: 1, intensity: 0, wind: 0.25, opacity: 1 },
   lightning: { depth: 0.12, x: 0.66, opacity: 1 },
@@ -70,7 +70,7 @@ export const KINDS = {
 export const KIND_NAMES = Object.keys(KINDS);
 
 /** Keys that blend when a keyframe changes them (the rest switch at the keyframe). */
-const NUMERIC = ["x", "y", "r", "h", "size", "opacity", "cover", "speed", "swell", "lit", "beam", "sweep", "window", "rock", "lantern", "intensity", "wind", "density", "reflect", "depth", "spread", "rough", "cap", "count"];
+const NUMERIC = ["x", "y", "r", "h", "size", "opacity", "cover", "speed", "swell", "lit", "beam", "sweep", "window", "rock", "lantern", "keyLight", "intensity", "wind", "density", "reflect", "depth", "spread", "rough", "cap", "count"];
 
 /**
  * An element's state at t: kind defaults, its own fields, then each due keyframe (`to`) blended in

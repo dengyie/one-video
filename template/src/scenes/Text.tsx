@@ -74,7 +74,7 @@ export const QuoteScene: React.FC<{ text: string; author?: string; source?: stri
   const { u, portrait } = useLayout();
   const scene = useScene();
   const t = useTime();
-  const q = useReveal(0.2, 0.9);
+  const q = useReveal(0, 0.45);
   const a = useReveal(1.0, 0.6);
   // A quote read aloud lights up as it is spoken (and the timeline drops its caption).
   const times = spokenTimes(text, scene.lines);
@@ -83,12 +83,12 @@ export const QuoteScene: React.FC<{ text: string; author?: string; source?: stri
       {asset && <MediaFill asset={asset} dim={0.65} motion="in" />}
       <Stage center style={{ alignItems: "center", textAlign: "center" }}>
         <div style={{ fontSize: 180 * u, lineHeight: 0.6, color: theme.colors.accent, opacity: q * 0.8, fontFamily: "Georgia, serif" }}>“</div>
-        <div style={{ fontSize: (portrait ? 58 : 60) * u, fontWeight: 700, lineHeight: 1.45, maxWidth: "86%", opacity: q, transform: `translateY(${(1 - q) * 20 * u}px)` }}>
+        <div style={{ fontSize: (portrait ? 58 : 64) * u, fontWeight: 700, color: "#fff", textShadow: "0 2px 12px #000", lineHeight: 1.45, maxWidth: "86%", opacity: q, transform: `translateY(${(1 - q) * 10 * u}px)` }}>
           {times
             ? [...text].map((c, i) => {
                 // Words not yet said stay faint, so a long quote builds clause by clause instead of sitting there whole.
                 const k = Math.min(1, Math.max(0, (t - times[i] + 0.1) / 0.25));
-                return <span key={i} style={{ display: "inline-block", opacity: 0.22 + 0.78 * k, transform: `translateY(${(1 - k) * 10 * u}px)` }}>{c}</span>;
+                return <span key={i} style={{ opacity: 0.66 + 0.34 * k }}>{c}</span>;
               })
             : text}
         </div>

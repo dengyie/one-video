@@ -157,6 +157,7 @@
             "y": 0.9,
             "size": 0.3,
             "lantern": 1,
+            "keyLight": 0.85,
             "facing": 1,
             "to": [
               {
@@ -194,9 +195,8 @@
           },
           {
             "cue": "old",
-            "x": 0.36,
-            "y": 0.66,
-            "zoom": 1.25,
+            "on": "keeper",
+            "zoom": 2.05,
             "dur": 2.2
           },
           {
@@ -450,6 +450,7 @@
               {
                 "cue": "night",
                 "dur": 0.01,
+                "keyLight": 0.75,
                 "lit": 0.9
               },
               {
@@ -479,11 +480,10 @@
           },
           {
             "cue": "night",
-            "zoom": 1.45,
+            "zoom": 1.95,
             "cut": true,
             "sway": 0.4,
-            "on": "lh",
-            "anchor": "gallery"
+            "on": ["lh", "hut"]
           },
           {
             "cue": "dark",

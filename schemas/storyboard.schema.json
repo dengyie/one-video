@@ -3123,6 +3123,12 @@
                 "minimum": 0,
                 "maximum": 1
               },
+              "keyLight": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "local directional light on a figure or lighthouse"
+              },
               "facing": {
                 "enum": [
                   -1,
@@ -3334,6 +3340,11 @@
                       "description": "boat: roll on the swell"
                     },
                     "lantern": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "keyLight": {
                       "type": "number",
                       "minimum": 0,
                       "maximum": 1

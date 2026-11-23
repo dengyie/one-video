@@ -80,7 +80,9 @@ export function analyzeFrames(frames, fps, t = QC_DEFAULTS) {
     return d / f.length;
   });
   const total = frames.length * step;
-  const black = runs(means.map((m) => m < t.black.luma), step)
+  // A dark frame can still show a small subject. Require both low mean and no visible highlights.
+  const black = runs(frames.map((f, i) => means[i] < t.black.luma
+    && f.reduce((n, luma) => n + Number(luma >= 3 * t.black.luma), 0) < Math.max(2, Math.ceil(f.length * 0.001))), step)
     .filter(([a, b]) => b - a > t.black.maxRun && a > 0.5 && b < total - 0.5);
   const staticFlags = diffs.map((d) => d < t.frozen.diff);
   const frozen = runs(staticFlags, step).filter(([a, b]) => b - a > t.frozen.maxRun);
