@@ -23,6 +23,7 @@ const SITE = join(dirname(fileURLToPath(import.meta.url)), "site");
 const VDIR = join(SITE, "v");
 const MAX_ASSET = 25 * 1024 * 1024; // Workers static assets per-file limit
 const KIT = { captions: "out/publish/captions.vtt", description: "out/publish/description.txt" };
+const HOST_ASSETS = ["poster.jpg", "captions.vtt", "description.txt"];
 
 async function sync() {
   const drive = driveConfig();
@@ -34,7 +35,7 @@ async function sync() {
   const previous = new Map((readJsonFile(join(SITE, "videos.json"))?.videos ?? []).map((v) => [v.slug, v]));
   const videos = from === "drive"
     ? await driveCatalogue({ drive: new Drive(drive), root: drive.root, vdir: VDIR, previous, log: console.log, warn: console.warn })
-    : fromHost();
+    : fromHost({ previous });
 
   const keep = new Set(videos.map((v) => v.slug));
   for (const d of readdirSync(VDIR)) if (!keep.has(d)) { rmSync(join(VDIR, d), { recursive: true, force: true }); console.log(`✗ ${d} (no longer published)`); }
@@ -44,7 +45,7 @@ async function sync() {
 }
 
 // ── host ─────────────────────────────────────────────────────────────────────────────────────────
-export function fromHost({ root: ROOT = process.env.ONEVIDEO_PROJECTS ?? "/srv/onevideo", host: HOST = process.env.ONEVIDEO_HOST || (existsSync(ROOT) ? "local" : ""), vdir = VDIR } = {}) {
+export function fromHost({ root: ROOT = process.env.ONEVIDEO_PROJECTS ?? "/srv/onevideo", host: HOST = process.env.ONEVIDEO_HOST || (existsSync(ROOT) ? "local" : ""), vdir = VDIR, previous = new Map() } = {}) {
   const LOCAL = HOST === "local";
   if (!HOST) fail(`ONEVIDEO_HOST is required off the render node (${ROOT} not found here): set it to its ssh host, e.g. \`ONEVIDEO_HOST=render-box npm run web:sync\`, or configure the drive (ONEVIDEO_DRIVE_*).`);
   // Runs on the host: one JSON line per published project.
@@ -57,9 +58,9 @@ for (const slug of fs.readdirSync(root)) {
     const pub = JSON.parse(fs.readFileSync(path.join(dir, "plan/publish.json"), "utf8"));
     const inProject = (file) => typeof file === "string" && file.startsWith("out/") && !file.split("/").includes("..");
     if (!inProject(pub.video) || (pub.poster && !inProject(pub.poster))) continue;
-    const st = fs.statSync(path.join(dir, pub.video));
-    if (!st.isFile()) continue;
-    console.log(JSON.stringify({ slug, publish: pub, size: st.size, mtime: st.mtimeMs }));
+    const st = fs.statSync(path.join(dir, pub.video), { throwIfNoEntry: false });
+    if (!st) console.log(JSON.stringify({ slug, missing: pub.video }));
+    else if (st.isFile()) console.log(JSON.stringify({ slug, publish: pub, size: st.size, mtime: st.mtimeMs }));
   } catch {}
 }`;
   // ssh joins its arguments into one shell command line; locally the same line goes to bash.
@@ -72,14 +73,22 @@ for (const slug of fs.readdirSync(root)) {
   const out = [], tooBig = [];
   for (const p of ssh(["node", "-", q(ROOT)], LIST).split("\n").filter(Boolean).map((l) => JSON.parse(l))) {
     if (!SLUG.test(p.slug)) { console.warn(`skip ${p.slug}: slug must be [a-z0-9-]`); continue; }
+    const dst = join(vdir, p.slug);
+    const hasCopy = (size) => statSync(join(dst, "video.mp4"), { throwIfNoEntry: false })?.size === size
+      && HOST_ASSETS.every((f) => existsSync(join(dst, f)));
+    if (p.missing) {
+      const prev = previous.get(p.slug);
+      const keep = prev?.source === "static" && hasCopy(prev.size);
+      console.warn(`! ${p.slug}: ${p.missing} missing on host${keep ? " — keeping the listed version" : ""}`);
+      if (keep) out.push(prev);
+      continue;
+    }
     if (p.size > MAX_ASSET) { tooBig.push(p); continue; }
     const src = `${ROOT}/${p.slug}`;
-    const dst = join(vdir, p.slug);
     const stamp = join(dst, ".synced");
     const want = JSON.stringify({ video: p.publish.video, poster: p.publish.poster, mtime: p.mtime, size: p.size, from: "host" });
     mkdirSync(dst, { recursive: true });
-    const fresh = readText(stamp) === want && statSync(join(dst, "video.mp4"), { throwIfNoEntry: false })?.size === p.size
-      && ["poster.jpg", "captions.vtt", "description.txt"].every((f) => existsSync(join(dst, f)));
+    const fresh = readText(stamp) === want && hasCopy(p.size);
     if (!fresh) {
       const cut = `${src}/${p.publish.video}`;
       if (p.publish.poster) scp(`${src}/${p.publish.poster}`, join(dst, "poster.jpg"));
