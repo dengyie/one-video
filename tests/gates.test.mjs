@@ -240,6 +240,14 @@ test("portrait device overlays check the reserved caption slot, not the ordinary
   assert.equal(run(0.90).length, 1);
 });
 
+test("layoutGate does not reserve a device caption slot for a scene with captions disabled", () => {
+  const timeline = {
+    width: 1080, height: 1920, captions: { enabled: true, style: "line", items: [{ scene: "device", text: "A chapter", start: 1, end: 3 }] },
+    scenes: [{ id: "device", type: "device", captions: false, start: 0, duration: 4, overlays: [{ type: "icon", x: 0.5, y: 0.90, size: 90, t: 0, end: 4 }] }],
+  };
+  assert.deepEqual(layoutGate(timeline, {}), []);
+});
+
 test("layoutGate: overlays over spoken captions, off-frame, tiny or stacked stickers, text pushed out by a shot", () => {
   const base = { width: 1920, height: 1080, captions: { enabled: true, style: "line", items: [{ scene: "a", text: "说话中", start: 1, end: 3 }] } };
   const scene = (over) => ({ id: "a", type: "media", start: 0, duration: 6, shots: [{ t: 0, zoom: 1, x: 0.5, y: 0.5 }], overlays: [], ...over });

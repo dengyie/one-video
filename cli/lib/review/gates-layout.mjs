@@ -64,7 +64,7 @@ export function layoutGate(timeline, config) {
         for (let t = a; t < b; t += 0.25) if (meets(bx, captionBand(sc.shots, t, portrait, slot))) return true;
         return false;
       };
-      const bandHit = (bx) => spoken.find((c) => c.scene === sc.id && (slot || !c.top) && inBand(c, bx));
+      const bandHit = (bx) => sc.captions !== false && spoken.find((c) => c.scene === sc.id && (slot || !c.top) && inBand(c, bx));
       // The part of the frame on screen through the overlay's whole life: a push-in crops its edges.
       const vis = seenBox(sc.shots, o.t, Math.min(o.end, sc.duration));
       const mapped = [];
