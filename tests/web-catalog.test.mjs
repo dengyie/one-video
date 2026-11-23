@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { driveCatalogue } from "../web/catalog.mjs";
@@ -113,6 +113,29 @@ test("drive catalogue: a file that does not match its record keeps the listed en
     // Without a previous entry the project is simply not listed.
     const fresh = await run(torn, { vdir: join(vdir, "elsewhere") });
     assert.deepEqual(fresh.videos, []);
+  } finally { rmSync(vdir, { recursive: true, force: true }); }
+});
+
+test("drive catalogue: late failure leaves every file of the previous kit intact", async () => {
+  const vdir = mkdtempSync(join(tmpdir(), "ov-cat-"));
+  try {
+    const { videos } = await run(fakeDrive(project("keeper")), { vdir });
+    const previous = new Map(videos.map((v) => [v.slug, v]));
+    const dir = join(vdir, "keeper");
+    const snapshot = () => Object.fromEntries(readdirSync(dir).map((file) => [file, readFileSync(join(dir, file), "utf8")]));
+    const before = snapshot();
+    const update = project("keeper", {
+      publish: { title: "new", video: "out/v3.mp4", poster: "out/publish/poster.jpg" },
+      extra: { "out/v3.mp4": "NEWCUT", "out/publish/poster.jpg": "NEWJPEG", "out/publish/captions.vtt": "WEBVTT\nnew" },
+    });
+    const after = await run(fakeDrive(update, { serve: (p, body) => p.endsWith(".vtt") ? "HALF" : body }), { vdir, previous });
+    assert.deepEqual(after.videos, videos);
+    assert.match(after.warns.join("\n"), /captions\.vtt.*keeping the listed version/);
+    assert.deepEqual(snapshot(), before);
+
+    const retry = await run(fakeDrive(update), { vdir, previous });
+    assert.equal(retry.videos[0].title, "new");
+    assert.equal(readFileSync(join(dir, "poster.jpg"), "utf8"), "NEWJPEG");
   } finally { rmSync(vdir, { recursive: true, force: true }); }
 });
 

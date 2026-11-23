@@ -4,8 +4,9 @@
 // its web renditions (publish.json `renditions`, out/publish/web-*.mp4) stay on the drive and the
 // viewer's browser loads them from there (the Worker hands out signed links, web/drive.mjs). `drive` is anything with list / readJson /
 // download(remote, sink) → { sha256 } (cli/lib/archive/drive.mjs, or a fake in tests).
-import { createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { finished } from "node:stream/promises";
 import { joinRemote } from "../cli/lib/archive/index.mjs";
 
 export const SLUG = /^[a-z0-9][a-z0-9-]*$/;
@@ -49,7 +50,16 @@ async function driveEntry(drive, root, vdir, slug, log) {
 }
 
 async function publishedEntry(drive, base, dst, slug, record, files, log) {
-  const pub = JSON.parse(await fetchChecked(drive, base, "plan/publish.json", files, join(dst, ".publish.json")));
+  const stage = mkdtempSync(join(dst, ".sync-"));
+  try {
+    return await stageEntry(drive, base, dst, stage, slug, record, files, log);
+  } finally { rmSync(stage, { recursive: true, force: true }); }
+}
+
+async function stageEntry(drive, base, dst, stage, slug, record, files, log) {
+  const publish = ".publish.json";
+  await fetchChecked(drive, base, "plan/publish.json", files, join(stage, publish));
+  const pub = JSON.parse(readFileSync(join(stage, publish), "utf8"));
   if (!pub.video) throw new Error("plan/publish.json names no cut (published before the player read the drive): run onevideo publish again on its render node");
   if (!pub.poster) throw new Error("plan/publish.json names no poster frame: run onevideo publish again on its render node");
   const need = { video: pub.video, poster: pub.poster, ...KIT };
@@ -58,37 +68,40 @@ async function publishedEntry(drive, base, dst, slug, record, files, log) {
   // Re-download only when a file the page shows changed on the drive.
   const stamp = join(dst, ".synced");
   const want = JSON.stringify(Object.values(need).map((rel) => files[rel].sha256).concat(files["plan/publish.json"].sha256));
-  const fresh = readText(stamp) === want && Object.values(LOCAL).every((f) => existsSync(join(dst, f)));
+  const fresh = readText(stamp) === want && [publish, ...Object.values(LOCAL)].every((f) => existsSync(join(dst, f)));
   if (!fresh) {
-    for (const [what, file] of Object.entries(LOCAL)) await fetchChecked(drive, base, need[what], files, join(dst, file));
-    writeFileSync(stamp, want);
-    log(`↓ ${slug} (${pub.video}, ${(files[pub.video].size / 2 ** 20).toFixed(1)} MiB on the drive)`);
-  } else log(`= ${slug}`);
+    for (const [what, file] of Object.entries(LOCAL)) await fetchChecked(drive, base, need[what], files, join(stage, file));
+    writeFileSync(join(stage, ".synced"), want);
+  }
   // Tiers already on the drive, highest first; one listed but not uploaded yet waits for the next run.
   const renditions = (Array.isArray(pub.renditions) ? pub.renditions : [])
     .filter((r) => QUALITY.test(r?.q ?? "") && typeof r.file === "string" && files[r.file]?.sha256)
     .map((r) => ({ q: r.q, height: Number(r.height) || null, kbps: Number(r.kbps) || null, size: files[r.file].size, v: files[r.file].sha256.slice(0, 12), drive: joinRemote(base, r.file) }))
     .sort((a, b) => (b.height ?? 0) - (a.height ?? 0));
-  return entry(slug, pub, {
+  const result = entry(slug, pub, {
     renditions,
     size: files[pub.video].size,
     date: (pub.rendered ?? files[pub.video].at ?? record.at ?? new Date().toISOString()).slice(0, 10),
     v: files[pub.video].sha256.slice(0, 12),
-    description: readFileSync(join(dst, LOCAL.description), "utf8"),
+    description: readFileSync(join(fresh ? dst : stage, LOCAL.description), "utf8"),
     drive: joinRemote(base, pub.video),
   });
+  if (!fresh) {
+    for (const file of [publish, ...Object.values(LOCAL), ".synced"]) renameSync(join(stage, file), join(dst, file));
+    log(`↓ ${slug} (${pub.video}, ${(files[pub.video].size / 2 ** 20).toFixed(1)} MiB on the drive)`);
+  } else log(`= ${slug}`);
+  return result;
 }
 
-// One archived file to a local path, checked against the archive record; returns its text.
+// One archived file to a staging path, checked against the archive record.
 async function fetchChecked(drive, base, rel, files, abs) {
-  const part = `${abs}.part`;
-  const got = await drive.download(joinRemote(base, rel), createWriteStream(part));
-  if (got.sha256 !== files[rel].sha256) {
-    rmSync(part, { force: true });
-    throw new Error(`${rel} on the drive does not match its archive record (an archive run in flight?)`);
-  }
-  renameSync(part, abs);
-  return readFileSync(abs, "utf8");
+  const sink = createWriteStream(abs);
+  try {
+    const [got] = await Promise.all([drive.download(joinRemote(base, rel), sink), finished(sink)]);
+    if (got.sha256 !== files[rel].sha256) {
+      throw new Error(`${rel} on the drive does not match its archive record (an archive run in flight?)`);
+    }
+  } finally { sink.destroy(); }
 }
 
 // One videos.json entry. `drive`: the cut's path on the drive (the Worker redirects to it); without
