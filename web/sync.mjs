@@ -24,6 +24,7 @@ const VDIR = join(SITE, "v");
 const MAX_ASSET = 25 * 1024 * 1024; // Workers static assets per-file limit
 const KIT = { captions: "out/publish/captions.vtt", description: "out/publish/description.txt" };
 const HOST_ASSETS = ["poster.jpg", "captions.vtt", "description.txt"];
+const hostVersion = (stamp) => createHash("sha256").update(stamp).digest("hex").slice(0, 12);
 
 async function sync() {
   const drive = driveConfig();
@@ -74,18 +75,20 @@ for (const slug of fs.readdirSync(root)) {
   for (const p of ssh(["node", "-", q(ROOT)], LIST).split("\n").filter(Boolean).map((l) => JSON.parse(l))) {
     if (!SLUG.test(p.slug)) { console.warn(`skip ${p.slug}: slug must be [a-z0-9-]`); continue; }
     const dst = join(vdir, p.slug);
+    const stamp = join(dst, ".synced");
     const hasCopy = (size) => statSync(join(dst, "video.mp4"), { throwIfNoEntry: false })?.size === size
       && HOST_ASSETS.every((f) => existsSync(join(dst, f)));
     if (p.missing) {
       const prev = previous.get(p.slug);
-      const keep = prev?.source === "static" && hasCopy(prev.size);
+      const cached = readJsonFile(stamp);
+      const keep = prev?.source === "static" && cached?.from === "host" && cached.video === p.missing
+        && prev.video === `v/${p.slug}/video.mp4?v=${hostVersion(JSON.stringify(cached))}` && hasCopy(prev.size);
       console.warn(`! ${p.slug}: ${p.missing} missing on host${keep ? " — keeping the listed version" : ""}`);
       if (keep) out.push(prev);
       continue;
     }
     if (p.size > MAX_ASSET) { tooBig.push(p); continue; }
     const src = `${ROOT}/${p.slug}`;
-    const stamp = join(dst, ".synced");
     const want = JSON.stringify({ video: p.publish.video, poster: p.publish.poster, mtime: p.mtime, size: p.size, from: "host" });
     mkdirSync(dst, { recursive: true });
     const fresh = readText(stamp) === want && hasCopy(p.size);
@@ -107,7 +110,7 @@ for (const slug of fs.readdirSync(root)) {
     out.push(entry(p.slug, p.publish, {
       size: p.size,
       date: new Date(p.mtime).toISOString().slice(0, 10),
-      v: createHash("sha256").update(want).digest("hex").slice(0, 12),
+      v: hostVersion(want),
       description: readFileSync(join(dst, "description.txt"), "utf8"),
     }));
   }

@@ -69,6 +69,16 @@ test("host sync retains the published site copy after a draft prunes the version
     assert.equal(readFileSync(join(vdir, "demo", "video.mp4"), "utf8"), "approved");
     assert.deepEqual(fromHost(opts), [], "a missing cut cannot be newly listed");
 
+    const next = join(versions, "v3.mp4");
+    put(next, "newly approved");
+    recordRender(project, { v: 3, file: next }, { alias: main });
+    put(publish, JSON.stringify({ title: "Demo updated", video: "out/versions/v3.mp4", poster: "out/publish/poster.jpg" }));
+    const nextDraft = join(versions, "v4-draft.mp4");
+    put(nextDraft, "another draft");
+    recordRender(project, { v: 4, file: nextDraft, draft: true }, { alias: join(out, "demo.draft.mp4") });
+    assert.equal(existsSync(next), false);
+    assert.deepEqual(fromHost({ ...opts, previous }), [], "an older site copy cannot stand in for a different published cut");
+
     rmSync(publish);
     assert.deepEqual(fromHost({ ...opts, previous }), [], "removing the publish record still unlists the video");
   } finally { rmSync(base, { recursive: true, force: true }); }
