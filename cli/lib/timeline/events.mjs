@@ -1,6 +1,7 @@
 // What a viewer sees change on screen: every reveal of a compiled timeline in timeline seconds
 // (the rhythm gate and look's note checks read it; the compiler fills long still stretches from it).
 import { weakMove } from "./shots.mjs";
+import { linePointTimes, lineSegmentStart } from "../../../shared/line-reveal.mjs";
 
 // Longest stretch with nothing new on screen before it reads as a stall (gates.maxStill).
 export const MAX_STILL = 4.5;
@@ -74,8 +75,9 @@ export function screenEvents(timeline) {
       racePeriods(sc).slice(1).forEach((t) => at(t, "prop"));
     }
     if (sc.type === "line-chart" && Array.isArray(sc.props?.pointCues)) {
-      const T = sc.props.pointCues.map((c) => sc.cues?.[c]);
-      for (let k = 1; k < T.length; k++) if (Number.isFinite(T[k]) && Number.isFinite(T[k - 1])) at(T[k] - Math.min(3, Math.max(0.3, (T[k] - T[k - 1]) * 0.8)), "prop");
+      const n = Math.max(sc.props.pointCues.length, ...(sc.props.series ?? []).map((s) => s.points.length));
+      const T = linePointTimes(sc, n, sc.props.pointCues, sc.cues?.[sc.props.drawCue] ?? 0.5) ?? [];
+      for (let k = 1; k < T.length; k++) at(lineSegmentStart(T[k - 1], T[k]), "prop");
     }
   }
   return events.sort((a, b) => a.t - b.t);

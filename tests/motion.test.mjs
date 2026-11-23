@@ -10,6 +10,28 @@ import { beatsFile, detectBeats, everyFourth, gridBeats, snapToBar, snapToBeat }
 import { openingGate, rhythmGate, schemaGate } from "../cli/lib/review/gates.mjs";
 import { coverPoint, dodgeX, hexLuminance, nearCentroid, rampTime, scrimFor, subjectFocus } from "../cli/lib/vision/subject.mjs";
 import { example } from "./helpers.mjs";
+import { dipOpacity, whipBlur, zoomScale } from "../shared/transition.mjs";
+
+test("dip phases do not bleed across the scene boundary at even or odd durations", () => {
+  for (const frames of [2, 15, 16, 21]) {
+    const split = Math.floor(frames / 2);
+    assert.equal(dipOpacity("out", 0, frames, split), 1);
+    assert.equal(dipOpacity("out", split, frames, split), 0);
+    assert.equal(dipOpacity("in", split, frames, split), 0);
+    assert.equal(dipOpacity("in", frames, frames, split), 1);
+    for (let frame = 0; frame <= frames; frame++) {
+      assert.equal(dipOpacity("out", frame, frames, split) * dipOpacity("in", frame, frames, split), 0);
+    }
+  }
+});
+
+test("whip blur and zoom scale stay within gentle bounds", () => {
+  assert.equal(whipBlur(0, 1920), 0);
+  assert.ok(whipBlur(0.5, 1920) < 18);
+  assert.equal(zoomScale("in", 1), 1);
+  assert.ok(zoomScale("in", 0) >= 0.97);
+  assert.ok(zoomScale("out", 1) <= 1.02);
+});
 
 const lines = [{ start: 0, end: 1.8 }, { start: 2, end: 3.9 }, { start: 4.1, end: 6 }];
 const ctx = (over = {}) => ({ cues: { boom: 1.5 }, lines, duration: 6, start: 10, beats: [], snap: true, ...over });

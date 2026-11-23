@@ -14,11 +14,13 @@ export const REFRAMING = new Set(["slide", "push", "whip", "zoom", "punch", "iri
 
 // The boundary between two scenes is one transition: the incoming scene's enter wins, then the
 // outgoing scene's exit, then the style's default. Narration never moves; only visuals overlap.
-export function boundaryTransition(prev, next, theme, fps) {
+export function boundaryTransition(prev, next, theme, fps, { chapterTurn = false, consecutiveFades = 0 } = {}) {
   // One device across several scenes stays put: the screen changes, the device never re-enters;
   // one world continued (inherit) dissolves between its two framings.
   const sameDevice = prev.type === "device" && next.type === "device" && (prev.props?.device ?? null) === (next.props?.device ?? null);
-  const spec = normTransition(next.enter) ?? normTransition(prev.exit) ?? (sameDevice ? { type: "cut" } : null) ?? (sameWorld(prev, next) ? { type: "fade" } : null) ?? normTransition(theme.transition) ?? { type: "fade" };
+  const authored = normTransition(next.enter) ?? normTransition(prev.exit);
+  const fallback = (sameDevice ? { type: "cut" } : null) ?? (sameWorld(prev, next) ? { type: "fade" } : null) ?? normTransition(theme.transition) ?? { type: "fade" };
+  const spec = authored ?? (fallback.type === "fade" && (consecutiveFades >= 2 || (chapterTurn && consecutiveFades >= 1)) ? { type: "cut" } : fallback);
   const want = Math.round((spec.duration ?? TRANSITION_DURATION[spec.type] ?? 0.5) * fps);
   // Never let a transition eat more than 40% of either scene.
   const frames = spec.type === "cut" ? 0 : Math.max(2, Math.min(want, Math.floor(prev.durationInFrames * 0.4), Math.floor(next.durationInFrames * 0.4)));

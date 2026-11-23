@@ -4,6 +4,7 @@ import { revealAt, useLayout, usePace, useScene, useTheme, useTime, useTimeline 
 import type { Scene } from "../engine/types";
 import { clamp01, easeInOut, easeOut, easeOutBack, lerp } from "../engine/motion";
 import { ClipVideo } from "../components/Media";
+import { deviceViewportHeight } from "../../../shared/safe-layout.mjs";
 
 // ── device ───────────────────────────────────────────────────────────────────
 // A product demo on one device that never leaves the frame: real UI captures (onevideo capture)
@@ -130,7 +131,9 @@ export const DeviceScene: React.FC<{ device?: Kind; screens: Screen[]; steps?: S
   const theme = useTheme();
   const tl = useTimeline();
   const scene = useScene();
-  const { u, width, height, portrait, pad } = useLayout();
+  const { u, width, height: frameHeight, portrait, pad } = useLayout();
+  const protect = scene.captions && tl.captions.enabled && tl.captions.style !== "none";
+  const height = protect ? deviceViewportHeight(frameHeight, u, portrait) : frameHeight;
   const pace = usePace();
   const t = useTime();
   const kind: Kind = device ?? (portrait ? "phone" : "browser");
@@ -175,7 +178,7 @@ export const DeviceScene: React.FC<{ device?: Kind; screens: Screen[]; steps?: S
   const lp = activeLabel ? easeOut((t - activeLabel.at) / 0.4) * (1 - clamp01((t - labelEnd + 0.3) / 0.3)) : 0;
 
   return (
-    <AbsoluteFill style={{ overflow: "hidden" }}>
+    <div data-caption-protected={scene.id} style={{ position: "absolute", inset: "0 0 auto", height, overflow: "hidden" }}>
       <AbsoluteFill style={{ transform: camera, transformOrigin: "0 0" }}>
         <div style={{ position: "absolute", inset: 0, opacity: enter, transform: `translateY(${(1 - enter) * 0.12 * height}px)` }}>
           {/* glow behind the device */}
@@ -195,6 +198,11 @@ export const DeviceScene: React.FC<{ device?: Kind; screens: Screen[]; steps?: S
             {prev >= 0 && sw < 1 && <div style={{ position: "absolute", inset: 0, transform: `translateX(${-sw * 0.3 * screen.w}px)`, opacity: 1 - sw * 0.6 }}><Page asset={screens[prev].asset} w={screen.w} h={screen.h} /></div>}
             <div style={{ position: "absolute", inset: 0, transform: prev >= 0 ? `translateX(${(1 - sw) * screen.w}px)` : undefined, boxShadow: sw < 1 ? `0 0 ${30 * u}px rgba(0,0,0,0.35)` : undefined }}>
               <Page asset={screens[cur].asset} w={screen.w} h={screen.h} scroll={scrollNow} />
+              {cards.map((c) => {
+                const hide = easeInOut((t - c.open) / 0.28) * (1 - easeInOut((t - c.close) / 0.4));
+                if (hide <= 0) return null;
+                return <div key={c.i} style={{ position: "absolute", left: c.from.x - screen.x, top: c.from.y - screen.y, width: c.from.w, height: c.from.h, opacity: hide, backgroundColor: "#fff" }} />;
+              })}
             </div>
             {/* the page dims while a card is open over it */}
             <div style={{ position: "absolute", inset: 0, background: "#000", opacity: 0.45 * Math.max(0, ...cards.map((c) => easeInOut((t - c.open) / 0.5) * (1 - easeInOut((t - c.close) / 0.4)))) }} />
@@ -236,8 +244,8 @@ export const DeviceScene: React.FC<{ device?: Kind; screens: Screen[]; steps?: S
           <div style={{ background: theme.colors.highlight, color: "#0b0f19", fontSize: 40 * u, fontWeight: 800, padding: `${10 * u}px ${26 * u}px`, borderRadius: 10 * u, textShadow: "none", whiteSpace: "nowrap" }}>{activeLabel.st.label}</div>
         </div>
       )}
-      {caption && <div style={{ position: "absolute", left: pad, right: pad, bottom: (portrait ? 300 : 60) * u, textAlign: "center", fontSize: 30 * u, color: theme.colors.muted, opacity: easeOut((t - 0.5) / 0.5) }}>{caption}</div>}
-    </AbsoluteFill>
+      {caption && <div style={{ position: "absolute", left: pad, right: pad, bottom: (portrait && !protect ? 300 : 36) * u, textAlign: "center", fontSize: 30 * u, color: theme.colors.muted, opacity: easeOut((t - 0.5) / 0.5) }}>{caption}</div>}
+    </div>
   );
 };
 

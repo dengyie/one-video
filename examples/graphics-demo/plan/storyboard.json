@@ -138,7 +138,7 @@
       "type": "scale-compare",
       "background": "waves",
       "enter": {
-        "type": "through",
+        "type": "zoom",
         "duration": 0.7
       },
       "intent": "嵌套圆对数缩放：赤道周长 → 地月距离 → 日地距离，镜头一路拉远看量级",
@@ -147,6 +147,7 @@
         "subtitle": "来源：NASA 行星数据表（轨道半长轴）"
       },
       "cues": {
+        "earth": 0,
         "moon": "月球",
         "sun": "太阳"
       },
@@ -155,6 +156,7 @@
           {
             "label": "赤道一圈",
             "value": 40075,
+            "cue": "earth",
             "format": {
               "compact": "zh",
               "suffix": "公里"

@@ -2,6 +2,7 @@ import React from "react";
 import { useCurrentFrame, useVideoConfig } from "remotion";
 import { useLayout, useTimeline } from "./context";
 import { clamp01, easeOut, easeOutBack, lerp } from "./motion";
+import { deviceCaptionSlot } from "../../../shared/safe-layout.mjs";
 
 // Split into runs; numbers (with %/$/units glued on) and Latin words are the line's key tokens.
 const KEY = /([$¥€£]?\d[\d,.]*\s*(?:%|万亿|亿|万|倍|美元|元|[kKmMbB]\b)?|[A-Za-z][A-Za-z0-9.&-]*)/;
@@ -23,7 +24,7 @@ export const Captions: React.FC = () => {
   const tl = useTimeline();
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const { u, portrait } = useLayout();
+  const { u, height, portrait } = useLayout();
   const t = frame / fps;
   const hidden = new Set(tl.scenes.filter((s) => !s.captions).map((s) => s.id));
   // A line lingers 0.25 s past its end, but the line started most recently wins: a next line
@@ -32,6 +33,8 @@ export const Captions: React.FC = () => {
     .filter((c) => t >= c.start - 0.05 && t < c.end + 0.25 && !hidden.has(c.scene))
     .reduce<(typeof tl.captions.items)[number] | undefined>((m, c) => (!m || c.start >= m.start ? c : m), undefined);
   if (!item) return null;
+  const device = tl.scenes.some((s) => s.id === item.scene && s.type === "device");
+  const slot = deviceCaptionSlot(height, u, portrait);
   const { colors, captionBg } = tl.theme;
   const fadeIn = clamp01((t - (item.start - 0.05)) / 0.12);
   const fadeOut = clamp01((item.end + 0.25 - t) / 0.12);
@@ -44,22 +47,27 @@ export const Captions: React.FC = () => {
         position: "absolute",
         left: 0,
         right: 0,
-        ...(item.top ? { top: (portrait ? 220 : 46) * u } : { bottom: (portrait ? 300 : 46) * u }),
+        ...(device
+          ? { top: slot.top, bottom: slot.bottom, alignItems: "center", overflow: "hidden" }
+          : item.top ? { top: (portrait ? 220 : 46) * u } : { bottom: (portrait ? 300 : 46) * u }),
         display: "flex",
         justifyContent: "center",
         opacity: Math.min(fadeIn, fadeOut),
-        transform: kinetic ? `translateY(${(1 - easeOut(fadeIn)) * 18 * u}px) scale(${lerp(0.94, 1, easeOutBack(fadeIn))})` : undefined,
         pointerEvents: "none",
       }}
     >
       <div
+        data-caption={item.scene}
         style={{
-          maxWidth: portrait ? "88%" : "80%",
+          maxWidth: `${slot.width * 100}%`,
+          boxSizing: "border-box",
+          pointerEvents: tl.probe ? "auto" : undefined,
+          transform: kinetic ? `translateY(${(1 - easeOut(fadeIn)) * 18 * u}px) scale(${lerp(0.94, 1, easeOutBack(fadeIn))})` : undefined,
           fontSize: (portrait ? 54 : 42) * u,
           lineHeight: 1.35,
           textAlign: "center",
-          color: colors.text,
-          background: kinetic ? "rgba(0,0,0,0.32)" : captionBg ?? "rgba(0,0,0,0.6)",
+          color: kinetic ? "#fff" : colors.text,
+          background: kinetic ? "rgba(0,0,0,0.86)" : captionBg ?? "rgba(0,0,0,0.6)",
           backdropFilter: kinetic ? `blur(${8 * u}px)` : undefined,
           fontWeight: kinetic ? 700 : 600,
           padding: `${10 * u}px ${28 * u}px`,
@@ -77,8 +85,8 @@ export const Captions: React.FC = () => {
                   const fresh = on && tok.at + i >= spoken - 2;
                   return (
                     <span key={i} style={{
-                      display: "inline-block", whiteSpace: "pre", color: tok.key ? colors.accent : on ? colors.text : colors.muted,
-                      opacity: on ? 1 : 0.62, transform: fresh ? "translateY(-6%) scale(1.06)" : undefined,
+                      display: "inline-block", whiteSpace: "pre", color: tok.key ? `color-mix(in srgb, ${colors.accent} 55%, white)` : "#fff",
+                      opacity: on ? 1 : 0.8, transform: fresh ? "translateY(-6%) scale(1.06)" : undefined,
                     }}>{c}</span>
                   );
                 })}

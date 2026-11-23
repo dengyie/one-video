@@ -18,6 +18,52 @@ export const QC_DEFAULTS = {
   sampleFps: 2,
 };
 
+const SAMPLE_WIDTH = 64, SAMPLE_HEIGHT = 36;
+const SAMPLE_SIZE = SAMPLE_WIDTH * SAMPLE_HEIGHT;
+
+function hasPictureDetail(frame, level) {
+  const visited = new Uint8Array(frame.length);
+  for (let i = 0; i < frame.length; i++) {
+    if (visited[i] || frame[i] < level) continue;
+    const region = [i];
+    visited[i] = 1;
+    let left = SAMPLE_WIDTH, right = 0, top = SAMPLE_HEIGHT, bottom = 0;
+    for (let k = 0; k < region.length; k++) {
+      const j = region[k];
+      const x = j % SAMPLE_WIDTH, y = Math.floor(j / SAMPLE_WIDTH);
+      left = Math.min(left, x); right = Math.max(right, x);
+      top = Math.min(top, y); bottom = Math.max(bottom, y);
+      const add = (n) => {
+        if (!visited[n] && frame[n] >= level) {
+          visited[n] = 1;
+          region.push(n);
+        }
+      };
+      if (x > 0) add(j - 1);
+      if (x < SAMPLE_WIDTH - 1) add(j + 1);
+      if (y > 0) add(j - SAMPLE_WIDTH);
+      if (y < SAMPLE_HEIGHT - 1) add(j + SAMPLE_WIDTH);
+    }
+    if (region.length >= 0.01 * frame.length && (bottom - top >= 3 || right - left >= 0.25 * SAMPLE_WIDTH)) return true;
+  }
+  return false;
+}
+
+function isBlackPicture(frame, luma) {
+  if (frame.length !== SAMPLE_SIZE) return frame.every((v) => v < luma);
+  // In likely caption/watermark bands, only substantial connected picture detail counts.
+  let sum = 0, detail = 0, highlights = 0, pixels = 0;
+  for (let y = 8; y < 26; y++) for (let x = 0; x < SAMPLE_WIDTH; x++) {
+    const v = frame[y * SAMPLE_WIDTH + x];
+    sum += v;
+    detail += Number(v >= 1.6 * luma);
+    highlights += Number(v >= 3 * luma);
+    pixels++;
+  }
+  return sum < luma * pixels && detail < 0.05 * pixels && highlights < 0.01 * pixels
+    && !hasPictureDetail(frame, 1.6 * luma);
+}
+
 // Minimal PNG decoder for 8-bit grayscale, non-interlaced images (what ffmpeg emits with format=gray).
 export function decodeGrayPng(buf) {
   let off = 8, w = 0, h = 0;
@@ -80,7 +126,7 @@ export function analyzeFrames(frames, fps, t = QC_DEFAULTS) {
     return d / f.length;
   });
   const total = frames.length * step;
-  const black = runs(means.map((m) => m < t.black.luma), step)
+  const black = runs(frames.map((f) => isBlackPicture(f, t.black.luma)), step)
     .filter(([a, b]) => b - a > t.black.maxRun && a > 0.5 && b < total - 0.5);
   const staticFlags = diffs.map((d) => d < t.frozen.diff);
   const frozen = runs(staticFlags, step).filter(([a, b]) => b - a > t.frozen.maxRun);
@@ -107,12 +153,50 @@ function parseSilence(stderr) {
   return out;
 }
 
+const speechLines = (scene, offset, span) => (scene.lines ?? [])
+  .map(({ start, end }) => [Math.max(start, offset - scene.start), Math.min(end, scene.duration, offset + span - scene.start)])
+  .filter(([start, end]) => end - start >= 0.05);
+
+const speechGap = (start, end, silence) => Math.min(silence.maxGap, 0.8 * (end - start));
+
+export function voiceGaps(timeline, { readVoice, offset = 0, span = timeline.duration - offset, silence = QC_DEFAULTS.silence } = {}) {
+  const gaps = [];
+  const level = 32768 * 10 ** (silence.noiseDb / 20);
+  for (const scene of timeline.scenes) {
+    const lines = speechLines(scene, offset, span);
+    if (!lines.length) continue;
+    let voice;
+    try {
+      if (scene.audio) voice = readVoice?.(scene.audio);
+    } catch { /* An unreadable source cannot contribute any narration. */ }
+    for (const [start, end] of lines) {
+      const at = scene.start - offset;
+      if (!voice) { gaps.push([start + at, end + at]); continue; }
+      const { samples, channels, sampleRate } = voice;
+      const first = Math.round(start * sampleRate), last = Math.round(end * sampleRate);
+      const min = Math.ceil(speechGap(start, end, silence) * sampleRate);
+      let quiet = first;
+      const record = (i) => { if (i - quiet >= min) gaps.push([quiet / sampleRate + at, i / sampleRate + at]); };
+      for (let i = first; i < last; i++) {
+        for (let c = 0; c < channels; c++) {
+          if (Math.abs(samples[i * channels + c] ?? 0) < level) continue;
+          record(i);
+          quiet = i + 1;
+          break;
+        }
+      }
+      record(last);
+    }
+  }
+  return gaps;
+}
+
 export async function sampleGrayFrames(video, step) {
-  const bytesPerFrame = 64 * 36;
+  const bytesPerFrame = SAMPLE_SIZE;
   const frames = [];
   let pending = Buffer.alloc(0), index = 0;
   // Bundled FFmpeg has no fps/select filter; stream grayscale frames and subsample in Node.
-  await ffmpeg(["-loglevel", "error", "-i", video, "-an", "-vf", "scale=64:36,format=gray", "-c:v", "rawvideo", "-threads", "1", "-f", "image2pipe", "pipe:1"], {
+  await ffmpeg(["-loglevel", "error", "-i", video, "-an", "-vf", `scale=${SAMPLE_WIDTH}:${SAMPLE_HEIGHT},format=gray`, "-c:v", "rawvideo", "-threads", "1", "-f", "image2pipe", "pipe:1"], {
     onStdout(chunk) {
       const bytes = pending.length ? Buffer.concat([pending, chunk]) : chunk;
       let start = 0;
@@ -128,7 +212,7 @@ export async function sampleGrayFrames(video, step) {
 
 // A part render starts `offset` seconds into the timeline and runs `span` seconds: the duration
 // check, the narration intervals and the scene samples are taken on the file's own clock.
-export async function runQc({ video, timeline, outDir, thresholds = {}, offset = 0, span = timeline.duration - offset }) {
+export async function runQc({ video, timeline, outDir, readVoice, thresholds = {}, offset = 0, span = timeline.duration - offset }) {
   const t = deepMerge(QC_DEFAULTS, thresholds);
   const checks = [];
   const add = (id, status, detail) => checks.push({ id, status, detail });
@@ -149,27 +233,36 @@ export async function runQc({ video, timeline, outDir, thresholds = {}, offset =
   else add("audio-codec", a.codec_name === "aac" ? "pass" : "warn", `${a.codec_name} ${a.sample_rate}Hz ${a.channels}ch`);
   add("duration", Math.abs(duration - span) <= t.durationTolerance ? "pass" : "fail", `${duration.toFixed(2)}s (${offset ? `part from ${offset}s: ${+span.toFixed(2)}` : `timeline ${timeline.duration}`}s)`);
 
-  let loud = null, silences = [];
+  const fmt = (rs) => rs.map(([s, e]) => `${s.toFixed(1)}–${e.toFixed(1)}s`).join(", ");
+  const scheduled = timeline.scenes.flatMap((s) => speechLines(s, offset, span)
+    .map(([start, end]) => [start + s.start - offset, end + s.start - offset]));
+  let loud = null;
   if (a) {
-    const { stderr } = await ffmpeg(["-i", video, "-vn", "-af", `silencedetect=noise=${t.silence.noiseDb}dB:d=${t.silence.maxGap},loudnorm=I=${t.loudness.target}:TP=${t.loudness.maxTruePeak}:print_format=json`, "-f", "null", "-"]);
+    const minGap = scheduled.reduce((min, [s, e]) => Math.min(min, speechGap(s, e, t.silence)), t.silence.maxGap);
+    const { stderr } = await ffmpeg(["-i", video, "-vn", "-af", `silencedetect=noise=${t.silence.noiseDb}dB:d=${minGap},loudnorm=I=${t.loudness.target}:TP=${t.loudness.maxTruePeak}:print_format=json`, "-f", "null", "-"]);
     loud = parseLoudnorm(stderr);
-    silences = parseSilence(stderr).filter(([s, e]) => s > 0.5 && e < duration - 1);
+    const silences = parseSilence(stderr);
+    const deadAir = silences.filter(([s, e]) => e - s >= t.silence.maxGap && s > 0.5 && e < duration - 1);
+    const cutSpeech = scheduled.flatMap(([start, end]) => silences
+      .map(([s, e]) => [Math.max(s, start), Math.min(e, end)])
+      .filter(([s, e]) => e - s >= speechGap(start, end, t.silence)));
     if (loud) {
       const off = Math.abs(loud.integrated - t.loudness.target);
       add("loudness", off <= t.loudness.tolerance ? "pass" : off <= t.loudness.tolerance * 2 ? "warn" : "fail", `${loud.integrated.toFixed(1)} LUFS (target ${t.loudness.target}±${t.loudness.tolerance})`);
       add("true-peak", loud.truePeak <= t.loudness.maxTruePeak ? "pass" : "warn", `${loud.truePeak.toFixed(1)} dBTP (max ${t.loudness.maxTruePeak})`);
     } else add("loudness", "warn", "loudnorm produced no measurement");
-    // Silence during a narration interval means a dropped TTS line: fail. Elsewhere it is only dead air.
-    const inSpeech = silences.filter(([s, e]) => (timeline.narration ?? []).some(([a, b]) => s < b - offset - 0.2 && e > a - offset + 0.2));
-    const fmtS = (rs) => rs.map(([s, e]) => `${s.toFixed(1)}–${e.toFixed(1)}s`).join(", ");
-    add("silence-in-narration", inSpeech.length ? "fail" : "pass", inSpeech.length ? fmtS(inSpeech) : "narration audible throughout");
-    add("dead-air", silences.length > inSpeech.length ? "warn" : "pass", silences.length ? fmtS(silences) : `no gap > ${t.silence.maxGap}s`);
+    add("dead-air", deadAir.length ? "warn" : "pass", deadAir.length ? fmt(deadAir) : `no gap > ${t.silence.maxGap}s`);
+    add("silence-in-mix-narration", cutSpeech.length ? "fail" : "pass", cutSpeech.length
+      ? fmt(cutSpeech) : scheduled.length ? "no silent gaps during scheduled speech" : "no narration scheduled");
   }
+  const inSpeech = voiceGaps(timeline, { readVoice, offset, span, silence: t.silence });
+  add("silence-in-narration", inSpeech.length ? "fail" : "pass", inSpeech.length
+    ? `silent or missing voice stem: ${fmt(inSpeech)}`
+    : scheduled.length ? "no gaps in the voice stem" : "no narration scheduled");
 
   const step = Math.max(1, Math.round(timeline.fps / t.sampleFps));
   const frames = await sampleGrayFrames(video, step);
   const fa = analyzeFrames(frames, timeline.fps / step, t);
-  const fmt = (rs) => rs.map(([s, e]) => `${s.toFixed(1)}–${e.toFixed(1)}s`).join(", ");
   add("black-frames", fa.black.length ? "fail" : "pass", fa.black.length ? fmt(fa.black) : "none");
   add("frozen-segments", fa.frozen.length ? "warn" : "pass", fa.frozen.length ? `${fmt(fa.frozen)} (> ${t.frozen.maxRun}s without motion)` : "none");
   add("static-ratio", fa.staticRatio <= t.staticRatioMax ? "pass" : "warn", `${(fa.staticRatio * 100).toFixed(0)}% of samples nearly static (max ${(t.staticRatioMax * 100).toFixed(0)}%)`);

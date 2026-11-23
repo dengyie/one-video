@@ -1,6 +1,7 @@
 // The stills probe (onevideo stills / preview): what each frame actually shows, measured in the
 // page, for the CLI's review (cli/lib/review/probe.mjs). DOM measurement only: no React, no
 // rendering; the overlay layer calls it once the frame is laid out.
+import { hitsCaption } from "../../../shared/probe-order.mjs";
 import type { Overlay } from "./types";
 
 export const PROBE_TAG = "ONEVIDEO_PROBE ";
@@ -8,8 +9,7 @@ export const PROBE_TAG = "ONEVIDEO_PROBE ";
 export const logProbe = (rec: object) => console.log(`${PROBE_TAG}${JSON.stringify(rec)}`);
 
 // The probe (onevideo stills): on-screen boxes, as frame fractions, of each sticker-like overlay and
-// of every visible line of scene text (header, titles, labels, card text), so the CLI can flag a
-// sticker over text the gates cannot model. Captions, the watermark and credits are left out.
+// of visible text and caption plates, so the CLI can flag clashes the gates cannot model.
 // `covers` is how much of each line's box the sticker's drawn shape hides, found by hit tests on a
 // grid over their overlap: a tilted stamp's bounding box has empty corners. Only the middle of a
 // line counts, where its glyphs are inked; the line box runs above and below them.
@@ -76,6 +76,7 @@ export function probeBoxes(layer: HTMLElement, list: Overlay[]) {
   const walk = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let n = walk.nextNode(); n; n = walk.nextNode()) {
     const text = (n.textContent ?? "").trim();
+    if (n.parentElement?.closest("[data-caption]")) continue;
     const a = text ? seen(n.parentElement) : 0;
     if (a < 0.5) continue;
     const range = doc.createRange();
@@ -88,6 +89,22 @@ export function probeBoxes(layer: HTMLElement, list: Overlay[]) {
     const part = !v ? { v: [] as [] } : v.some((x, k) => x !== box[k]) ? { v } : {};
     texts.push({ text: text.slice(0, 24), box, ...(cut.length ? { cut } : {}), ...(a < 0.995 ? { a: Math.round(a * 100) / 100 } : {}), ...part });
     lines.push({ el: n.parentElement!, plate: plateOf(n.parentElement!), r, shown });
+  }
+  const protectedViews = [...root.querySelectorAll("[data-caption-protected]")].filter((el) => seen(el) >= 0.5);
+  const captionClashes: string[] = [];
+  for (const el of root.querySelectorAll("[data-caption]")) {
+    if (seen(el) < 0.5) continue;
+    const r = el.getBoundingClientRect(), box = frame(r);
+    if (!box) continue;
+    const text = (el.textContent ?? "").slice(0, 24);
+    const { sides, shown } = clipOf(el, r);
+    texts.push({ text, box, ...(sides.length ? { cut: sides } : {}) });
+    lines.push({ el, plate: el, r, shown });
+    if (protectedViews.some((v) => {
+      const b = v.getBoundingClientRect();
+      return shown && Math.min(b.right, shown.right) - Math.max(b.left, shown.left) > 1
+        && Math.min(b.bottom, shown.bottom) - Math.max(b.top, shown.top) > 1;
+    })) captionClashes.push(text);
   }
   const N = 8;
   // Scene text under other scene text: down the hit-test stack at a grid over the line's inked middle,
@@ -133,12 +150,15 @@ export function probeBoxes(layer: HTMLElement, list: Overlay[]) {
       let hits = 0;
       for (let a = 0; a < N; a++) for (let b = 0; b < N; b++) {
         const px = F.left + (x0 + ((a + 0.5) / N) * (x1 - x0)) * F.width, py = F.top + (y0 + ((b + 0.5) / N) * (y1 - y0)) * F.height;
-        if (doc.elementsFromPoint(px, py).some((e) => el.contains(e))) hits++;
+        const stack = doc.elementsFromPoint(px, py);
+        const target = lines[k].el;
+        if (target.hasAttribute("data-caption")
+          ? hitsCaption(stack, el, target) : stack.some((e) => el.contains(e))) hits++;
       }
       if (hits) covers.push({ t: k, area: Math.round(((hits / (N * N)) * (x1 - x0) * (y1 - y0)) * 1e6) / 1e6 });
     });
     overlays.push({ i, box, covers });
   }
   // `hit`: text-over-text coverage was hit-tested (`over`), so its absence means none.
-  return { overlays, texts, hit: true };
+  return { overlays, texts, hit: true, ...(captionClashes.length ? { captionClashes } : {}) };
 }

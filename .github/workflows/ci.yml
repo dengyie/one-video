@@ -31,6 +31,36 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+  render-example:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install template dependencies and CJK fonts
+        run: |
+          npm run setup
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk
+      - name: Render Postman with silent narration fixtures
+        run: |
+          project="$RUNNER_TEMP/postman"
+          artifacts="$RUNNER_TEMP/onevideo-example"
+          cp -a examples/postman "$project"
+          mkdir -p "$artifacts"
+          node .github/prepare-silent-voice.mjs "$project"
+          cd "$project"
+          node "$GITHUB_WORKSPACE/cli/onevideo.mjs" render --out "$artifacts/postman.mp4" --concurrency 2
+          node "$GITHUB_WORKSPACE/cli/onevideo.mjs" sheet --video "$artifacts/postman.mp4" --fps 0.5 --cols 5
+          cp out/qc/sheet-*.jpg "$artifacts/"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: onevideo-postman-silent
+          path: ${{ runner.temp }}/onevideo-example/
+          if-no-files-found: error
+
   gitleaks:
     runs-on: ubuntu-latest
     timeout-minutes: 5

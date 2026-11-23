@@ -5,7 +5,24 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import { ffmpeg } from "../cli/lib/core/ffmpeg.mjs";
-import { decodeGrayPng, runs, analyzeFrames, QC_DEFAULTS, runQc, sampleGrayFrames } from "../cli/lib/vision/qc.mjs";
+import { decodeGrayPng, runs, analyzeFrames, QC_DEFAULTS, runQc, sampleGrayFrames, voiceGaps } from "../cli/lib/vision/qc.mjs";
+import { readWav, writeWav } from "../cli/lib/audio/wav.mjs";
+
+test("voice QC catches silent lines at the edges and confines findings to the rendered part", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ov-voice-qc-"));
+  try {
+    const audio = "narrator.wav", sampleRate = 8000;
+    const samples = Int16Array.from({ length: 4 * sampleRate }, (_, i) => i >= sampleRate && i < 2 * sampleRate ? 6500 * Math.sin(i / 10) : 0);
+    writeWav(join(dir, audio), { channels: 1, sampleRate, samples });
+    const timeline = { duration: 7, scenes: [{ start: 3, duration: 4, audio, lines: [
+      { start: 0, end: 1 }, { start: 1, end: 2 }, { start: 3, end: 4 },
+    ] }] };
+    const readVoice = (file) => readWav(join(dir, file));
+    assert.deepEqual(voiceGaps(timeline, { readVoice }), [[3, 4], [6, 7]]);
+    assert.deepEqual(voiceGaps(timeline, { readVoice, offset: 4, span: 2.5 }), [[2, 2.5]]);
+    assert.deepEqual(voiceGaps(timeline, { readVoice: (file) => readWav(join(dir, "missing", file)) }), [[3, 4], [4, 5], [6, 7]]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 function crcTable() {
   return Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
@@ -62,6 +79,33 @@ test("analyzeFrames finds interior black runs and long frozen segments", () => {
   assert.ok(r.staticRatio > 0.5);
 });
 
+test("black-frame QC separates dark content from near-black noise", () => {
+  const dark = Uint8Array.from({ length: 64 * 36 }, (_, i) => i >= 16 * 64 + 24 && i < 16 * 64 + 36 ? 52 : 4);
+  const blank = Uint8Array.from({ length: 64 * 36 }, (_, i) => i === 0 ? 48 : i % 5);
+  const report = analyzeFrames([frame(80), frame(80), dark, dark, blank, blank, frame(80), frame(80)], 2);
+  assert.ok(report.means[2] < QC_DEFAULTS.black.luma);
+  assert.deepEqual(report.black, [[2, 3]]);
+});
+
+test("caption and watermark pixels do not make a black picture visible", () => {
+  const marks = (i) => {
+    const x = i % 64, y = Math.floor(i / 64);
+    return ((y >= 29 && y < 32 && x >= 20 && x < 44) || (y < 3 && x >= 53)) && i % 2 === 0;
+  };
+  const dark = Uint8Array.from({ length: 64 * 36 }, (_, i) => marks(i) ? 160 : i % 5);
+  const report = analyzeFrames([frame(80), frame(80), dark, dark, frame(80), frame(80)], 2);
+  assert.deepEqual(report.black, [[1, 2]]);
+});
+
+test("black-frame QC sees a dark subject even at either edge of the picture", () => {
+  const subject = (top) => Uint8Array.from({ length: 64 * 36 }, (_, i) => {
+    const x = i % 64, y = Math.floor(i / 64);
+    return x >= 27 && x < 34 && y >= top && y < top + 5 ? 33 : 2;
+  });
+  const report = analyzeFrames([frame(80), frame(80), subject(2), subject(2), subject(29), subject(29), frame(80), frame(80)], 2);
+  assert.deepEqual(report.black, []);
+});
+
 test("analyzeFrames compares against the frame one window back, so slow drift is motion", () => {
   const fps = 2;
   // One more pixel brightens each sample: mean diff 0.5 vs the previous sample (< 0.6), 1.0 vs two back.
@@ -87,11 +131,32 @@ test("bundled FFmpeg QC samples the same frames as the PNG pipeline", async () =
       .map((file) => decodeGrayPng(readFileSync(join(png, file))).pixels);
     const samples = await sampleGrayFrames(video, 4);
     assert.deepEqual(samples.map((x) => new Uint8Array(x)), legacy);
-    const timeline = { width: 64, height: 36, fps: 8, duration: 4, scenes: [{ id: "one", type: "test", start: 0, duration: 4 }] };
-    const report = await runQc({ video, timeline, outDir });
+    const timeline = { width: 64, height: 36, fps: 8, duration: 4, scenes: [{ id: "one", type: "test", start: 0, duration: 4, lines: [{ start: 0.5, end: 2.5 }] }] };
+    const report = await runQc({ video, timeline, outDir, readVoice: (file) => readWav(join(dir, file)) });
     assert.equal(report.verdict, "fail");
     assert.deepEqual(report.checks.find((c) => c.id === "black-frames"), { id: "black-frames", status: "fail", detail: "1.0–2.0s" });
+    assert.deepEqual(report.checks.find((c) => c.id === "silence-in-narration"), { id: "silence-in-narration", status: "fail", detail: "silent or missing voice stem: 0.5–2.5s" });
     assert.equal(report.frames.length, 1);
     assert.deepEqual(readdirSync(outDir), ["frames"]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("QC fails when scheduled speech is present in its stem but missing in the mix", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ov-mix-qc-"));
+  try {
+    const video = join(dir, "mix.mp4"), audio = "voice.wav", sampleRate = 48000;
+    const samples = Int16Array.from({ length: 4 * sampleRate }, (_, i) => 8500 * Math.sin(2 * Math.PI * 1000 * i / sampleRate));
+    writeWav(join(dir, audio), { channels: 1, sampleRate, samples });
+    const mixed = samples.slice();
+    mixed.fill(0, 0.5 * sampleRate, 1.5 * sampleRate);
+    writeWav(join(dir, "mix.wav"), { channels: 1, sampleRate, samples: mixed });
+    writeFileSync(join(dir, "frame.png"), grayPng(64, 36, frame(80, 64 * 36)));
+    await ffmpeg(["-loop", "1", "-framerate", "8", "-i", join(dir, "frame.png"), "-i", join(dir, "mix.wav"), "-t", "4", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", video]);
+    const timeline = { width: 64, height: 36, fps: 8, duration: 5, scenes: [{ id: "one", type: "test", start: 1, duration: 4, audio, lines: [{ start: 0.6, end: 1.4 }, { start: 2, end: 3 }] }] };
+    const report = await runQc({ video, timeline, outDir: join(dir, "qc"), offset: 1, readVoice: (file) => readWav(join(dir, file)) });
+    assert.equal(report.checks.find((c) => c.id === "silence-in-narration").status, "pass");
+    assert.deepEqual(report.checks.find((c) => c.id === "silence-in-mix-narration"), { id: "silence-in-mix-narration", status: "fail", detail: "0.6–1.4s" });
+    assert.equal(report.checks.find((c) => c.id === "dead-air").status, "pass");
+    assert.equal(report.verdict, "fail");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

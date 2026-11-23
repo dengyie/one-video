@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { probeIssues } from "../cli/lib/review/probe.mjs";
+import { deviceViewportHeight, statCardColumns } from "../shared/safe-layout.mjs";
+import { hitsCaption } from "../shared/probe-order.mjs";
 
 // A 9:16 timeline with one scene and a stamp at y 0.5; probes are what Overlay.tsx probeBoxes logs.
 const tl = () => ({
@@ -9,6 +11,32 @@ const tl = () => ({
 });
 const shot = (overlays, texts) => [{ frame: 0, file: "x.jpg", scenes: [{ scene: "s", t: 2, overlays, texts }] }];
 const title = { text: "募资", box: [0.2, 0.45, 0.8, 0.48] };
+
+test("layout probe flags captions in a protected viewport without generating an overlay fix", () => {
+  const frames = shot([], []);
+  frames[0].scenes[0].captionClashes = ["Chapter two"];
+  const [issue] = probeIssues([...frames, ...frames], tl());
+  assert.match(issue.msg, /caption "Chapter two" covers a protected subject at 12.0s/);
+  assert.equal(issue.at.field, "captions");
+  assert.equal(issue.fix, undefined);
+});
+
+test("probe counts a sticker's hits only when it is drawn in front of the caption", () => {
+  const ink = {}, sticker = {}, background = {};
+  const caption = { contains: (e) => e === ink || e === caption };
+  const overlay = { contains: (e) => e === sticker || e === overlay };
+  assert.equal(hitsCaption([ink, caption, sticker, overlay, background], overlay, caption), false);
+  assert.equal(hitsCaption([sticker, overlay, ink, caption, background], overlay, caption), true);
+});
+
+test("devices reserve caption space and portrait cards cap wide column counts", () => {
+  assert.equal(deviceViewportHeight(1080, 1, false), 860);
+  assert.equal(deviceViewportHeight(1920, 1, true), 1530);
+  assert.equal(deviceViewportHeight(960, 0.5, true), 765);
+  assert.equal(statCardColumns(4, 4, true), 2);
+  assert.equal(statCardColumns(4, 4, false), 4);
+  assert.equal(statCardColumns(3, 4, true), 1);
+});
 
 test("probeIssues flags a sticker hiding a line and finds a clear height", () => {
   const out = probeIssues(shot([{ i: 0, box: [0.3, 0.44, 0.7, 0.52], covers: [{ t: 0, area: 0.004 }] }], [title]), tl());

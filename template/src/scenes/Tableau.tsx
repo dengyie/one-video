@@ -156,7 +156,8 @@ const Lighthouse: React.FC<{ c: Ctx; s: any }> = ({ c, s }) => {
   const H = s.h * c.H, x = s.x * c.W, base = s.y * c.H;
   const wb = H * 0.2, wt = wb * 0.66, top = base - H * 0.78;
   const lamp = lampLevel(s.lit, c.t);
-  const body = mixHex(c.pal.land, c.pal.rim, 0.2), band = mixHex(c.pal.land, c.pal.rim, 0.07);
+  const body = mixHex(c.pal.land, c.pal.rim, 0.2 + 0.48 * s.keyLight);
+  const band = mixHex(c.pal.land, c.pal.rim, 0.07 + 0.24 * s.keyLight);
   const at = (f: number) => wb + (wt - wb) * f;
   const stripe = (f0: number, f1: number) => {
     const y0 = base - H * 0.78 * f0, y1 = base - H * 0.78 * f1;
@@ -255,12 +256,13 @@ const Shore: React.FC<{ c: Ctx; s: any }> = ({ c, s }) => {
   );
 };
 
-const Figure: React.FC<{ c: Ctx; s: any; walking: number }> = ({ c, s, walking }) => {
+const Figure: React.FC<{ c: Ctx; s: any; walking: number; id: string }> = ({ c, s, walking, id }) => {
   const L = s.size * c.S, x = s.x * c.W, y = s.y * c.H;
   const step = walking > 0 ? Math.sin(c.t * 5.5) : 0;
   const bob = walking > 0 ? Math.abs(Math.sin(c.t * 5.5)) * L * 0.012 : 0;
   const lan = s.lantern * (0.8 + 0.2 * noise(c.t * 7, 3));
   const ink = c.pal.land;
+  const lightId = `${c.id}-figure-key-${id}`;
   const P = (px: number, py: number) => `${(px * L).toFixed(1)},${(py * L).toFixed(1)}`;
   const silhouette = (
     <>
@@ -278,8 +280,14 @@ const Figure: React.FC<{ c: Ctx; s: any; walking: number }> = ({ c, s, walking }
       {/* A silhouette is the colour of the land, so against a storm sky it vanishes: the sky's rim
           light traces its outline first (a wider stroke under the fill shows only outside it). */}
       <g transform={`translate(${x.toFixed(1)} ${(y - bob).toFixed(1)}) scale(${s.facing} 1)`}>
+        {s.keyLight > 0 && <defs>
+          <radialGradient id={lightId} gradientUnits="userSpaceOnUse" cx={L * 0.25} cy={-L * 0.48} r={L * 0.65}>
+            <stop stopColor={mixHex(ink, LANTERN, s.keyLight * 0.63)} />
+            <stop offset="1" stopColor={ink} />
+          </radialGradient>
+        </defs>}
         {rimNeed(c.pal) > 0.01 && <g stroke={c.pal.rim} strokeWidth={L * 0.024} strokeLinejoin="round" strokeOpacity={0.55 * rimNeed(c.pal)} fill={c.pal.rim} fillOpacity={rimNeed(c.pal)}>{silhouette}</g>}
-        <g fill={ink}>{silhouette}</g>
+        <g fill={s.keyLight > 0 ? `url(#${lightId})` : ink}>{silhouette}</g>
         <line x1={0.24 * L} x2={0.24 * L} y1={-0.45 * L} y2={-0.41 * L} stroke={ink} strokeWidth={L * 0.008} />
         <rect x={0.205 * L} y={-0.41 * L} width={0.07 * L} height={0.09 * L} rx={L * 0.01} fill={lan > 0.01 ? "#fff0c0" : ink} opacity={lan > 0.01 ? Math.max(0.35, lan) : 1} />
       </g>
@@ -526,7 +534,7 @@ export const TableauScene: React.FC<Props> = ({ elements = [], camera = [] }) =>
         case "hut": return <Hut c={c} s={s} />;
         case "boat": return <Boat c={c} s={s} />;
         case "shore": return <Shore c={c} s={s} />;
-        case "figure": return <Figure c={c} s={s} walking={walkingOf(el)} />;
+        case "figure": return <Figure c={c} s={s} walking={walkingOf(el)} id={el.id} />;
         case "fire": return <Fire c={c} s={s} />;
         case "title": {
           // On a stage wider than the frame the title stays in the frame (centred, not off at the stage's middle).

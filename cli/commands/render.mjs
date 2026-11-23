@@ -9,6 +9,7 @@ import { productsHash, reviewSubject, stageStatus } from "../lib/core/state.mjs"
 import { checkProject, printIssues } from "../lib/review/check.mjs";
 import { REMOTION_BIN, TEMPLATE_DIR, requireRemotion, run, ffmpeg, ffprobe } from "../lib/core/ffmpeg.mjs";
 import { runQc } from "../lib/vision/qc.mjs";
+import { readWav } from "../lib/audio/wav.mjs";
 import { aspectTag, DIMENSIONS, withAspect } from "../lib/timeline/index.mjs";
 import { buildPublishKit, posterTime, stemGroups } from "../lib/publish/kit.mjs";
 import { webRenditions } from "../lib/publish/web.mjs";
@@ -231,7 +232,7 @@ export async function qc(args) {
   const subject = isMain ? reviewSubject(project) : null;
   const outDir = isMain ? join(project.paths.out, "qc") : join(project.paths.out, "qc", entry ? `v${entry.v}` : basename(video, ".mp4"));
   const span = entry?.part && entry.frames ? (entry.frames[1] - entry.frames[0] + 1) / tl.fps : undefined;
-  const review = await runQc({ video, timeline: tl, outDir, thresholds: project.config.qc, offset, span });
+  const review = await runQc({ video, timeline: tl, outDir, readVoice: (file) => readWav(project.p("public", file)), thresholds: project.config.qc, offset, span });
   const reportPath = isMain ? project.paths.review : join(outDir, "review.json");
   writeJson(reportPath, isMain ? { ...review, subject } : review);
   const icon = { pass: "✓", warn: "⚠", fail: "✗" };

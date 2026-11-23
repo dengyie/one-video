@@ -6,6 +6,8 @@ import { clamp01, easeInOut, easeOut, lerp } from "../engine/motion";
 import type { Format } from "../engine/types";
 import { Card } from "../components/Card";
 import { Stage, Title } from "./Stage";
+import { statCardColumns } from "../../../shared/safe-layout.mjs";
+import { linePointTimes, lineProgress } from "../../../shared/line-reveal.mjs";
 
 // Count-ups finish fast: the number should be readable while the voice is still saying it.
 const COUNT = 0.8;
@@ -36,14 +38,15 @@ export const StatCardsScene: React.FC<{ columns?: number; cards: StatCard[] }> =
   const t = useTime();
   const { fps } = useTimeline();
   const scene = useScene();
-  const cols = columns ?? (portrait ? (cards.length > 3 ? 2 : 1) : Math.min(cards.length, cards.length === 4 ? 2 : 3));
+  const cols = statCardColumns(cards.length, columns, portrait);
   const big = cards.length <= 2 ? 1.4 : cards.length <= 4 ? 1.15 : 0.8;
+  const gap = (portrait ? 24 : 36) * u, inset = (portrait ? 24 : 40) * u;
   // One value size for every card, small enough that the longest stays inside its card.
-  const room = (width - 2 * pad - (cols - 1) * 36 * u) / cols - 80 * u;
+  const room = (width - 2 * pad - (cols - 1) * gap) / cols - 2 * inset;
   const valueSize = Math.min(...cards.map((c) => fitFont(fmtCount(c.value, c.value, c.format), room, 88 * u * big)));
   return (
     <Stage center>
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 36 * u }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap }}>
         {cards.map((c, i) => {
           const s = at(i, cards.length, c.cue);
           const o = easeOut((t - s) / 0.45);
@@ -52,8 +55,8 @@ export const StatCardsScene: React.FC<{ columns?: number; cards: StatCard[] }> =
           // A note with its own cue comes in when the narration says it.
           const no = c.noteCue ? easeOut((t - Math.max(s, cueOr(scene, c.noteCue, s))) / 0.4) : 1;
           return (
-            <Card key={i} o={o} accent={color} anchor={[`card${i + 1}`, c.cue].filter(Boolean).join(" ")} style={{ textAlign: "left", padding: `${34 * u}px ${40 * u}px` }}>
-              <div style={{ fontSize: 28 * u * Math.max(0.85, big * 0.9), color: theme.colors.muted }}>{c.label}</div>
+            <Card key={i} o={o} accent={color} anchor={[`card${i + 1}`, c.cue].filter(Boolean).join(" ")} style={{ textAlign: "left", padding: `${34 * u}px ${inset}px`, overflowWrap: "anywhere" }}>
+              <div style={{ fontSize: 28 * u * Math.max(0.85, big * 0.9), color: theme.colors.muted, textWrap: "balance" }}>{c.label}</div>
               <div style={{ fontFamily: theme.fonts.number, fontSize: valueSize, fontWeight: 800, color, marginTop: 10 * u, lineHeight: 1.05, whiteSpace: "nowrap" }}>
                 {c.from === undefined && t - s < COUNT ? <Roll text={fmtCount(c.value, c.value, c.format)} p={easeOut((t - s) / COUNT)} was={easeOut((t - 1 / fps - s) / COUNT)} /> : fmtCount(v, c.value, c.format)}
               </div>
@@ -313,18 +316,11 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
   // narration reading the values out, travelling through most of the gap so the frame keeps moving);
   // otherwise it draws in one sweep from drawStart.
   const n = Math.max(...series.map((s) => s.points.length));
-  const pointT = pointCues.some(Boolean) && n > 1
-    ? periodTimes(n, scene.duration, (k) => (pointCues[k] ? scene.cues[pointCues[k]!] : k === 0 ? drawStart : undefined))
-    : null;
-  const pos = pointT
-    ? pointT.slice(1).reduce((sum, T, k) => {
-        const travel = Math.min(3, Math.max(0.3, (T - pointT[k]) * 0.8));
-        return sum + easeInOut(clamp01((t - (T - travel)) / travel));
-      }, 0)
-    : 0;
+  const pointT = linePointTimes(scene, n, pointCues, drawStart);
+  const pos = pointT ? lineProgress(pointT, t) : 0;
   const drawP = pointT ? pos / (n - 1) : easeInOut((t - drawStart) / Math.max(1.2, Math.min(4, scene.duration * 0.45)));
   // The big label sits on the last point reached; cued, that is the last value spoken (none before the first).
-  const reached = pointT ? (t >= pointT[0] ? Math.floor(pos + 1e-6) : -1) : Math.ceil(drawP * (n - 1));
+  const reached = pointT ? pointT.reduce((last, at, k) => t >= at ? k : last, -1) : Math.ceil(drawP * (n - 1));
   // Value labels get a dark outline under the fill so they stay legible over a bright backdrop (a rocket plume).
   const halo = { stroke: theme.colors.bg, strokeWidth: 8 * u, strokeLinejoin: "round" as const, paintOrder: "stroke" };
   const lastLabel = (s: LineSeries) => s.points[Math.max(0, Math.min(reached, s.points.length - 1))];
@@ -376,8 +372,7 @@ export const LineChartScene: React.FC<{ title?: string; xLabel?: string; yLabel?
                   <circle key={`a${k}`} data-anchor={pointAnchors(si, k, pts.length).join(" ")} cx={x} cy={y} r={10 * u} fill="none" />
                 ))}
                 {pts.map(([x, y], k) => {
-                  // Cued, the start point waits half-lit until its value is spoken.
-                  const o = pointT && k === 0 ? (reached >= 0 ? 1 : 0.5) : clamp01(((pointT ? pos : drawP * (pts.length - 1)) - k + 0.15) / 0.3);
+                  const o = pointT ? Number(k <= reached) : clamp01((drawP * (pts.length - 1) - k + 0.15) / 0.3);
                   // Cued, the points still ahead wait as faint markers on a dashed preview of the path, so the axes
                   // show where the line is going instead of sitting empty until the narration gets there; their values stay hidden.
                   const ghost = pointT ? 0.45 : 0;

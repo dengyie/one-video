@@ -18,6 +18,15 @@ import { readFileSync } from "node:fs";
 
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} ≉ ${b}`);
 
+test("tableau local key light blends and carries into inherited scenes", () => {
+  for (const type of ["lighthouse", "figure"]) {
+    const el = { id: "subject", type, to: [{ t: 1, dur: 2, keyLight: 0.8 }] };
+    near(elementAt(el, 0).keyLight, 0);
+    near(elementAt(el, 2).keyLight, 0.4);
+    near(settledElement(el, 3).keyLight, 0.8);
+  }
+});
+
 test("tableau elementAt: defaults, keyframes blend over dur, entrance fade, tone cross-fade", () => {
   const lamp = { id: "lh", type: "lighthouse", x: 0.3, to: [{ t: 2, dur: 2, lit: 0 }] };
   near(elementAt(lamp, 0).h, 0.36);

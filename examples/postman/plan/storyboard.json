@@ -36,11 +36,11 @@
           { "id": "birds", "opacity": 0 },
           { "id": "sky", "to": [{ "at": 0, "dur": 4, "tone": "night" }] },
           { "id": "stars", "to": [{ "at": 0.5, "dur": 3, "opacity": 1, "density": 1 }] },
-          { "id": "postman", "type": "figure", "on": "hills", "anchor": "ridge", "x": 0.2, "size": 0.06, "lantern": 1, "facing": 1, "to": [{ "cue": "mail", "dur": 7, "x": 0.38 }] }
+          { "id": "postman", "type": "figure", "on": "hills", "anchor": "ridge", "x": 0.2, "size": 0.085, "lantern": 1, "keyLight": 0.88, "facing": 1, "to": [{ "cue": "mail", "dur": 7, "x": 0.38 }] }
         ],
         "camera": [
-          { "at": 0, "zoom": 2.2, "on": "postman" },
-          { "cue": "ridge", "zoom": 1.8, "dur": 2.4, "on": "postman" },
+          { "at": 0, "zoom": 3.1, "on": "postman" },
+          { "cue": "ridge", "zoom": 2.5, "dur": 2.4, "on": "postman" },
           { "cue": "in", "x": 0.5, "y": 0.6, "zoom": 1.2, "dur": 2.6 }
         ]
       },
@@ -63,12 +63,12 @@
           { "id": "pines", "to": [{ "cue": "winter", "dur": 2, "wind": 0.8 }] },
           { "id": "pines2", "to": [{ "cue": "winter", "dur": 2, "wind": 0.8 }] },
           { "id": "town", "to": [{ "cue": "dark", "dur": 1.2, "lit": 0 }] },
-          { "id": "postman", "x": 0.42, "to": [{ "at": 0, "dur": 6, "x": 0.5 }, { "cue": "lamp", "dur": 1.4, "lantern": 0.25 }] }
+          { "id": "postman", "x": 0.42, "to": [{ "at": 0, "dur": 6, "x": 0.5 }, { "cue": "lamp", "dur": 1.4, "lantern": 0.25, "keyLight": 0.42 }] }
         ],
         "camera": [
           { "at": 0, "x": 0.5, "y": 0.5, "zoom": 1.15, "sway": 0.4, "cut": true },
           { "cue": "seal", "x": 0.5, "y": 0.55, "zoom": 1.3, "dur": 3, "sway": 0.8 },
-          { "cue": "lamp", "zoom": 2.4, "dur": 2.4, "sway": 0.5, "on": "postman" }
+          { "cue": "lamp", "zoom": 3.15, "dur": 2.4, "sway": 0.5, "on": "postman" }
         ]
       },
       "hold": 0.8

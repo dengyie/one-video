@@ -3,6 +3,28 @@ import assert from "node:assert/strict";
 import { compileTimeline, phraseTime, resolveAt, mergeTheme, researchSources, sourceList, credit, CUE_LEAD, boundaryTransition, transitionSfx } from "../cli/lib/timeline/index.mjs";
 import { example } from "./helpers.mjs";
 import { mutedBackdrop, placeCaptions } from "../cli/lib/captions/layout.mjs";
+import { linePointTimes, lineProgress, lineSegmentStart } from "../shared/line-reveal.mjs";
+
+test("line draws to cued points without shifting or previewing their values", () => {
+  const times = linePointTimes({ duration: 12, cues: { start: 2, next: 2.2, last: 9 } }, 4, ["start", "next", null, "last"], 0.5);
+  assert.deepEqual(times, [2, 2.2, 5.6, 9]);
+  assert.equal(lineProgress(times, 2), 0);
+  assert.equal(lineProgress(times, 2.2), 1);
+  assert.equal(lineProgress(times, lineSegmentStart(5.6, 9)), 2);
+  assert.equal(lineProgress(times, 9), 3);
+  assert.equal(linePointTimes({ duration: 6 }, 2, ["missing"], 0), null);
+});
+
+test("compiled defaults break fade chains at chapter turns without overriding an authored fade", () => {
+  const ex = example();
+  const args = { ...ex, assets: ex.fetchedAssets };
+  const render = () => compileTimeline(args).timeline.scenes;
+  const cuts = render().slice(1).map((s) => s.transitionIn.type);
+  assert.ok(cuts.includes("cut") && !cuts.join(" ").includes("fade fade fade"));
+  const cut = cuts.indexOf("cut") + 1;
+  ex.storyboard.scenes[cut].enter = "fade";
+  assert.equal(render()[cut].transitionIn.type, "fade");
+});
 
 const lines = [{ text: "1990年，全球第一", start: 0.2, end: 2.2 }, { text: "36年后，苹果排第一", start: 2.5, end: 4.5 }];
 
