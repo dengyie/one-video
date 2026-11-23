@@ -97,6 +97,15 @@ test("caption and watermark pixels do not make a black picture visible", () => {
   assert.deepEqual(report.black, [[1, 2]]);
 });
 
+test("black-frame QC sees a dark subject even at either edge of the picture", () => {
+  const subject = (top) => Uint8Array.from({ length: 64 * 36 }, (_, i) => {
+    const x = i % 64, y = Math.floor(i / 64);
+    return x >= 27 && x < 34 && y >= top && y < top + 5 ? 33 : 2;
+  });
+  const report = analyzeFrames([frame(80), frame(80), subject(2), subject(2), subject(29), subject(29), frame(80), frame(80)], 2);
+  assert.deepEqual(report.black, []);
+});
+
 test("analyzeFrames compares against the frame one window back, so slow drift is motion", () => {
   const fps = 2;
   // One more pixel brightens each sample: mean diff 0.5 vs the previous sample (< 0.6), 1.0 vs two back.

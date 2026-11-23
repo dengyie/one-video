@@ -21,9 +21,37 @@ export const QC_DEFAULTS = {
 const SAMPLE_WIDTH = 64, SAMPLE_HEIGHT = 36;
 const SAMPLE_SIZE = SAMPLE_WIDTH * SAMPLE_HEIGHT;
 
+function hasPictureDetail(frame, level) {
+  const visited = new Uint8Array(frame.length);
+  for (let i = 0; i < frame.length; i++) {
+    if (visited[i] || frame[i] < level) continue;
+    const region = [i];
+    visited[i] = 1;
+    let left = SAMPLE_WIDTH, right = 0, top = SAMPLE_HEIGHT, bottom = 0;
+    for (let k = 0; k < region.length; k++) {
+      const j = region[k];
+      const x = j % SAMPLE_WIDTH, y = Math.floor(j / SAMPLE_WIDTH);
+      left = Math.min(left, x); right = Math.max(right, x);
+      top = Math.min(top, y); bottom = Math.max(bottom, y);
+      const add = (n) => {
+        if (!visited[n] && frame[n] >= level) {
+          visited[n] = 1;
+          region.push(n);
+        }
+      };
+      if (x > 0) add(j - 1);
+      if (x < SAMPLE_WIDTH - 1) add(j + 1);
+      if (y > 0) add(j - SAMPLE_WIDTH);
+      if (y < SAMPLE_HEIGHT - 1) add(j + SAMPLE_WIDTH);
+    }
+    if (region.length >= 0.01 * frame.length && (bottom - top >= 3 || right - left >= 0.25 * SAMPLE_WIDTH)) return true;
+  }
+  return false;
+}
+
 function isBlackPicture(frame, luma) {
   if (frame.length !== SAMPLE_SIZE) return frame.every((v) => v < luma);
-  // Sample below top captions and corner marks and above bottom captions.
+  // In likely caption/watermark bands, only substantial connected picture detail counts.
   let sum = 0, detail = 0, highlights = 0, pixels = 0;
   for (let y = 8; y < 26; y++) for (let x = 0; x < SAMPLE_WIDTH; x++) {
     const v = frame[y * SAMPLE_WIDTH + x];
@@ -32,7 +60,8 @@ function isBlackPicture(frame, luma) {
     highlights += Number(v >= 3 * luma);
     pixels++;
   }
-  return sum < luma * pixels && detail < 0.05 * pixels && highlights < 0.01 * pixels;
+  return sum < luma * pixels && detail < 0.05 * pixels && highlights < 0.01 * pixels
+    && !hasPictureDetail(frame, 1.6 * luma);
 }
 
 // Minimal PNG decoder for 8-bit grayscale, non-interlaced images (what ffmpeg emits with format=gray).
