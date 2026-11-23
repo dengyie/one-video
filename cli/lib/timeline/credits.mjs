@@ -1,3 +1,7 @@
+import { credit } from "../assets/compile.mjs";
+
+export { credit } from "../assets/compile.mjs";
+
 // Attribution: research sources, asset credits and library licence lines.
 // One line per distinct source: "publisher · title · date". Facts first, then extra research.sources.
 export function researchSources(research) {
@@ -30,20 +34,4 @@ export function libraryCredit(entry) {
   const p = entry?.provenance ?? {};
   if (!/cc[- ]?by/i.test(p.license ?? "")) return null;
   return `动画：${[p.author ?? p.source, "CC BY 4.0"].filter(Boolean).join(" · ")}`;
-}
-
-export function collectAssetRefs(v, out = new Set()) {
-  if (Array.isArray(v)) v.forEach((x) => collectAssetRefs(x, out));
-  else if (v && typeof v === "object") {
-    for (const [k, x] of Object.entries(v)) {
-      if ((k === "asset" || k === "avatar" || k === "logo") && typeof x === "string") out.add(x);
-      else collectAssetRefs(x, out);
-    }
-  }
-  return out;
-}
-
-export function credit(a) {
-  if (a.license === "generated") return null;
-  return [a.title, a.author, a.license].filter(Boolean).join(" · ");
 }

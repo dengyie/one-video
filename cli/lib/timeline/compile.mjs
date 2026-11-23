@@ -1,7 +1,6 @@
 // Timeline compiler: script + storyboard + measured timings → plan/timeline.json.
 // The Remotion template reads only this file, so every timing decision lives here. The passes it
-// runs live next to it (cues, transitions, sfx, shots, props, anchors, credits); caption placement
-// lives in ../captions.
+// runs live in the timeline, caption, audio, and asset domains.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { readJson, styleDef } from "../core/project.mjs";
@@ -9,11 +8,10 @@ import { collectIcons, resolveIcon } from "../library/icons.mjs";
 import { resolveCountry } from "../library/geo.mjs";
 import { entryPath, isMonoDark, loadCatalog, resolveEntry, tintLottie } from "../library/catalog.mjs";
 import { parseWav } from "../audio/wav.mjs";
-import { countFrames, depthPath, framesDir, lumaPath } from "../assets/media.mjs";
-import { beatsFile } from "../audio/beats.mjs";
+import { collectAssetRefs, compileSceneVisuals } from "../assets/compile.mjs";
+import { compileMusic, loadMusicGrid } from "../audio/music.mjs";
 import { boxMean, depthAt, dodgeX, hexLuminance, lumaAt, scrimFor, subjectFocus, wordBox } from "../vision/subject.mjs";
-import { placeCaptions } from "../captions/layout.mjs";
-import { normalizeForMatch } from "../core/text.mjs";
+import { compileCaptions, sceneCaptions } from "../captions/compile.mjs";
 import { resolveAt } from "./cues.mjs";
 import { CAMERA_DEFAULT, boundaryTransition, normTransition } from "./transitions.mjs";
 import { MOTION_GAIN, MOTION_SFX, motionCues, overlaySound, sfxFile, sfxVariants, slamWord, transitionSfx } from "./sfx.mjs";
@@ -22,7 +20,7 @@ import { MAX_STILL, OVERLAY_EFFECTS, screenEvents } from "./events.mjs";
 import { anchorNames } from "./anchors.mjs";
 import { resolveDeviceRects, resolvePropTimes, settled, settledElement } from "./props.mjs";
 import { resolveTableauRefs } from "./tableau.mjs";
-import { collectAssetRefs, credit, libraryCredit, sourceList } from "./credits.mjs";
+import { libraryCredit, sourceList } from "./credits.mjs";
 import { clampT, r3 } from "./util.mjs";
 
 export const DIMENSIONS = { "16:9": [1920, 1080], "9:16": [1080, 1920], "1:1": [1080, 1080], "4:5": [1080, 1350] };
@@ -31,12 +29,6 @@ export const SILENT_SCENE_DEFAULT = 4;
 
 const normCamera = (c) => (c == null ? null : typeof c === "string" ? { move: c } : c);
 
-// Scene types that paint the whole frame themselves (no theme background shows through).
-const OPAQUE_TYPES = new Set(["media", "focus", "split", "footage", "parallax", "match-cut"]);
-
-// A quote whose text is exactly what the narrator says is read along on screen (QuoteScene lights it
-// up as it is spoken), so a caption under it would only print the same sentence twice.
-const readAloud = (sb, lines) => sb.type === "quote" && typeof sb.props?.text === "string" && lines.length > 0 && normalizeForMatch(sb.props.text) === normalizeForMatch(lines.map((l) => l.text).join(""));
 const overlaps = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
 
 // The channel mark. A string is the text of the default badge; an object adds a line under it
@@ -80,17 +72,13 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
   const libraryCredits = [];
   let catalog = null;
   const scenes = [];
-  const captions = [];
   const narration = [];
   const sfx = [];
   const chapters = [];
   let frame = 0;
 
   const sfxCfg = { transition: null, volume: 0.5, ...(config.sfx ?? {}) };
-  // Beat grid of the music, cached by `onevideo music` / render (see beats.mjs).
-  const musicSrc = config.music?.file ?? "music/bgm.wav";
-  const beatsAt = root ? beatsFile(join(root, "public", musicSrc)) : null;
-  const grid = config.music?.enabled !== false && beatsAt && existsSync(beatsAt) ? readJson(beatsAt) : {};
+  const grid = loadMusicGrid(root, config.music);
   // music.offset starts the track that many seconds in; "auto" picks the start that lands the
   // hard cuts on downbeats (a dry compile without snapping says where they fall).
   let offset = typeof config.music?.offset === "number" ? config.music.offset : 0;
@@ -234,39 +222,17 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       if (icon) icons[name] = icon; else errors.push(`scene "${sb.id}" uses unknown icon "${name}" (Lucide name or flag:<iso2>)`);
     }
     if (sb.type === "unit-grid" && !icons[props.icon ?? "user-round"]) { const icon = resolveIcon(props.icon ?? "user-round"); if (icon) icons[props.icon ?? "user-round"] = icon; }
-    const refs = collectAssetRefs([props, overlays]);
-    if (sb.backdrop) refs.add(sb.backdrop.asset);
-    for (const id of refs) {
-      const a = assetById.get(id);
-      if (!a) { errors.push(`scene "${sb.id}" references unknown asset "${id}"`); continue; }
-      if (!a.file) { errors.push(`asset "${id}" not fetched yet; run: onevideo assets fetch`); continue; }
-      if (root && !existsSync(join(root, "public", a.file))) errors.push(`asset "${id}" file missing: public/${a.file}; run: onevideo assets fetch`);
-      usedAssets[id] = { src: a.file, kind: a.kind, credit: credit(a), ...(a.license === "generated" && { generated: true }) };
-      // A full-page capture is this many of its viewport tall (what a scrolling screen slides over).
-      const vp = a.capture?.full && a.capture.viewport;
-      if (vp && a.width && a.height) usedAssets[id].pages = r3(a.height / a.width / (vp[1] / vp[0]));
-      if (root && existsSync(join(root, "public", depthPath(a)))) {
-        usedAssets[id].depth = depthPath(a);
-        const meta = join(root, "public", depthPath(a), "meta.json");
-        if (a.kind === "video" && existsSync(meta)) { const m = readJson(meta); Object.assign(usedAssets[id], { depthStep: m.step, depthFrames: m.frames }); }
-      }
-      if (root && existsSync(join(root, "public", lumaPath(a)))) usedAssets[id].luma = lumaPath(a);
-      if (a.kind === "video" && root) {
-        const frames = countFrames(join(root, "public", framesDir(a.file)));
-        if (frames) Object.assign(usedAssets[id], { seq: framesDir(a.file), frames, fps: 30 });
-        else warnings.push(`asset "${id}": no frame sequence, falls back to <OffthreadVideo> (needs memory); run: onevideo render (extracts it)`);
-      }
-    }
+    const visual = compileSceneVisuals(sb, props, overlays, { assetById, usedAssets, root, errors, warnings });
 
     for (const l of lines) {
-      captions.push({ scene: sb.id, text: l.text, start: r3(start + l.start), end: r3(start + l.end) });
       narration.push([r3(start + l.start), r3(start + l.end)]);
     }
     const chapter = sb.chapter ?? sc.chapter;
     if (chapter) chapters.push({ title: chapter, start: r3(start) });
     // A shot track also covers long stretches where nothing else changes (rhythm gate's maxStill).
+    const captions = sceneCaptions(sb, lines);
     if (shots && sb.type !== "sources" && sb.type !== "canvas" && sb.type !== "tableau" && !laidOut(sb.type)) {
-      const seen = { id: sb.id, type: sb.type, start: 0, duration, cues, props, overlays, lines, captions: sb.captions ?? !readAloud(sb, lines) };
+      const seen = { id: sb.id, type: sb.type, start: 0, duration, cues, props, overlays, lines, captions };
       shots = stillShots(shots, screenEvents({ scenes: [seen] }).map((e) => e.t), duration, config.gates?.maxStill ?? MAX_STILL);
     }
 
@@ -283,11 +249,8 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       transitionIn: null,
       transitionOut: null,
       camera: { ...CAMERA_DEFAULT, ...(normCamera(theme.camera) ?? {}), ...(normCamera(sb.camera) ?? {}) },
-      opaque: Boolean(sb.backdrop) || OPAQUE_TYPES.has(sb.type),
-      header: sb.header ?? null,
-      background: sb.background ?? null,
-      backdrop: sb.backdrop ? { dim: 0.62, blur: 0, motion: "in", startFrom: 0, ...sb.backdrop } : null,
-      captions: sb.captions ?? !readAloud(sb, lines),
+      ...visual,
+      captions,
       cues,
       lines: lines.map((l) => ({ text: l.text, start: l.start, end: l.end })),
       props,
@@ -352,7 +315,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       if (hit) title.duration = r3(Math.max(0.4, hit.t - t0 - 0.3));
     }
   }
-  placeCaptions(scenes, captions, { root, usedAssets, fps, width, height });
+  const captions = compileCaptions(scenes, config.captions, { root, usedAssets, fps, width, height });
   const last = scenes[scenes.length - 1];
   if (last) last.transitionOut = { type: normTransition(last.exit)?.type === "cut" ? "cut" : "fade", frames: normTransition(last.exit)?.type === "cut" ? 0 : Math.round(0.6 * fps), tail: 0, direction: "left", nextOpaque: false };
   if (sfxCfg.motion === "auto") {
@@ -370,18 +333,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     }
   }
   sfx.sort((a, b) => a.at - b.at);
-  // music.file is a path under public/ (own or licensed track); otherwise the synthesized bgm.wav.
-  const music = config.music?.enabled === false ? null : root && existsSync(join(root, "public", musicSrc))
-    ? { src: musicSrc, offset, volume: config.music?.volume ?? 0.22, duckTo: config.music?.duckTo ?? 0.07, fade: 1.2, credit: config.music?.file ? config.music?.credit ?? null : "OneVideo 程序化合成" }
-    : null;
-  if (config.music?.enabled !== false && !music) warnings.push(`no background music (public/${musicSrc})${config.music?.file ? "" : "; run: onevideo music"}`);
-  // The story score turns where its scenes started when it was written; a re-timed cut drifts off it.
-  if (music && grid.scored && grid.cut) {
-    const moved = scenes.filter((s) => grid.cut[s.id] !== undefined && Math.abs(grid.cut[s.id] - s.start) > 0.75).map((s) => s.id);
-    const changed = scenes.length !== Object.keys(grid.cut).length || scenes.some((s) => grid.cut[s.id] === undefined);
-    if (moved.length || changed) warnings.push(`music was scored for an earlier cut (${moved.length ? `scenes ${moved.join(", ")} moved` : "scenes changed"}); run: onevideo music`);
-  }
-  if (config.music?.file && !config.music?.credit) warnings.push("music.file has no music.credit; add the track title/author/license for the publish credits");
+  const music = compileMusic(config.music, { root, offset, grid, scenes, warnings });
   const usedSfx = [...new Set(sfx.map((s) => s.sound))];
   if (root) for (const name of usedSfx) if (!existsSync(join(root, "public", sfxFile(name)))) errors.push(`sfx "${name}" missing: public/${sfxFile(name)}; run: onevideo music`);
   // Library sounds run up to 8 s; the player keeps each one mounted for its real length.
@@ -405,7 +357,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     duration: r3(totalFrames / fps),
     theme,
     watermark,
-    captions: { enabled: config.captions?.enabled !== false, style: config.captions?.style ?? "line", items: captions },
+    captions,
     narration,
     music,
     sfx,

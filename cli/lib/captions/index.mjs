@@ -4,3 +4,4 @@ export * from "./lines.mjs";
 export * from "./layout.mjs";
 export * from "./subtitles.mjs";
 export * from "./gate.mjs";
+export * from "./compile.mjs";
