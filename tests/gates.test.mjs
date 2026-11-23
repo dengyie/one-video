@@ -230,6 +230,16 @@ test("fitOverlays moves overlays placed for 16:9 out of a 9:16 caption band and 
   assert.deepEqual(fitOverlays(tl, {}), [], "nothing left to move");
 });
 
+test("portrait device overlays check the reserved caption slot, not the ordinary portrait band", () => {
+  const items = [{ scene: "device", text: "A chapter", start: 1, end: 3 }];
+  const run = (y) => layoutGate({
+    width: 1080, height: 1920, captions: { enabled: true, style: "line", items },
+    scenes: [{ id: "device", type: "device", start: 0, duration: 4, overlays: [{ type: "icon", x: 0.5, y, size: 90, t: 0, end: 4 }] }],
+  }, {}).filter((i) => /caption band/.test(i.msg));
+  assert.deepEqual(run(0.75), []);
+  assert.equal(run(0.90).length, 1);
+});
+
 test("layoutGate: overlays over spoken captions, off-frame, tiny or stacked stickers, text pushed out by a shot", () => {
   const base = { width: 1920, height: 1080, captions: { enabled: true, style: "line", items: [{ scene: "a", text: "说话中", start: 1, end: 3 }] } };
   const scene = (over) => ({ id: "a", type: "media", start: 0, duration: 6, shots: [{ t: 0, zoom: 1, x: 0.5, y: 0.5 }], overlays: [], ...over });

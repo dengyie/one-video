@@ -2,7 +2,7 @@ import React from "react";
 import { useCurrentFrame, useVideoConfig } from "remotion";
 import { useLayout, useTimeline } from "./context";
 import { clamp01, easeOut, easeOutBack, lerp } from "./motion";
-import { deviceViewportHeight } from "../../../shared/safe-layout.mjs";
+import { deviceCaptionSlot } from "../../../shared/safe-layout.mjs";
 
 // Split into runs; numbers (with %/$/units glued on) and Latin words are the line's key tokens.
 const KEY = /([$¥€£]?\d[\d,.]*\s*(?:%|万亿|亿|万|倍|美元|元|[kKmMbB]\b)?|[A-Za-z][A-Za-z0-9.&-]*)/;
@@ -34,6 +34,7 @@ export const Captions: React.FC = () => {
     .reduce<(typeof tl.captions.items)[number] | undefined>((m, c) => (!m || c.start >= m.start ? c : m), undefined);
   if (!item) return null;
   const device = tl.scenes.some((s) => s.id === item.scene && s.type === "device");
+  const slot = deviceCaptionSlot(height, u, portrait);
   const { colors, captionBg } = tl.theme;
   const fadeIn = clamp01((t - (item.start - 0.05)) / 0.12);
   const fadeOut = clamp01((item.end + 0.25 - t) / 0.12);
@@ -47,7 +48,7 @@ export const Captions: React.FC = () => {
         left: 0,
         right: 0,
         ...(device
-          ? { top: deviceViewportHeight(height, u, portrait) + 8 * u, bottom: 14 * u, alignItems: "center", overflow: "hidden" }
+          ? { top: slot.top, bottom: slot.bottom, alignItems: "center", overflow: "hidden" }
           : item.top ? { top: (portrait ? 220 : 46) * u } : { bottom: (portrait ? 300 : 46) * u }),
         display: "flex",
         justifyContent: "center",
@@ -58,7 +59,7 @@ export const Captions: React.FC = () => {
       <div
         data-caption={item.scene}
         style={{
-          maxWidth: portrait ? "88%" : "80%",
+          maxWidth: `${slot.width * 100}%`,
           boxSizing: "border-box",
           pointerEvents: tl.probe ? "auto" : undefined,
           transform: kinetic ? `translateY(${(1 - easeOut(fadeIn)) * 18 * u}px) scale(${lerp(0.94, 1, easeOutBack(fadeIn))})` : undefined,
