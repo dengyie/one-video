@@ -161,7 +161,7 @@ test("bundled FFmpeg QC samples the same frames as the PNG pipeline", async () =
     const samples = await sampleGrayFrames(video, 4);
     assert.deepEqual(samples.map((x) => new Uint8Array(x)), legacy);
     const timeline = { width: 64, height: 36, fps: 8, duration: 4, scenes: [{ id: "one", type: "test", start: 0, duration: 4, lines: [{ start: 0.5, end: 2.5 }] }] };
-    const report = await runQc({ video, timeline, outDir, readVoice: (file) => readWav(join(dir, file)) });
+    const report = await runQc({ video, timeline, outDir, bounds: null, readVoice: (file) => readWav(join(dir, file)) });
     assert.equal(report.verdict, "fail");
     assert.deepEqual(report.checks.find((c) => c.id === "black-frames"), { id: "black-frames", status: "fail", detail: "1.0–2.0s" });
     assert.deepEqual(report.checks.find((c) => c.id === "silence-in-narration"), { id: "silence-in-narration", status: "fail", detail: "silent or missing voice stem: 0.5–2.5s" });
