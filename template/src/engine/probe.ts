@@ -1,6 +1,7 @@
 // The stills probe (onevideo stills / preview): what each frame actually shows, measured in the
 // page, for the CLI's review (cli/lib/review/probe.mjs). DOM measurement only: no React, no
 // rendering; the overlay layer calls it once the frame is laid out.
+import { hitsCaption } from "../../../shared/probe-order.mjs";
 import type { Overlay } from "./types";
 
 export const PROBE_TAG = "ONEVIDEO_PROBE ";
@@ -149,7 +150,10 @@ export function probeBoxes(layer: HTMLElement, list: Overlay[]) {
       let hits = 0;
       for (let a = 0; a < N; a++) for (let b = 0; b < N; b++) {
         const px = F.left + (x0 + ((a + 0.5) / N) * (x1 - x0)) * F.width, py = F.top + (y0 + ((b + 0.5) / N) * (y1 - y0)) * F.height;
-        if (doc.elementsFromPoint(px, py).some((e) => el.contains(e))) hits++;
+        const stack = doc.elementsFromPoint(px, py);
+        const target = lines[k].el;
+        if (target.hasAttribute("data-caption")
+          ? hitsCaption(stack, el, target) : stack.some((e) => el.contains(e))) hits++;
       }
       if (hits) covers.push({ t: k, area: Math.round(((hits / (N * N)) * (x1 - x0) * (y1 - y0)) * 1e6) / 1e6 });
     });
