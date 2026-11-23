@@ -8,9 +8,12 @@
       "props": {
         "kicker": "NASDAQ · SPCX",
         "title": "SpaceX 上市",
-        "subtitle": "造火箭的，凭什么值一万亿？",
         "date": "2026-06-12"
       },
+      "overlays": [
+        { "type": "word", "text": "交易代码 SPCX", "style": "rise", "at": "代码SPCX", "duration": 2.8, "y": 0.71, "size": 44 },
+        { "type": "word", "text": "造火箭的，凭什么值一万亿？", "style": "rise", "at": "一家造火箭", "duration": 3.5, "y": 0.71, "size": 44 }
+      ],
       "backdrop": {
         "asset": "falcon-heavy",
         "dim": 0.55,
@@ -384,13 +387,17 @@
       },
       "cues": {
         "draw": 0.6,
-        "xai": "合并xAI"
+        "round1": "3500亿",
+        "round2": "8000亿",
+        "round3": "1.25万亿",
+        "round4": "1.77万亿"
       },
       "props": {
         "format": {
           "compact": "zh"
         },
         "drawCue": "draw",
+        "pointCues": ["round1", "round2", "round3", "round4"],
         "series": [
           {
             "name": "估值",
@@ -418,7 +425,7 @@
           {
             "x": "2026.02",
             "label": "合并 xAI",
-            "cue": "xai"
+            "cue": "round3"
           }
         ]
       },

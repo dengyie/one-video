@@ -19,6 +19,12 @@ test("applyFix: merges into the storyboard object or replaces a value; unknown t
 test("fixPlan: stickers dropped on the captions move clear of them and of each other, a still title gets a shot track, charts keep their cue warnings", () => {
   const ex = example({ media: ["sfx/whoosh.wav", "sfx/pop.wav", "music/inspired.mp3"] });
   const storyboard = structuredClone(ex.storyboard);
+  delete storyboard.scenes[0].overlays;
+  const valuation = storyboard.scenes.find((s) => s.id === "valuation");
+  delete valuation.props.pointCues;
+  for (const name of ["round1", "round2", "round3", "round4"]) delete valuation.cues[name];
+  valuation.props.annotations[0].cue = "xai";
+  valuation.cues.xai = "合并xAI";
   const profit = storyboard.scenes.find((s) => s.id === "profit");
   delete profit.props.left.cue;
   delete profit.props.right.cue;

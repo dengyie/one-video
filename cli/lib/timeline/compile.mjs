@@ -300,10 +300,13 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
   const totalFrames = frame;
   // Opening fades up from the background, closing fades out; inner boundaries overlap.
   const edge = (type, d) => ({ type: type === "cut" ? "cut" : "fade", frames: type === "cut" ? 0 : Math.round(d * fps), lead: 0, direction: "left" });
+  const chapterStarts = new Set(chapters.map((chapter) => chapter.start));
+  let consecutiveFades = 0;
   scenes.forEach((sc, i) => {
     const prev = scenes[i - 1];
     if (!prev) { sc.transitionIn = edge(normTransition(sc.enter)?.type ?? "fade", 0.45); return; }
-    const b = boundaryTransition(prev, sc, theme, fps);
+    const b = boundaryTransition(prev, sc, theme, fps, { chapterTurn: chapterStarts.has(sc.start), consecutiveFades });
+    consecutiveFades = b.type === "fade" ? consecutiveFades + 1 : 0;
     sc.transitionIn = { type: b.type, frames: b.frames, lead: b.lead, direction: b.direction };
     prev.transitionOut = { type: b.type, frames: b.frames, tail: b.frames - b.lead, direction: b.direction, nextOpaque: sc.opaque };
     // Through dives at the outgoing subject: an authored [x, y] on screen, else the depth map's.
