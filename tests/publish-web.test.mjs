@@ -47,6 +47,19 @@ test("web renditions: encodes missing or stale tiers only", async () => {
     await webRenditions({ root, main, dir, probe, encode });
     assert.deepEqual(encoded.map((a) => a.at(-1)), [join(dir, "web-720p.mp4.part.mp4")]);
 
+    const other = join(root, "out/v5.mp4");
+    writeFileSync(other, "NEW");
+    utimesSync(other, old, old);
+    encoded.length = 0;
+    await webRenditions({ root, main: other, dir, probe, encode });
+    assert.equal(encoded.length, 3, "older cuts of the same size cannot reuse another cut's tiers");
+    assert.ok(encoded.every((args) => args[4] === other));
+
+    encoded.length = 0;
+    const probe24 = async () => ({ streams: [{ codec_type: "video", height: 1080, avg_frame_rate: "24/1" }] });
+    await webRenditions({ root, main: other, dir, probe: probe24, encode });
+    assert.equal(encoded.length, 3, "changed settings invalidate the tiers");
+
     await assert.rejects(webRenditions({ root, main, dir, probe: async () => ({ streams: [] }), encode }), /no video stream/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
