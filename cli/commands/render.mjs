@@ -72,6 +72,8 @@ function commonFlags(project) {
   return [`--props=${project.paths.timeline}`, `--public-dir=${project.p("public")}`];
 }
 
+export const h264OutputPath = (file) => basename(file).includes(".") ? file : `${file}.mp4`;
+
 async function renderWithBounds(project, flags, tl, file, range) {
   const id = `qc-${randomUUID()}`;
   const start = range?.[0] ?? 0;
@@ -120,7 +122,7 @@ export async function render(args) {
     const old = adoptLegacy(project, alias, { draft, part });
     if (old) log(`kept the unversioned ${relative(project.root, alias)} as v${old.v} (${old.file})`);
   }
-  const { v, file } = args.out || variant ? { v: null, file: args.out ?? variant } : versionFile(project, { draft, part });
+  const { v, file } = args.out || variant ? { v: null, file: h264OutputPath(args.out ?? variant) } : versionFile(project, { draft, part });
   const flags = [
     "render", ENTRY, COMPOSITION, file,
     "--codec=h264", "--audio-codec=aac", "--audio-bitrate=192k",
