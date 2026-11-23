@@ -275,7 +275,11 @@ export async function runQc({ video, timeline, outDir, bounds, readVoice, thresh
 
   const step = qcSampleStep(timeline.fps, t);
   const frames = await sampleGrayFrames(video, step);
-  const fa = analyzeFrames(frames, timeline.fps / step, t, bounds?.step === step ? bounds.samples : undefined);
+  const overlaySamples = bounds && frames.map((_, i) => {
+    const frame = i * step;
+    return frame % bounds.step === 0 ? bounds.samples[frame / bounds.step] : undefined;
+  });
+  const fa = analyzeFrames(frames, timeline.fps / step, t, overlaySamples);
   add("black-frames", fa.black.length ? "fail" : "pass", fa.black.length ? fmt(fa.black) : "none");
   add("frozen-segments", fa.frozen.length ? "warn" : "pass", fa.frozen.length ? `${fmt(fa.frozen)} (> ${t.frozen.maxRun}s without motion)` : "none");
   add("static-ratio", fa.staticRatio <= t.staticRatioMax ? "pass" : "warn", `${(fa.staticRatio * 100).toFixed(0)}% of samples nearly static (max ${(t.staticRatioMax * 100).toFixed(0)}%)`);

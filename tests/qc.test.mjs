@@ -170,6 +170,25 @@ test("bundled FFmpeg QC samples the same frames as the PNG pipeline", async () =
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("QC reuses exact frame bounds when it samples at a different cadence", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ov-qc-bounds-cadence-"));
+  try {
+    const video = join(dir, "cut.mp4");
+    const captioned = frame(0, 64 * 36);
+    for (let y = 29; y < 32; y++) captioned.fill(150, y * 64 + 20, y * 64 + 44);
+    for (let i = 0; i < 120; i++) {
+      const picture = i >= 30 && i < 90 ? captioned : frame(90, 64 * 36);
+      writeFileSync(join(dir, `in${String(i).padStart(3, "0")}.png`), grayPng(64, 36, picture));
+    }
+    await ffmpeg(["-framerate", "30", "-start_number", "0", "-i", join(dir, "in%03d.png"), "-c:v", "libx264", "-pix_fmt", "yuv420p", video]);
+    const timeline = { width: 64, height: 36, fps: 30, duration: 4, scenes: [] };
+    const boxes = [[20 / 64, 29 / 36, 44 / 64, 32 / 36]];
+    const bounds = { step: 15, samples: [[], [], boxes, boxes, boxes, boxes, [], []] };
+    const report = await runQc({ video, timeline, outDir: join(dir, "qc"), bounds, thresholds: { sampleFps: 1 } });
+    assert.deepEqual(report.checks.find((c) => c.id === "black-frames"), { id: "black-frames", status: "fail", detail: "1.0–3.0s" });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("QC fails when scheduled speech is present in its stem but missing in the mix", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ov-mix-qc-"));
   try {
