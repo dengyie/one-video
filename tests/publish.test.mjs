@@ -5,6 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, linkSync, copyFileSync, readFile
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mainVersion, publishedVersion } from "../cli/lib/publish/renders.mjs";
+import { readQcBounds, writeQcBounds } from "../cli/lib/core/qc-bounds.mjs";
 import { srtTime, toSrt, toVtt } from "../cli/lib/captions/index.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { example } from "./helpers.mjs";
@@ -93,4 +94,18 @@ test("publishing a cut rendered before versioning adopts it as a version the mai
   assert.equal(log.length, 1);
   assert.equal(log[0].alias, "out/demo.mp4");
   assert.ok(log[0].legacy);
+});
+
+test("publishing an unlogged cut preserves the main cut's QC bounds on both paths", () => {
+  const root = mkdtempSync(join(tmpdir(), "ov-legacy-bounds-"));
+  const out = join(root, "out"), main = join(out, "demo.mp4");
+  mkdirSync(out);
+  const project = { root, paths: { out }, config: { name: "demo" } };
+  const bounds = { step: 15, samples: [[[0.25, 0.8, 0.75, 0.9]]] };
+  writeFileSync(main, "unlogged cut");
+  writeQcBounds(main, bounds);
+  const published = publishedVersion(project, main);
+  assert.equal(published, "out/versions/v1.mp4");
+  assert.deepEqual(readQcBounds(join(root, published)), bounds);
+  assert.deepEqual(readQcBounds(main), bounds);
 });
