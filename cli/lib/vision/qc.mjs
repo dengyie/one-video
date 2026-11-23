@@ -109,13 +109,17 @@ function parseSilence(stderr) {
   return out;
 }
 
+const speechLines = (scene, offset, span) => (scene.lines ?? [])
+  .map(({ start, end }) => [Math.max(start, offset - scene.start), Math.min(end, scene.duration, offset + span - scene.start)])
+  .filter(([start, end]) => end - start >= 0.05);
+
+const speechGap = (start, end, silence) => Math.min(silence.maxGap, 0.8 * (end - start));
+
 export function voiceGaps(timeline, { readVoice, offset = 0, span = timeline.duration - offset, silence = QC_DEFAULTS.silence } = {}) {
   const gaps = [];
   const level = 32768 * 10 ** (silence.noiseDb / 20);
   for (const scene of timeline.scenes) {
-    const lines = (scene.lines ?? [])
-      .map(({ start, end }) => [Math.max(start, offset - scene.start), Math.min(end, scene.duration, offset + span - scene.start)])
-      .filter(([start, end]) => end - start >= 0.05);
+    const lines = speechLines(scene, offset, span);
     if (!lines.length) continue;
     let voice;
     try {
@@ -126,7 +130,7 @@ export function voiceGaps(timeline, { readVoice, offset = 0, span = timeline.dur
       if (!voice) { gaps.push([start + at, end + at]); continue; }
       const { samples, channels, sampleRate } = voice;
       const first = Math.round(start * sampleRate), last = Math.round(end * sampleRate);
-      const min = Math.ceil(Math.min(silence.maxGap, 0.8 * (end - start)) * sampleRate);
+      const min = Math.ceil(speechGap(start, end, silence) * sampleRate);
       let quiet = first;
       const record = (i) => { if (i - quiet >= min) gaps.push([quiet / sampleRate + at, i / sampleRate + at]); };
       for (let i = first; i < last; i++) {
@@ -186,23 +190,31 @@ export async function runQc({ video, timeline, outDir, readVoice, thresholds = {
   add("duration", Math.abs(duration - span) <= t.durationTolerance ? "pass" : "fail", `${duration.toFixed(2)}s (${offset ? `part from ${offset}s: ${+span.toFixed(2)}` : `timeline ${timeline.duration}`}s)`);
 
   const fmt = (rs) => rs.map(([s, e]) => `${s.toFixed(1)}–${e.toFixed(1)}s`).join(", ");
+  const scheduled = timeline.scenes.flatMap((s) => speechLines(s, offset, span)
+    .map(([start, end]) => [start + s.start - offset, end + s.start - offset]));
   let loud = null;
   if (a) {
-    const { stderr } = await ffmpeg(["-i", video, "-vn", "-af", `silencedetect=noise=${t.silence.noiseDb}dB:d=${t.silence.maxGap},loudnorm=I=${t.loudness.target}:TP=${t.loudness.maxTruePeak}:print_format=json`, "-f", "null", "-"]);
+    const minGap = scheduled.reduce((min, [s, e]) => Math.min(min, speechGap(s, e, t.silence)), t.silence.maxGap);
+    const { stderr } = await ffmpeg(["-i", video, "-vn", "-af", `silencedetect=noise=${t.silence.noiseDb}dB:d=${minGap},loudnorm=I=${t.loudness.target}:TP=${t.loudness.maxTruePeak}:print_format=json`, "-f", "null", "-"]);
     loud = parseLoudnorm(stderr);
-    const silences = parseSilence(stderr).filter(([s, e]) => s > 0.5 && e < duration - 1);
+    const silences = parseSilence(stderr);
+    const deadAir = silences.filter(([s, e]) => e - s >= t.silence.maxGap && s > 0.5 && e < duration - 1);
+    const cutSpeech = scheduled.flatMap(([start, end]) => silences
+      .map(([s, e]) => [Math.max(s, start), Math.min(e, end)])
+      .filter(([s, e]) => e - s >= speechGap(start, end, t.silence)));
     if (loud) {
       const off = Math.abs(loud.integrated - t.loudness.target);
       add("loudness", off <= t.loudness.tolerance ? "pass" : off <= t.loudness.tolerance * 2 ? "warn" : "fail", `${loud.integrated.toFixed(1)} LUFS (target ${t.loudness.target}±${t.loudness.tolerance})`);
       add("true-peak", loud.truePeak <= t.loudness.maxTruePeak ? "pass" : "warn", `${loud.truePeak.toFixed(1)} dBTP (max ${t.loudness.maxTruePeak})`);
     } else add("loudness", "warn", "loudnorm produced no measurement");
-    add("dead-air", silences.length ? "warn" : "pass", silences.length ? fmt(silences) : `no gap > ${t.silence.maxGap}s`);
+    add("dead-air", deadAir.length ? "warn" : "pass", deadAir.length ? fmt(deadAir) : `no gap > ${t.silence.maxGap}s`);
+    add("silence-in-mix-narration", cutSpeech.length ? "fail" : "pass", cutSpeech.length
+      ? fmt(cutSpeech) : scheduled.length ? "no silent gaps during scheduled speech" : "no narration scheduled");
   }
   const inSpeech = voiceGaps(timeline, { readVoice, offset, span, silence: t.silence });
-  const hasVoice = timeline.scenes.some((s) => (s.lines ?? []).some((l) => s.start + l.end > offset && s.start + l.start < offset + span));
   add("silence-in-narration", inSpeech.length ? "fail" : "pass", inSpeech.length
     ? `silent or missing voice stem: ${fmt(inSpeech)}`
-    : hasVoice ? "no gaps in the voice stem" : "no narration scheduled");
+    : scheduled.length ? "no gaps in the voice stem" : "no narration scheduled");
 
   const step = Math.max(1, Math.round(timeline.fps / t.sampleFps));
   const frames = await sampleGrayFrames(video, step);

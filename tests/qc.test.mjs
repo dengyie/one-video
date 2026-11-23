@@ -121,3 +121,23 @@ test("bundled FFmpeg QC samples the same frames as the PNG pipeline", async () =
     assert.deepEqual(readdirSync(outDir), ["frames"]);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("QC fails when scheduled speech is present in its stem but missing in the mix", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ov-mix-qc-"));
+  try {
+    const video = join(dir, "mix.mp4"), audio = "voice.wav", sampleRate = 48000;
+    const samples = Int16Array.from({ length: 4 * sampleRate }, (_, i) => 8500 * Math.sin(2 * Math.PI * 1000 * i / sampleRate));
+    writeWav(join(dir, audio), { channels: 1, sampleRate, samples });
+    const mixed = samples.slice();
+    mixed.fill(0, 0.5 * sampleRate, 1.5 * sampleRate);
+    writeWav(join(dir, "mix.wav"), { channels: 1, sampleRate, samples: mixed });
+    writeFileSync(join(dir, "frame.png"), grayPng(64, 36, frame(80, 64 * 36)));
+    await ffmpeg(["-loop", "1", "-framerate", "8", "-i", join(dir, "frame.png"), "-i", join(dir, "mix.wav"), "-t", "4", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", video]);
+    const timeline = { width: 64, height: 36, fps: 8, duration: 5, scenes: [{ id: "one", type: "test", start: 1, duration: 4, audio, lines: [{ start: 0.6, end: 1.4 }, { start: 2, end: 3 }] }] };
+    const report = await runQc({ video, timeline, outDir: join(dir, "qc"), offset: 1, readVoice: (file) => readWav(join(dir, file)) });
+    assert.equal(report.checks.find((c) => c.id === "silence-in-narration").status, "pass");
+    assert.deepEqual(report.checks.find((c) => c.id === "silence-in-mix-narration"), { id: "silence-in-mix-narration", status: "fail", detail: "0.6–1.4s" });
+    assert.equal(report.checks.find((c) => c.id === "dead-air").status, "pass");
+    assert.equal(report.verdict, "fail");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
