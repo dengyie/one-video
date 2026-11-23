@@ -95,10 +95,14 @@ onevideo validate
 # 单句试听 TTS 语调与语速
 onevideo tts --sample
 
-# 全流程编排与渲染 (TTS -> 配乐 -> 素材 -> 时间轴 -> Remotion 渲染 -> 自动 QC)
+# 生成配音、配乐、素材和时间轴，并输出预览联系表
 onevideo build
 
-# 审阅生成的抽帧截图后批准
+# 检查 out/qc/preview-*.jpg，批准预览后再次构建，渲染整片并执行自动质检
+onevideo approve preview
+onevideo build
+
+# 检查 out/qc/frames/ 中的抽帧截图，然后批准最终审阅
 onevideo approve review
 
 # 生成发布物料包
