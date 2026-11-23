@@ -1,7 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { deflateSync } from "node:zlib";
-import { decodeGrayPng, runs, analyzeFrames, QC_DEFAULTS } from "../cli/lib/vision/qc.mjs";
+import { ffmpeg } from "../cli/lib/core/ffmpeg.mjs";
+import { decodeGrayPng, runs, analyzeFrames, QC_DEFAULTS, runQc, sampleGrayFrames } from "../cli/lib/vision/qc.mjs";
 
 function crcTable() {
   return Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
@@ -66,4 +70,28 @@ test("analyzeFrames compares against the frame one window back, so slow drift is
   const adjacent = analyzeFrames(drift, fps, { ...QC_DEFAULTS, frozen: { ...QC_DEFAULTS.frozen, window: 0.5 } });
   assert.equal(lagged.staticRatio, 0);
   assert.ok(adjacent.staticRatio > 0.9);
+});
+
+test("bundled FFmpeg QC samples the same frames as the PNG pipeline", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ov-qc-"));
+  try {
+    const video = join(dir, "cut.mp4"), png = join(dir, "png"), outDir = join(dir, "qc");
+    mkdirSync(png);
+    for (let i = 0; i < 32; i++) {
+      const luma = i >= 8 && i < 16 ? 0 : 60 + i * 4;
+      writeFileSync(join(dir, `in${String(i).padStart(2, "0")}.png`), grayPng(64, 36, frame(luma, 64 * 36)));
+    }
+    await ffmpeg(["-framerate", "8", "-start_number", "0", "-i", join(dir, "in%02d.png"), "-c:v", "libx264", "-pix_fmt", "yuv420p", video]);
+    await ffmpeg(["-i", video, "-an", "-vf", "scale=64:36,format=gray", "-c:v", "png", "-f", "image2", join(png, "%05d.png")]);
+    const legacy = readdirSync(png).sort().filter((_, i) => i % 4 === 0)
+      .map((file) => decodeGrayPng(readFileSync(join(png, file))).pixels);
+    const samples = await sampleGrayFrames(video, 4);
+    assert.deepEqual(samples.map((x) => new Uint8Array(x)), legacy);
+    const timeline = { width: 64, height: 36, fps: 8, duration: 4, scenes: [{ id: "one", type: "test", start: 0, duration: 4 }] };
+    const report = await runQc({ video, timeline, outDir });
+    assert.equal(report.verdict, "fail");
+    assert.deepEqual(report.checks.find((c) => c.id === "black-frames"), { id: "black-frames", status: "fail", detail: "1.0–2.0s" });
+    assert.equal(report.frames.length, 1);
+    assert.deepEqual(readdirSync(outDir), ["frames"]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
