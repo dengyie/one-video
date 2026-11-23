@@ -47,6 +47,17 @@ export function probeIssues(probes, timeline, { variant = null } = {}) {
   for (const p of probes) for (const rec of p.scenes ?? []) {
     const sc = byId.get(rec.scene);
     if (!sc) continue;
+    for (const text of rec.captionClashes ?? []) {
+      const key = `${sc.id}#caption#${text}`;
+      if (said.has(key)) continue;
+      said.add(key);
+      const t = sc.start + rec.t;
+      out.push({
+        level: "warn", gate: "probe",
+        msg: `scene "${sc.id}" caption "${text}" covers a protected subject at ${t.toFixed(1)}s`,
+        at: { scene: sc.id, from: t, to: t, field: "captions" },
+      });
+    }
     // Scene text cut at the frame edge (a long title in a narrow frame, a label a push-in carries out).
     // Not while the camera travels (a shot move, a canvas or map flight: `moving`): text it carries
     // across the edge is on its way in or out; a still where the camera holds reports it.

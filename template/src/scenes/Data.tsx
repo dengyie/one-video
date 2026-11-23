@@ -6,6 +6,7 @@ import { clamp01, easeInOut, easeOut, lerp } from "../engine/motion";
 import type { Format } from "../engine/types";
 import { Card } from "../components/Card";
 import { Stage, Title } from "./Stage";
+import { statCardColumns } from "../../../shared/safe-layout.mjs";
 
 // Count-ups finish fast: the number should be readable while the voice is still saying it.
 const COUNT = 0.8;
@@ -36,14 +37,15 @@ export const StatCardsScene: React.FC<{ columns?: number; cards: StatCard[] }> =
   const t = useTime();
   const { fps } = useTimeline();
   const scene = useScene();
-  const cols = columns ?? (portrait ? (cards.length > 3 ? 2 : 1) : Math.min(cards.length, cards.length === 4 ? 2 : 3));
+  const cols = statCardColumns(cards.length, columns, portrait);
   const big = cards.length <= 2 ? 1.4 : cards.length <= 4 ? 1.15 : 0.8;
+  const gap = (portrait ? 24 : 36) * u, inset = (portrait ? 24 : 40) * u;
   // One value size for every card, small enough that the longest stays inside its card.
-  const room = (width - 2 * pad - (cols - 1) * 36 * u) / cols - 80 * u;
+  const room = (width - 2 * pad - (cols - 1) * gap) / cols - 2 * inset;
   const valueSize = Math.min(...cards.map((c) => fitFont(fmtCount(c.value, c.value, c.format), room, 88 * u * big)));
   return (
     <Stage center>
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 36 * u }}>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap }}>
         {cards.map((c, i) => {
           const s = at(i, cards.length, c.cue);
           const o = easeOut((t - s) / 0.45);
@@ -52,8 +54,8 @@ export const StatCardsScene: React.FC<{ columns?: number; cards: StatCard[] }> =
           // A note with its own cue comes in when the narration says it.
           const no = c.noteCue ? easeOut((t - Math.max(s, cueOr(scene, c.noteCue, s))) / 0.4) : 1;
           return (
-            <Card key={i} o={o} accent={color} anchor={[`card${i + 1}`, c.cue].filter(Boolean).join(" ")} style={{ textAlign: "left", padding: `${34 * u}px ${40 * u}px` }}>
-              <div style={{ fontSize: 28 * u * Math.max(0.85, big * 0.9), color: theme.colors.muted }}>{c.label}</div>
+            <Card key={i} o={o} accent={color} anchor={[`card${i + 1}`, c.cue].filter(Boolean).join(" ")} style={{ textAlign: "left", padding: `${34 * u}px ${inset}px`, overflowWrap: "anywhere" }}>
+              <div style={{ fontSize: 28 * u * Math.max(0.85, big * 0.9), color: theme.colors.muted, textWrap: "balance" }}>{c.label}</div>
               <div style={{ fontFamily: theme.fonts.number, fontSize: valueSize, fontWeight: 800, color, marginTop: 10 * u, lineHeight: 1.05, whiteSpace: "nowrap" }}>
                 {c.from === undefined && t - s < COUNT ? <Roll text={fmtCount(c.value, c.value, c.format)} p={easeOut((t - s) / COUNT)} was={easeOut((t - 1 / fps - s) / COUNT)} /> : fmtCount(v, c.value, c.format)}
               </div>

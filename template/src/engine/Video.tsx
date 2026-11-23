@@ -250,8 +250,8 @@ export const Video: React.FC<Timeline> = (timeline) => {
           </Sequence>
         ))}
         <FilmLook />
+        {timeline.captions.enabled && timeline.captions.style !== "none" && <Captions />}
         <div data-probe="skip" style={{ display: "contents" }}>
-          {timeline.captions.enabled && timeline.captions.style !== "none" && <Captions />}
           {timeline.watermark && <Watermark mark={timeline.watermark} />}
         </div>
       </AbsoluteFill>
