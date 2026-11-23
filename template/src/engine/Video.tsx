@@ -14,6 +14,7 @@ import { FilmLook, Overlays } from "../components/Overlay";
 import { Captions } from "./Captions";
 import { SCENES } from "../scenes";
 import { canvasBackdrop } from "../scenes/Canvas";
+import { dipOpacity, whipBlur, zoomScale } from "../../../shared/transition.mjs";
 
 // Music gain: full between lines, ducked under speech, with short ramps and fade in/out.
 export function musicGain(t: number, total: number, m: NonNullable<Timeline["music"]>, narration: [number, number][]): number {
@@ -42,7 +43,7 @@ function clockPolygon(p: number): string {
   return `polygon(${pts.join(", ")})`;
 }
 
-type Look = { style: React.CSSProperties; whip?: number; dip?: number };
+type Look = { style: React.CSSProperties; whip?: number };
 
 // One side of a boundary. `p` runs 0→1 across the overlap for both sides; the incoming scene is
 // drawn on top, so an outgoing side only has to move or fade when the incoming one doesn't cover it.
@@ -61,10 +62,10 @@ export function presentation(type: Transition, side: "in" | "out", p: number, di
     case "whip": {
       const k = inS ? 1 - p : -p;
       const look: Look = { style: { transform: `translate(${k * dx * w}px, ${k * dy * h}px)` } };
-      if (type === "whip") look.whip = Math.sin(Math.PI * p);
+      if (type === "whip") look.whip = p;
       return look;
     }
-    case "zoom": return { style: inS ? { opacity: p, transform: `scale(${0.94 + 0.06 * p})` } : { opacity: fadeOut, transform: `scale(${1 + 0.05 * p})` } };
+    case "zoom": return { style: { opacity: inS ? p : 1, transform: `scale(${zoomScale(side, p)})` } };
     case "punch": return { style: inS ? { opacity: Math.min(1, p * 1.6), transform: `scale(${0.85 + 0.15 * p})` } : { opacity: 1 - p, transform: `scale(${1 + 0.3 * p})` } };
     case "iris": return { style: inS ? { clipPath: `circle(${p * 72}% at 50% 50%)` } : { opacity: fadeOut } };
     case "clock": return { style: inS ? { clipPath: p >= 1 ? undefined : clockPolygon(p) } : { opacity: fadeOut } };
@@ -82,7 +83,7 @@ export function presentation(type: Transition, side: "in" | "out", p: number, di
     case "through": return { style: inS
       ? { opacity: clamp01((p - 0.3) / 0.4), transform: `scale(${1.35 - 0.35 * easeOut(p)})` }
       : { opacity: covered ? 1 : 1 - clamp01((p - 0.6) / 0.4), transform: `scale(${1 + 3 * p ** 1.5})`, filter: `blur(${(p * p * 0.012 * w).toFixed(1)}px)` } };
-    case "dip": return inS ? { style: { opacity: 1 }, dip: p } : { style: {} };
+    case "dip": return { style: {} };
     default: return { style: { opacity: inS ? p : fadeOut } };
   }
 }
@@ -111,7 +112,7 @@ export function cameraTransform(cam: Camera, k: number, t: number, w: number, se
 
 // Shape and motion transitions only read when the moving layer is solid; a scene without a photo
 // carries its own copy of the style background while one of these runs.
-const SOLID: Transition[] = ["push", "whip", "iris", "clock", "wipe", "through"];
+const SOLID: Transition[] = ["push", "whip", "iris", "clock", "wipe", "through", "zoom"];
 
 // Screen point a through transition dives at: the outgoing subject filmed through that scene's
 // shot track at time t (the backdrop layer through its weaker copy), as a CSS transform-origin.
@@ -135,14 +136,18 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
   const tout = scene.transitionOut;
   let look: Look = { style: {} };
   let active: Transition | null = null;
+  let dip: number | undefined;
   let out = false;
   if (tin && tin.frames > 0 && frame < tin.frames) {
     active = tin.type;
-    look = presentation(tin.type, "in", easeInOut(frame / tin.frames), tin.direction, width, height, false);
-  } else if (tout && tout.frames > 0 && frame > length - tout.frames) {
+    if (tin.type === "dip") dip = dipOpacity("in", frame, tin.frames, tin.lead);
+    else look = presentation(tin.type, "in", easeInOut(frame / tin.frames), tin.direction, width, height, false);
+  } else if (tout && tout.frames > 0 && frame >= length - tout.frames) {
     active = tout.type;
     out = true;
-    look = presentation(tout.type, "out", easeInOut((frame - (length - tout.frames)) / tout.frames), tout.direction, width, height, tout.nextOpaque);
+    const local = frame - (length - tout.frames);
+    if (tout.type === "dip") dip = dipOpacity("out", local, tout.frames, tout.frames - tout.tail);
+    else look = presentation(tout.type, "out", easeInOut(local / tout.frames), tout.direction, width, height, tout.nextOpaque);
   }
   const solid = !scene.opaque && active !== null && SOLID.includes(active);
   const t = (frame - (tin?.lead ?? 0)) / fps;
@@ -165,16 +170,15 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
   if (look.whip) style.filter = `url(#${filterId})`;
   // Text over a photo gets a soft shadow (inherited by every label in the scene).
   const shadow: React.CSSProperties = scene.backdrop ? { textShadow: "0 2px 14px rgba(0,0,0,0.6)" } : {};
-  const dip = look.dip;
-  const [dx, dy] = DIR[tin?.direction ?? "left"] ?? DIR.left;
+  const [dx, dy] = DIR[(out ? tout : tin)?.direction ?? "left"] ?? DIR.left;
   return (
     <>
-      {dip !== undefined && <AbsoluteFill style={{ backgroundColor: "#000", opacity: dip < 0.5 ? dip * 2 : 2 - dip * 2 }} />}
-      <AbsoluteFill style={{ ...style, ...(dip !== undefined ? { opacity: dip < 0.5 ? 0 : dip * 2 - 1 } : {}), ...shadow }}>
+      {dip !== undefined && out && <AbsoluteFill style={{ backgroundColor: "#000" }} />}
+      <AbsoluteFill style={{ ...style, ...(dip !== undefined ? { opacity: dip } : {}), ...shadow }}>
         {look.whip ? (
           <svg width={0} height={0} style={{ position: "absolute" }}>
             <filter id={filterId} x="-10%" y="-10%" width="120%" height="120%">
-              <feGaussianBlur stdDeviation={`${look.whip * 0.03 * width * Math.abs(dx)} ${look.whip * 0.03 * height * Math.abs(dy)}`} />
+              <feGaussianBlur stdDeviation={`${whipBlur(look.whip, width) * Math.abs(dx)} ${whipBlur(look.whip, height) * Math.abs(dy)}`} />
             </filter>
           </svg>
         ) : null}
