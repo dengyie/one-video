@@ -18,6 +18,23 @@ export const QC_DEFAULTS = {
   sampleFps: 2,
 };
 
+const SAMPLE_WIDTH = 64, SAMPLE_HEIGHT = 36;
+const SAMPLE_SIZE = SAMPLE_WIDTH * SAMPLE_HEIGHT;
+
+function isBlackPicture(frame, luma) {
+  if (frame.length !== SAMPLE_SIZE) return frame.every((v) => v < luma);
+  // Sample below top captions and corner marks and above bottom captions.
+  let sum = 0, detail = 0, highlights = 0, pixels = 0;
+  for (let y = 8; y < 26; y++) for (let x = 0; x < SAMPLE_WIDTH; x++) {
+    const v = frame[y * SAMPLE_WIDTH + x];
+    sum += v;
+    detail += Number(v >= 1.6 * luma);
+    highlights += Number(v >= 3 * luma);
+    pixels++;
+  }
+  return sum < luma * pixels && detail < 0.05 * pixels && highlights < 0.01 * pixels;
+}
+
 // Minimal PNG decoder for 8-bit grayscale, non-interlaced images (what ffmpeg emits with format=gray).
 export function decodeGrayPng(buf) {
   let off = 8, w = 0, h = 0;
@@ -80,9 +97,7 @@ export function analyzeFrames(frames, fps, t = QC_DEFAULTS) {
     return d / f.length;
   });
   const total = frames.length * step;
-  // A dark frame can still show a small subject. Require both low mean and no visible highlights.
-  const black = runs(frames.map((f, i) => means[i] < t.black.luma
-    && f.reduce((n, luma) => n + Number(luma >= 3 * t.black.luma), 0) < Math.max(2, Math.ceil(f.length * 0.001))), step)
+  const black = runs(frames.map((f) => isBlackPicture(f, t.black.luma)), step)
     .filter(([a, b]) => b - a > t.black.maxRun && a > 0.5 && b < total - 0.5);
   const staticFlags = diffs.map((d) => d < t.frozen.diff);
   const frozen = runs(staticFlags, step).filter(([a, b]) => b - a > t.frozen.maxRun);
@@ -148,11 +163,11 @@ export function voiceGaps(timeline, { readVoice, offset = 0, span = timeline.dur
 }
 
 export async function sampleGrayFrames(video, step) {
-  const bytesPerFrame = 64 * 36;
+  const bytesPerFrame = SAMPLE_SIZE;
   const frames = [];
   let pending = Buffer.alloc(0), index = 0;
   // Bundled FFmpeg has no fps/select filter; stream grayscale frames and subsample in Node.
-  await ffmpeg(["-loglevel", "error", "-i", video, "-an", "-vf", "scale=64:36,format=gray", "-c:v", "rawvideo", "-threads", "1", "-f", "image2pipe", "pipe:1"], {
+  await ffmpeg(["-loglevel", "error", "-i", video, "-an", "-vf", `scale=${SAMPLE_WIDTH}:${SAMPLE_HEIGHT},format=gray`, "-c:v", "rawvideo", "-threads", "1", "-f", "image2pipe", "pipe:1"], {
     onStdout(chunk) {
       const bytes = pending.length ? Buffer.concat([pending, chunk]) : chunk;
       let start = 0;

@@ -80,11 +80,21 @@ test("analyzeFrames finds interior black runs and long frozen segments", () => {
 });
 
 test("black-frame QC separates dark content from near-black noise", () => {
-  const dark = Uint8Array.from({ length: 64 * 36 }, (_, i) => i < 12 ? 52 : 4);
+  const dark = Uint8Array.from({ length: 64 * 36 }, (_, i) => i >= 16 * 64 + 24 && i < 16 * 64 + 36 ? 52 : 4);
   const blank = Uint8Array.from({ length: 64 * 36 }, (_, i) => i === 0 ? 48 : i % 5);
   const report = analyzeFrames([frame(80), frame(80), dark, dark, blank, blank, frame(80), frame(80)], 2);
   assert.ok(report.means[2] < QC_DEFAULTS.black.luma);
   assert.deepEqual(report.black, [[2, 3]]);
+});
+
+test("caption and watermark pixels do not make a black picture visible", () => {
+  const marks = (i) => {
+    const x = i % 64, y = Math.floor(i / 64);
+    return ((y >= 29 && y < 32 && x >= 20 && x < 44) || (y < 3 && x >= 53)) && i % 2 === 0;
+  };
+  const dark = Uint8Array.from({ length: 64 * 36 }, (_, i) => marks(i) ? 160 : i % 5);
+  const report = analyzeFrames([frame(80), frame(80), dark, dark, frame(80), frame(80)], 2);
+  assert.deepEqual(report.black, [[1, 2]]);
 });
 
 test("analyzeFrames compares against the frame one window back, so slow drift is motion", () => {
