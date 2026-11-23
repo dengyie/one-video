@@ -272,15 +272,16 @@ export async function publish(args = {}) {
   kit.publish.video = publishedVersion(project, main);
   kit.publish.rendered = (readRenders(project).find((r) => r.file === kit.publish.video)?.at) ?? statSync(main).mtime.toISOString();
   if (!kit.publish.video) warn(`${relative(project.root, main)} is not a logged render version (a version since rendered over it, or pruned); the player site cannot find it on the drive (render again)`);
+  const cut = kit.publish.video ? join(project.root, kit.publish.video) : main;
   try {
-    await ffmpeg(["-v", "error", "-y", "-ss", posterTime(kit.publish).toFixed(2), "-i", main, "-frames:v", "1", "-vf", "scale=1280:-2", "-q:v", "3", join(dir, "poster.jpg")]);
+    await ffmpeg(["-v", "error", "-y", "-ss", posterTime(kit.publish).toFixed(2), "-i", cut, "-frames:v", "1", "-vf", "scale=1280:-2", "-q:v", "3", join(dir, "poster.jpg")]);
     kit.publish.poster = "out/publish/poster.jpg";
   } catch (e) {
     warn(`no poster frame (${String(e.message).split("\n")[0]}); the player site skips this video until publish makes one`);
   }
   // Lighter tiers of the cut for the player site (out/publish/web-*.mp4), archived with the kit.
   if (!args.noWeb) {
-    try { kit.publish.renditions = await webRenditions({ root: project.root, main, dir, probe: ffprobe, encode: ffmpeg, log }); }
+    try { kit.publish.renditions = await webRenditions({ root: project.root, main: cut, dir, probe: ffprobe, encode: ffmpeg, log }); }
     catch (e) { warn(`no web renditions (${String(e.message).split("\n")[0]}); the player site plays the full cut only`); }
   }
   writeJson(project.paths.publish, kit.publish);

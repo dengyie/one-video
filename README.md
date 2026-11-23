@@ -93,10 +93,14 @@ onevideo validate
 # Test TTS sample pronunciation and pacing
 onevideo tts --sample
 
-# Build complete timeline and render
+# Build the timeline and generate preview sheets
 onevideo build
 
-# Review inspection frames and approve
+# Inspect out/qc/preview-*.jpg, approve the preview, then render and run QC
+onevideo approve preview
+onevideo build
+
+# Inspect out/qc/frames/ and approve the final review
 onevideo approve review
 
 # Export final publishing bundle

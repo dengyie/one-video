@@ -4,7 +4,8 @@
 // carry one every ~8 s) and its index at the front (+faststart: playback starts after the first
 // bytes). They go into out/publish/, which `onevideo archive` uploads with the rest of the kit;
 // plan/publish.json lists them and web/catalog.mjs puts them in videos.json.
-import { existsSync, renameSync, rmSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { createReadStream, existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 
 // Highest first. `vmax`: peak video bitrate (CRF below it, so quiet scenes take far less); the
@@ -39,7 +40,7 @@ export function webArgs(src, dst, r, fps = 30) {
   ];
 }
 
-// Encode the tiers that are missing or older than the cut; returns publish.json's `renditions`
+// Encode the tiers that do not match the cut and settings; returns publish.json's `renditions`
 // (highest first). `probe(file)` → ffprobe JSON, `encode(args)` runs ffmpeg (injected for tests).
 export async function webRenditions({ root, main, dir, probe, encode, log = () => {} }) {
   const info = await probe(main);
@@ -47,15 +48,25 @@ export async function webRenditions({ root, main, dir, probe, encode, log = () =
   if (!v?.height) throw new Error(`no video stream in ${relative(root, main)}`);
   const [n, d = 1] = String(v.avg_frame_rate || v.r_frame_rate || "30/1").split("/").map(Number);
   const fps = n && d ? n / d : 30;
+  const ladder = ladderFor(v.height);
+  if (!ladder.length) return [];
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(main)) hash.update(chunk);
+  const cut = hash.digest("hex");
   const src = statSync(main).mtimeMs;
   const out = [];
-  for (const r of ladderFor(v.height)) {
+  for (const r of ladder) {
     const file = join(dir, webFile(r.q));
-    if (!existsSync(file) || statSync(file).mtimeMs < src) {
-      const part = `${file}.part.mp4`;
+    const stamp = join(dir, `.${webFile(r.q)}.source`);
+    const part = `${file}.part.mp4`;
+    const args = webArgs(main, part, r, fps);
+    const key = JSON.stringify([cut, ...args.slice(5, -1)]);
+    if (!existsSync(file) || statSync(file).mtimeMs < src || !existsSync(stamp) || readFileSync(stamp, "utf8") !== key) {
       try {
-        await encode(webArgs(main, part, r, fps));
+        await encode(args);
+        rmSync(stamp, { force: true });
         renameSync(part, file);
+        writeFileSync(stamp, key);
       } finally { rmSync(part, { force: true }); }
       log(`web ${r.q} → ${relative(root, file)} (${(statSync(file).size / 2 ** 20).toFixed(1)} MiB)`);
     }

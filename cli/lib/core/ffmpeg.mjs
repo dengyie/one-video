@@ -12,11 +12,11 @@ export function requireRemotion() {
 }
 
 // Spawn and collect output; rejects with stderr tail on non-zero exit.
-export function run(cmd, args, { cwd = TEMPLATE_DIR, stdio = "pipe" } = {}) {
+export function run(cmd, args, { cwd = TEMPLATE_DIR, stdio = "pipe", onStdout } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { cwd, stdio: stdio === "inherit" ? "inherit" : ["ignore", "pipe", "pipe"] });
     const out = [], err = [];
-    child.stdout?.on("data", (d) => out.push(d));
+    child.stdout?.on("data", onStdout ?? ((d) => out.push(d)));
     child.stderr?.on("data", (d) => err.push(d));
     child.on("error", reject);
     child.on("close", (code) => {

@@ -1,6 +1,6 @@
 // Post-render quality control: container/stream checks, loudness, silence gaps,
 // black frames, frozen/slideshow segments, and per-scene frame samples for visual review.
-import { mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { inflateSync } from "node:zlib";
 import { ffmpeg, ffprobe } from "../core/ffmpeg.mjs";
@@ -107,6 +107,25 @@ function parseSilence(stderr) {
   return out;
 }
 
+export async function sampleGrayFrames(video, step) {
+  const bytesPerFrame = 64 * 36;
+  const frames = [];
+  let pending = Buffer.alloc(0), index = 0;
+  // Bundled FFmpeg has no fps/select filter; stream grayscale frames and subsample in Node.
+  await ffmpeg(["-loglevel", "error", "-i", video, "-an", "-vf", "scale=64:36,format=gray", "-c:v", "rawvideo", "-threads", "1", "-f", "image2pipe", "pipe:1"], {
+    onStdout(chunk) {
+      const bytes = pending.length ? Buffer.concat([pending, chunk]) : chunk;
+      let start = 0;
+      for (; start + bytesPerFrame <= bytes.length; start += bytesPerFrame) {
+        if (index++ % step === 0) frames.push(Buffer.from(bytes.subarray(start, start + bytesPerFrame)));
+      }
+      pending = bytes.subarray(start);
+    },
+  });
+  if (pending.length) throw new Error("FFmpeg returned an incomplete grayscale frame");
+  return frames;
+}
+
 // A part render starts `offset` seconds into the timeline and runs `span` seconds: the duration
 // check, the narration intervals and the scene samples are taken on the file's own clock.
 export async function runQc({ video, timeline, outDir, thresholds = {}, offset = 0, span = timeline.duration - offset }) {
@@ -147,16 +166,8 @@ export async function runQc({ video, timeline, outDir, thresholds = {}, offset =
     add("dead-air", silences.length > inSpeech.length ? "warn" : "pass", silences.length ? fmtS(silences) : `no gap > ${t.silence.maxGap}s`);
   }
 
-  const grayDir = join(outDir, ".gray");
-  rmSync(grayDir, { recursive: true, force: true });
-  mkdirSync(grayDir, { recursive: true });
-  // Remotion's bundled ffmpeg has no fps/select filter: export every frame tiny, then subsample.
   const step = Math.max(1, Math.round(timeline.fps / t.sampleFps));
-  await ffmpeg(["-i", video, "-an", "-vf", "scale=64:36,format=gray", "-c:v", "png", "-f", "image2", join(grayDir, "%05d.png")]);
-  const frames = readdirSync(grayDir).filter((f) => f.endsWith(".png")).sort()
-    .filter((_, i) => i % step === 0)
-    .map((f) => decodeGrayPng(readFileSync(join(grayDir, f))).pixels);
-  rmSync(grayDir, { recursive: true, force: true });
+  const frames = await sampleGrayFrames(video, step);
   const fa = analyzeFrames(frames, timeline.fps / step, t);
   const fmt = (rs) => rs.map(([s, e]) => `${s.toFixed(1)}–${e.toFixed(1)}s`).join(", ");
   add("black-frames", fa.black.length ? "fail" : "pass", fa.black.length ? fmt(fa.black) : "none");
