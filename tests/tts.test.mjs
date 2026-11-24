@@ -8,6 +8,31 @@ import { alignLines, lineHash, runTts, sceneSpeech, timingHashes, timingVoice, t
 import { findPauses, readWav, toMono, writeWav } from "../cli/lib/audio/wav.mjs";
 import { captionAt, captionWindows } from "../shared/caption-timing.mjs";
 import { rateGate, timingsGate } from "../cli/lib/review/gates.mjs";
+import { pool } from "../cli/lib/core/http.mjs";
+
+test("a failed clone worker drains in-flight synthesis but never starts queued clone jobs", async () => {
+  let finishInflight;
+  const inflight = new Promise((resolve) => { finishInflight = resolve; });
+  const unavailable = new Error("clone unavailable");
+  const started = [];
+  let drained = false;
+  const take = pool(["failing", "in flight", "queued"], 2, async (scene) => {
+    started.push(scene);
+    if (scene === "failing") throw unavailable;
+    if (scene === "in flight") {
+      await inflight;
+      drained = true;
+    }
+  });
+  const rejected = assert.rejects(take, (error) => {
+    assert.equal(drained, true, "fallback must not race an in-flight clone");
+    return error === unavailable;
+  });
+  await new Promise(setImmediate);
+  finishInflight();
+  await rejected;
+  assert.deepEqual(started, ["failing", "in flight"]);
+});
 
 test("a clone outage retries, then uses the opted-in stock voice for the entire take", async (ctx) => {
   const root = mkdtempSync(join(tmpdir(), "ov-voice-fallback-"));

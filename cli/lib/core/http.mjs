@@ -132,16 +132,23 @@ export async function download(url, opts) {
   return (await request(url, { timeoutSec: 300, ...opts })).body;
 }
 
-// Run tasks with bounded concurrency, preserving result order.
+// Run tasks with bounded concurrency, preserving result order. On failure, drain only work
+// already started before rejecting so a caller can safely retry with a different strategy.
 export async function pool(items, limit, fn) {
   const out = new Array(items.length);
   let next = 0;
+  let failure;
   const worker = async () => {
-    while (next < items.length) {
+    while (!failure && next < items.length) {
       const i = next++;
-      out[i] = await fn(items[i], i);
+      try {
+        out[i] = await fn(items[i], i);
+      } catch (error) {
+        failure ??= { error };
+      }
     }
   };
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  if (failure) throw failure.error;
   return out;
 }
