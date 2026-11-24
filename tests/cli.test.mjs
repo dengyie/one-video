@@ -46,9 +46,13 @@ test("Promo Demo captures the detail page for the same card the storyboard taps"
   const capture = (id) => items.find((item) => item.id === props.screens.find((screen) => screen.id === id).asset).capture;
   const tap = props.steps.find((step) => step.tap);
   const detail = props.steps.find((step) => step.screen);
-  const tappedSelector = capture(props.screens[0].id).selectors[tap.tap];
+  const home = capture(props.screens[0].id);
+  const result = capture(detail.screen);
+  const tappedSelector = home.selectors[tap.tap];
   assert.ok(tappedSelector);
-  assert.deepEqual(capture(detail.screen).click, [tappedSelector]);
+  assert.match(tappedSelector, /:not\(\[aria-current\]\)/);
+  assert.equal(result.url, home.url);
+  assert.deepEqual(result.click, [tappedSelector]);
 });
 
 test("Keeper has the new lighthouse lamp framed when the narration reveals it", async () => {
