@@ -12,7 +12,7 @@ import { Header } from "../components/Header";
 import { Overlays } from "../components/Overlay";
 import { SCENES } from "../scenes";
 import { canvasBackdrop } from "../scenes/Canvas";
-import { dipOpacity, whipBlur, zoomScale } from "../../../shared/transition.mjs";
+import { closingFade, dipOpacity, whipBlur, zoomScale } from "../../../shared/transition.mjs";
 
 // Unit vector the incoming scene travels along: "left" means it enters from the right.
 const DIR: Record<Direction, [number, number]> = { left: [1, 0], right: [-1, 0], up: [0, 1], down: [0, -1] };
@@ -117,11 +117,13 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const { u } = useLayout();
+  const tl = useTimeline();
   const tin = scene.transitionIn;
   const tout = scene.transitionOut;
   let look: Look = { style: {} };
   let active: Transition | null = null;
   let dip: number | undefined;
+  let closing: number | undefined;
   let out = false;
   if (tin && tin.frames > 0 && frame < tin.frames) {
     active = tin.type;
@@ -132,11 +134,11 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
     out = true;
     const local = frame - (length - tout.frames);
     if (tout.type === "dip") dip = dipOpacity("out", local, tout.frames, tout.frames - tout.tail);
+    else if (tout.type === "fade" && scene === tl.scenes.at(-1)) closing = closingFade(local, tout.frames);
     else look = presentation(tout.type, "out", easeInOut(local / tout.frames), tout.direction, width, height, tout.nextOpaque);
   }
   const solid = !scene.opaque && active !== null && SOLID.includes(active);
   const t = (frame - (tin?.lead ?? 0)) / fps;
-  const tl = useTimeline();
   if (active === "through") {
     const prev = out ? scene : tl.scenes[tl.scenes.findIndex((s) => s.id === scene.id) - 1];
     const f = out ? tout?.focus : tin?.focus;
@@ -178,6 +180,7 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
         {/* The header is frame chrome: it rides the transition but not the camera, so a push-in cannot crop it. */}
         {header}
       </AbsoluteFill>
+      {closing !== undefined && <AbsoluteFill style={{ backgroundColor: "#000", opacity: closing }} />}
     </>
   );
 };

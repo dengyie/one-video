@@ -1,11 +1,52 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { captionAt, captionWindows } from "../shared/caption-timing.mjs";
+import { closingFade } from "../shared/transition.mjs";
+import { musicVolumeProps } from "../shared/music-envelope.mjs";
 import {
   area, cameraMoving, captionBand, clampView, clearOf, cueOr, easeOut, inFrame, labelWidth, LABEL_H, mapViewAt,
   meets, overlap, paceOf, placePinLabels, revealAt, seenBox, seenSpan, textEms, viewAt, visibleOnGlobe, WIDE,
 } from "../shared/index.mjs";
 
 const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} ≉ ${b}`);
+
+test("caption timing: short gaps and overlaps switch at speech onset without opacity drops", () => {
+  const a = { text: "山梁", start: 5.083, end: 9.133 };
+  const b = { text: "走进镇子", start: 9.383, end: 10.333 };
+  const c = { text: "冬天", start: 10.2, end: 10.8 };
+  const windows = captionWindows([c, a, b]);
+  assert.deepEqual(captionAt(windows, 9.333), { item: a, fadeIn: 1, opacity: 1 });
+  assert.deepEqual(captionAt(windows, b.start), { item: b, fadeIn: 1, opacity: 1 });
+  assert.deepEqual(captionAt(windows, c.start), { item: c, fadeIn: 1, opacity: 1 });
+  assert.equal(captionAt(windows, 11.1), undefined);
+});
+
+test("caption timing: isolated lines fade in and out; expired lines do not reappear", () => {
+  const a = { start: 1, end: 4 }, b = { start: 2, end: 2.5 }, c = { start: 5, end: 6 };
+  const windows = captionWindows([a, b, c]);
+  assert.equal(captionAt(windows, 0.94), undefined);
+  near(captionAt(windows, 1.01).opacity, 0.5);
+  near(captionAt(windows, 2.69).opacity, 0.5);
+  assert.equal(captionAt(windows, 3), undefined);
+  near(captionAt(windows, 5.01).opacity, 0.5);
+  near(captionAt(windows, 6.19).opacity, 0.5);
+});
+
+test("closing fade covers the visual on the last encoded frame", () => {
+  assert.deepEqual([0, 1, 2, 3, 4].map((frame) => closingFade(frame, 5)), [0, 0.0625, 0.5, 0.9375, 1]);
+  assert.equal(closingFade(0, 1), 1);
+});
+
+test("music envelope extends across loops, ducks under later speech and fades at the end of the cut", () => {
+  const { loopVolumeCurveBehavior, volume } = musicVolumeProps(30, 12, { volume: 0.3, duckTo: 0.1, fade: 1 }, [[1, 2], [7, 8]]);
+  assert.equal(loopVolumeCurveBehavior, "extend");
+  assert.equal(volume(0), 0);
+  near(volume(5 * 30), 0.3);
+  near(volume(6.8 * 30), 0.1 + 0.2 * 0.2 / 0.35);
+  near(volume(7.5 * 30), 0.1);
+  near(volume(11.5 * 30), 0.15);
+  assert.equal(volume(12 * 30), 0);
+});
 
 test("boxes: meets is strict, overlap is the shared area", () => {
   assert.equal(meets([0, 0, 1, 1], [1, 0, 2, 1]), false);

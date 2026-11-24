@@ -13,3 +13,6 @@ export const zoomScale = (side, p) => side === "in" ? 0.975 + 0.025 * p : 1 + 0.
 
 /** @param {number} p @param {number} length */
 export const whipBlur = (p, length) => Math.sin(Math.PI * p) * 0.009 * length;
+
+/** @param {number} frame @param {number} frames */
+export const closingFade = (frame, frames) => frames <= 1 ? 1 : easeInOut(frame / (frames - 1));

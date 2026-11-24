@@ -4,6 +4,7 @@ import { useLayout, useTimeline } from "./context";
 import { clamp01, easeOut, easeOutBack, lerp } from "./motion";
 import type { Theme, Timeline } from "./types";
 import { deviceCaptionSlot } from "../../../shared/safe-layout.mjs";
+import { captionAt, captionWindows } from "../../../shared/caption-timing.mjs";
 
 // Split into runs; numbers (with %/$/units glued on) and Latin words are the line's key tokens.
 const KEY = /([$¥€£]?\d[\d,.]*\s*(?:%|万亿|亿|万|倍|美元|元|[kKmMbB]\b)?|[A-Za-z][A-Za-z0-9.&-]*)/;
@@ -75,19 +76,17 @@ export const Captions: React.FC = () => {
   const { fps } = useVideoConfig();
   const { u, height, portrait } = useLayout();
   const t = frame / fps;
+  const windows = React.useMemo(() => {
+    const hidden = new Set(tl.scenes.filter((s) => !s.captions).map((s) => s.id));
+    return captionWindows(tl.captions.items.filter((c) => !hidden.has(c.scene)));
+  }, [tl.scenes, tl.captions.items]);
   if (!tl.captions.enabled || tl.captions.style === "none") return null;
-  const hidden = new Set(tl.scenes.filter((s) => !s.captions).map((s) => s.id));
-  // A line lingers 0.25 s past its end, but the line started most recently wins: a next line
-  // starting inside that linger must not be shadowed by the one before it.
-  const item = tl.captions.items
-    .filter((c) => t >= c.start - 0.05 && t < c.end + 0.25 && !hidden.has(c.scene))
-    .reduce<(typeof tl.captions.items)[number] | undefined>((m, c) => (!m || c.start >= m.start ? c : m), undefined);
-  if (!item) return null;
+  const caption = captionAt(windows, t);
+  if (!caption) return null;
+  const { item, fadeIn, opacity } = caption;
   const device = tl.scenes.some((s) => s.id === item.scene && s.type === "device");
   const position = captionPosition(item, device, height, u, portrait);
   const { colors, captionBg } = tl.theme;
-  const fadeIn = clamp01((t - (item.start - 0.05)) / 0.12);
-  const fadeOut = clamp01((item.end + 0.25 - t) / 0.12);
   const progress = clamp01((t - item.start) / Math.max(0.1, item.end - item.start));
   const renderStyle = Object.hasOwn(CAPTION_STYLES, tl.captions.style) ? CAPTION_STYLES[tl.captions.style] : CAPTION_STYLES.line;
   const { content, plate } = renderStyle({ item, progress, fadeIn, u, theme: tl.theme });
@@ -100,7 +99,7 @@ export const Captions: React.FC = () => {
         ...position.style,
         display: "flex",
         justifyContent: "center",
-        opacity: Math.min(fadeIn, fadeOut),
+        opacity,
         pointerEvents: "none",
       }}
     >

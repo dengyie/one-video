@@ -302,7 +302,9 @@ test("postman example: an inland world compiles clean, the walker keeps to the n
     const s = stateAt(postman, walk.props.elements, t);
     assert.ok(Math.abs(s.y - ridgeTop(elementAt(hills, t), hills.layers - 1, s.x).y) < 1e-9, `t=${t}`);
   }
-  for (const id of ["walk", "snow", "lights", "dawn"]) assert.ok(["fade", "dip"].includes(tl.scenes.find((s) => s.id === id).transitionIn.type), id);
+  assert.deepEqual(tl.scenes.map((s) => [s.id, s.transitionIn.type]), [
+    ["hook", "cut"], ["walk", "cut"], ["snow", "dip"], ["lights", "cut"], ["dawn", "dip"], ["credits", "dip"],
+  ]);
 });
 
 test("init --pipeline graphics carries the drawn defaults", () => {
