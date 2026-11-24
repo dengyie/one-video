@@ -50,6 +50,7 @@ export function fixPlan(project, plan, { rounds = 8, extra = [] } = {}) {
   const applied = [];
   const touched = new Set();
   let check = checkProject(project, { plan });
+  if (check.errors.some((i) => i.gate === "schema:storyboard")) return { applied, check };
   const mainAspect = check.timeline?.aspect ?? project.config.aspect ?? "16:9";
   const authored = new Map(plan.storyboard?.scenes?.map((s) => [s.id, s.overlays]));
   const aspectFix = (i) => {

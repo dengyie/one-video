@@ -94,6 +94,18 @@ test("fixPlan: a saved main-cut probe and layout gate share the aspect overlay t
   assert.deepEqual(applied.filter((a) => a.scene === sc.id && a.path[0] === "overlays").map((a) => a.gate), ["layout"]);
 });
 
+test("fixPlan: malformed storyboard scenes return schema errors without applying saved fixes", () => {
+  const ex = example();
+  const project = { root: ex.root, config: ex.config, paths: {} };
+  const extra = [{ gate: "probe", fix: { scene: "hook", path: ["overlays", 0], set: { y: 0.2 } } }];
+  for (const [scenes, error] of [[{}, /expected array/], [[null], /expected object, got null/]]) {
+    const plan = { ...ex, storyboard: { scenes } };
+    const { applied, check } = fixPlan(project, plan, { extra });
+    assert.deepEqual(applied, []);
+    assert.match(check.errors.find((i) => i.gate === "schema:storyboard")?.msg, error);
+  }
+});
+
 test("numberReveals: chart values the narration says get a cue on those words; dates, cued elements and unsaid values do not", () => {
   const lines = [{ start: 0, end: 4, text: "2024年12月约3500亿美元，" }, { start: 4, end: 8, text: "一年后约8000亿，再到1.25万亿。" }];
   const line = numberReveals({ type: "line-chart", lines, cues: { n1: 1 }, props: { series: [{ points: [["2024.12", 3.5e11], ["2025.06", 6e11], ["2025.12", 8e11], ["2026.02", 1.25e12]] }] } });
