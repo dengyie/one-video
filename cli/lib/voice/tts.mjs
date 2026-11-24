@@ -136,12 +136,8 @@ export async function voiceRef(t, { root, linesDir }, key) {
 // time order, so spans never overlap and each pause is used once); a boundary with no pause nearby
 // stays at its estimate.
 export function alignLines(weights, duration, pauses, kinds = []) {
-  return spansFromCuts(lineCuts(weights, duration, pauses, kinds), duration);
-}
-
-function lineCuts(weights, duration, pauses, kinds) {
   const n = weights.length;
-  if (n < 2) return [];
+  if (n === 1) return [[0, duration]];
   const total = weights.reduce((a, b) => a + b, 0) || n;
   const inner = pauses.filter(([a, b]) => a > 0.05 && b < duration - 0.05);
   const est = [];
@@ -181,15 +177,13 @@ function lineCuts(weights, duration, pauses, kinds) {
   for (let q = 1; q <= m; q++) if (dp[n - 2][q] < dp[n - 2][j]) j = q;
   const pick = new Array(n - 1);
   for (let k = n - 2; k >= 0; k--) { pick[k] = j; j = from[k][j]; }
-  return pick.map((p, k) => (p > 0 ? [...inner[p - 1], true] : [est[k], est[k], false]));
-}
-
-function spansFromCuts(cuts, duration) {
+  const cuts = pick.map((p, k) => (p > 0 ? inner[p - 1] : [est[k], est[k]]));
   const spans = [];
   let start = 0;
-  for (const [end, next] of [...cuts, [duration, duration]]) {
+  for (let k = 0; k < n; k++) {
+    const end = k < n - 1 ? cuts[k][0] : duration;
     spans.push([start, Math.max(start, end)]);
-    start = Math.max(end, next);
+    if (k < n - 1) start = Math.max(end, cuts[k][1]);
   }
   return spans;
 }
@@ -243,19 +237,10 @@ export async function runTts(project, script, { force = false, only = [], dry = 
 
   const out = { sampleRate: t.sampleRate, voice: { model: t.model, voice: t.voice, protocol: t.protocol, unit: t.unit, ...(t.design && { design: t.design }) }, scenes: {} };
   const clipsById = {};
-  const remapped = {};
   for (const s of scenes) if (s.lines.length) {
-    clipsById[s.id] = s.units.map((u) => {
-      const raw = trimSilence(toMono(readWav(u.file), t.sampleRate), t.sampleRate);
-      const { samples, timeAt } = shortenPauses(raw, t.sampleRate);
-      if (timeAt && t.unit !== "line") remapped[s.id] = {
-        samples: samples.length,
-        spans: sceneLineSpans(s, samples, t.sampleRate, { raw, timeAt }),
-      };
-      return samples;
-    });
+    clipsById[s.id] = s.units.map((u) => trimSilence(toMono(readWav(u.file), t.sampleRate), t.sampleRate));
   }
-  const tempo = t.tempo === "auto" ? autoTempo(sceneRates(scenes, clipsById, remapped, t), config.gates?.syllablesPerSec) : t.tempo ?? 1;
+  const tempo = t.tempo === "auto" ? autoTempo(sceneRates(scenes, clipsById, t), config.gates?.syllablesPerSec) : t.tempo ?? 1;
   if (tempo !== 1) {
     for (const id of Object.keys(clipsById)) clipsById[id] = clipsById[id].map((c) => timeStretch(c, t.sampleRate, tempo));
     log(`  tempo ×${tempo}${t.tempo === "auto" ? " (auto: the voice's own pace is outside the rate band)" : ""}`);
@@ -263,23 +248,22 @@ export async function runTts(project, script, { force = false, only = [], dry = 
   if (tempo !== 1) out.voice.tempo = tempo;
   const joinedById = {};
   const spansById = {};
+  const minSpan = Math.ceil(1000 / (config.fps ?? 30)) / 1000;
   for (const s of scenes) {
     if (!s.lines.length) continue;
     const lead = new Float32Array(Math.round(t.leadIn * t.sampleRate));
     const clips = clipsById[s.id];
     if (t.unit === "line") {
       const gaps = s.lines.map((l, i) => (i === s.lines.length - 1 ? t.tail : t.pause[l.pause] ?? t.pause.sentence));
-      const joined = concatWithGaps([lead, ...clips], [0, ...gaps], t.sampleRate);
+      const joined = concatWithGaps([lead, ...clips.map((clip) => shortenPauses(clip, t.sampleRate).samples)], [0, ...gaps], t.sampleRate);
       joinedById[s.id] = joined;
       spansById[s.id] = joined.spans.slice(1);
     } else {
       const clip = clips[0];
-      const mapped = remapped[s.id];
-      const spans = mapped
-        ? mapped.spans.map(([a, b]) => [a * clip.length / mapped.samples, b * clip.length / mapped.samples])
-        : sceneLineSpans(s, clip, t.sampleRate);
-      joinedById[s.id] = concatWithGaps([lead, clip], [0, t.tail], t.sampleRate);
-      spansById[s.id] = spans.map(([a, b]) => [t.leadIn + a, t.leadIn + b]);
+      const spans = sceneLineSpans(s, clip, t.sampleRate);
+      const { samples, timeAt } = shortenPauses(clip, t.sampleRate, { preserve: spans, minSpan });
+      joinedById[s.id] = concatWithGaps([lead, samples], [0, t.tail], t.sampleRate);
+      spansById[s.id] = spans.map(([a, b]) => [t.leadIn + timeAt(a), t.leadIn + timeAt(b)]);
     }
   }
   // One shared gain keeps the voice level consistent between scenes.
@@ -312,33 +296,14 @@ export async function runTts(project, script, { force = false, only = [], dry = 
 
 const round = (x) => Math.round(x * 1000) / 1000;
 
-function sceneLineSpans(scene, clip, sampleRate, edit) {
-  const weights = scene.lines.map((l) => Math.max(1, spokenLength(l.speak)));
-  const kinds = scene.lines.map((l) => l.pause);
-  const duration = clip.length / sampleRate;
-  const pauses = findPauses(clip, sampleRate);
-  if (!edit) return alignLines(weights, duration, pauses, kinds);
-  const { raw, timeAt } = edit;
-  const original = lineCuts(weights, raw.length / sampleRate, findPauses(raw, sampleRate), kinds);
-  const cuts = [];
-  let first = 0, start = 0;
-  // Keep breaks found in the original audio; re-estimate unanchored lines between them on the edited audio.
-  [...original, [null, null, true]].forEach(([a, b, snapped], i) => {
-    if (!snapped) return;
-    const end = a === null ? duration : timeAt(a);
-    const inside = pauses.filter(([lo, hi]) => lo >= start && hi <= end).map(([lo, hi]) => [lo - start, hi - start]);
-    const missing = lineCuts(weights.slice(first, i + 1), end - start, inside, kinds.slice(first, i + 1));
-    cuts.push(...missing.map(([lo, hi]) => [lo + start, hi + start]));
-    if (b !== null) cuts.push([end, timeAt(b)]);
-    first = i + 1;
-    start = b === null ? duration : timeAt(b);
-  });
-  return spansFromCuts(cuts, duration);
+function sceneLineSpans(scene, clip, sampleRate) {
+  return alignLines(scene.lines.map((l) => Math.max(1, spokenLength(l.speak))), clip.length / sampleRate,
+    findPauses(clip, sampleRate), scene.lines.map((l) => l.pause));
 }
 
 // Each scene's syllables per second as the rate gate counts them (caption text over the speech
 // each line spans): line unit times each clip, scene unit places the lines on the scene's pauses.
-function sceneRates(scenes, clipsById, remapped, t) {
+function sceneRates(scenes, clipsById, t) {
   const rates = [];
   for (const s of scenes) {
     const clips = clipsById[s.id];
@@ -347,7 +312,7 @@ function sceneRates(scenes, clipsById, remapped, t) {
     let speech;
     if (t.unit === "line") speech = clips.reduce((n, c) => n + c.length / t.sampleRate, 0);
     else {
-      const spans = remapped[s.id]?.spans ?? sceneLineSpans(s, clips[0], t.sampleRate);
+      const spans = sceneLineSpans(s, clips[0], t.sampleRate);
       speech = spans.reduce((n, [a, b]) => n + (b - a), 0);
     }
     if (speech > 0) rates.push(chars / speech);

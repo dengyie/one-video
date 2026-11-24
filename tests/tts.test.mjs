@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { alignLines, lineHash, runTts, sceneSpeech, timingHashes, ttsConfig } from "../cli/lib/voice/tts.mjs";
-import { findPauses, readWav, toMono, writeWav } from "../cli/lib/audio/wav.mjs";
+import { findPauses, readWav, timeStretch, toMono, writeWav } from "../cli/lib/audio/wav.mjs";
 import { captionAt, captionWindows } from "../shared/caption-timing.mjs";
 
 test("cached TTS shortens dead air before measuring narration and aligning captions", async () => {
@@ -48,7 +48,11 @@ test("shortening a sentence break does not move the caption boundary to the next
     assert.equal(duration, 5.4);
     assert.deepEqual([lines[0].end, lines[1].start], [1.15, 1.65]);
     const faster = await runTts({ root, config: { tts: { ...config.tts, tempo: 1.25 } }, paths }, { scenes: [scene] }, { cachedOnly: true });
-    assert.deepEqual(faster.scenes.speech.lines.map((line) => [line.start, line.end]), [[0.15, 0.95], [1.35, 4.07]]);
+    const paced = timeStretch(Float32Array.from(samples), t.sampleRate, 1.25);
+    const [originalBreak] = findPauses(paced, t.sampleRate);
+    const [first, next] = faster.scenes.speech.lines;
+    assert.equal(Math.round(first.end * 1000), Math.round((0.15 + originalBreak[0]) * 1000));
+    assert.equal(Math.round((next.start - first.end) * 1000), 500);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -69,9 +73,29 @@ test("an excised gap cannot collapse two estimated boundaries onto a missing cap
     const result = await runTts({ root, config, paths }, { scenes: [scene] }, { cachedOnly: true });
     const { duration, lines } = result.scenes.speech;
     assert.equal(duration, 4);
-    assert.ok(lines.every((line) => line.start < line.end));
+    assert.deepEqual([lines[1].start, lines[1].end], [1.775, 2.025]);
     const windows = captionWindows(lines);
-    assert.deepEqual([1.1, 2.4, 3.3].map((time) => captionAt(windows, time)?.item.text), lines.map((line) => line.text));
+    assert.deepEqual([1.1, 1.9, 3.3].map((time) => captionAt(windows, time)?.item.text), lines.map((line) => line.text));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("removing a later pause does not reassign an earlier caption boundary in unchanged speech", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ov-caption-unchanged-"));
+  try {
+    const paths = { linesDir: join(root, "lines"), audioDir: join(root, "audio") };
+    const config = { tts: { loudness: false } };
+    const t = ttsConfig(config);
+    const scene = { id: "speech", lines: [{ text: "甲乙。" }, { text: "丙丁戊。" }, { text: "己庚。" }] };
+    const samples = Int16Array.from({ length: t.sampleRate * 8 }, (_, i) => Math.round(8000 * Math.sin(i * 2 * Math.PI * 440 / t.sampleRate)));
+    samples.fill(0, t.sampleRate * 0.4, t.sampleRate * 0.56);
+    samples.fill(0, t.sampleRate * 3, t.sampleRate * 6);
+    const cache = join(paths.linesDir, `${lineHash(sceneSpeech(scene, config, {}).speak, t)}.wav`);
+    writeWav(cache, { samples, sampleRate: t.sampleRate, channels: 1 });
+    const result = await runTts({ root, config, paths }, { scenes: [scene] }, { cachedOnly: true });
+    assert.equal(result.scenes.speech.duration, 6);
+    assert.deepEqual(result.scenes.speech.lines.map(({ start, end }) => [start, end]), [[0.15, 2.436], [2.436, 3.15], [3.65, 5.65]]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
