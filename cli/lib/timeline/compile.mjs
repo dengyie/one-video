@@ -200,9 +200,9 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
         const before = new Map(lastTableau.elements.map((el) => [el.id, el]));
         const carried = (el) => (el.type === undefined && before.has(el.id) ? { ...settledElement(before.get(el.id)), ...el, t: 0, settled: true, to: el.to ?? [] } : el);
         props.elements = [...lastTableau.elements.filter((el) => !own.has(el.id)).map(settledElement), ...(props.elements ?? []).map(carried)];
-        const authoredCamera = Boolean(props.camera?.length);
-        inheritedCamera = (prev?.type === "tableau" && boundary.type === "fade")
-          || (lastTableau.cameraMoved && (boundary?.type !== "cut" || !authoredCamera));
+        const dissolvesFromTableau = prev?.type === "tableau" && boundary.type === "fade";
+        inheritedCamera = !props.camera?.length
+          || (boundary?.type !== "cut" && (dissolvesFromTableau || lastTableau.cameraMoved));
         if (inheritedCamera) props.camera = [{ ...lastTableau.cameraEnd, at: 0, cut: true }, ...(props.camera ?? [])];
       }
     }
