@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { captionAt, captionWindows } from "../shared/caption-timing.mjs";
 import { closingFade } from "../shared/transition.mjs";
 import { musicVolumeProps } from "../shared/music-envelope.mjs";
-import { rightShotInset } from "../shared/camera.mjs";
+import { cameraViewport, rightShotInset } from "../shared/camera.mjs";
 import {
   area, cameraMoving, captionBand, clampView, clearOf, cueOr, easeOut, inFrame, labelWidth, LABEL_H, mapViewAt,
   meets, overlap, paceOf, placePinLabels, revealAt, seenBox, seenSpan, textEms, viewAt, visibleOnGlobe, WIDE,
@@ -36,6 +36,18 @@ test("caption timing: isolated lines fade in and out; expired lines do not reapp
 test("closing fade covers the visual on the last encoded frame", () => {
   assert.deepEqual([0, 1, 2, 3, 4].map((frame) => closingFade(frame, 5)), [0, 0.0625, 0.5, 0.9375, 1]);
   assert.equal(closingFade(0, 1), 1);
+});
+
+test("camera viewport fits moving canvas cards below the header without losing the bottom edge", () => {
+  for (const [height, headerBottom] of [[1920, 281.4], [1080, 190]]) {
+    const { top, scale } = cameraViewport(height, headerBottom);
+    for (const y of [0, 42, 120]) {
+      assert.ok(y < headerBottom);
+      assert.ok(top + y * scale >= headerBottom);
+    }
+    near(top + height * scale, height);
+  }
+  assert.deepEqual(cameraViewport(1920, 0), { top: 0, scale: 1 });
 });
 
 test("music envelope extends across loops, ducks under later speech and fades at the end of the cut", () => {

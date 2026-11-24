@@ -67,6 +67,13 @@ export function rightShotInset(shots, a, b, width, margin) {
   return (1 - right) * width + margin;
 }
 
+/** Fit the whole camera frame below fixed chrome, preserving its aspect ratio.
+ * @param {number} height @param {number} headerBottom */
+export function cameraViewport(height, headerBottom) {
+  const top = Math.max(0, Math.min(height, headerBottom));
+  return { top, scale: (height - top) / height };
+}
+
 /** The part of the layer on screen through all of [a, b], as [x0, y0, x1, y1] fractions (a push-in crops its edges).
  * @param {ShotLike[] | undefined} shots @param {number} a @param {number} b @param {number} [step] @returns {[number, number, number, number]} */
 export function seenBox(shots, a, b, step = 0.25) {

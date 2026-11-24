@@ -12,6 +12,7 @@ import { Header } from "../components/Header";
 import { Overlays } from "../components/Overlay";
 import { SCENES } from "../scenes";
 import { canvasBackdrop } from "../scenes/Canvas";
+import { cameraViewport } from "../../../shared/camera.mjs";
 import { closingFade, dipOpacity, whipBlur, zoomScale } from "../../../shared/transition.mjs";
 
 // Unit vector the incoming scene travels along: "left" means it enters from the right.
@@ -116,7 +117,7 @@ function throughOrigin(f: Focus | undefined, shots: Shot[] | undefined, t: numbe
 const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.ReactNode; content: React.ReactNode; header: React.ReactNode; base: React.ReactNode }> = ({ scene, length, children, content, header, base }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
-  const { u } = useLayout();
+  const { u, top } = useLayout();
   const tl = useTimeline();
   const tin = scene.transitionIn;
   const tout = scene.transitionOut;
@@ -156,6 +157,14 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
   // Text over a photo gets a soft shadow (inherited by every label in the scene).
   const shadow: React.CSSProperties = scene.backdrop ? { textShadow: "0 2px 14px rgba(0,0,0,0.6)" } : {};
   const [dx, dy] = DIR[(out ? tout : tin)?.direction ?? "left"] ?? DIR.left;
+  const viewport = scene.type === "canvas" && scene.header ? cameraViewport(height, top) : null;
+  const art = <AbsoluteFill style={{ transform: cam || undefined }}>{content}</AbsoluteFill>;
+  const foreground = (
+    <MotionBlur id={scene.id} vx={vel.vx} vy={vel.vy} radial={vel.radial} style={{ transform: viewTransform(view, width, height) }}>
+      {viewport ? <AbsoluteFill style={{ transform: `translateY(${viewport.top}px) scale(${viewport.scale})`, transformOrigin: "top center" }}>{art}</AbsoluteFill> : art}
+      <Overlays />
+    </MotionBlur>
+  );
   return (
     <>
       {dip !== undefined && out && <AbsoluteFill style={{ backgroundColor: "#000" }} />}
@@ -171,10 +180,7 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
         {shots ? <AbsoluteFill style={{ transform: viewTransform(farther(view, 0.55), width, height) }}>{children}</AbsoluteFill>
           : scene.type === "canvas" && scene.backdrop ? <AbsoluteFill style={{ transform: canvasBackdrop(scene.props, t, width, height, u) }}>{children}</AbsoluteFill>
           : children}
-        <MotionBlur id={scene.id} vx={vel.vx} vy={vel.vy} radial={vel.radial} style={{ transform: viewTransform(view, width, height) }}>
-          <AbsoluteFill style={{ transform: cam || undefined }}>{content}</AbsoluteFill>
-          <Overlays />
-        </MotionBlur>
+        {viewport ? <AbsoluteFill style={{ clipPath: `inset(${viewport.top}px 0 0)` }}>{foreground}</AbsoluteFill> : foreground}
         {/* The header is frame chrome: it rides the transition but not the camera, so a push-in cannot crop it. */}
         {header}
       </AbsoluteFill>
