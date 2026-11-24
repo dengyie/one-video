@@ -75,7 +75,7 @@ export function loadMusicGrid(root, config) {
   return config?.enabled !== false && file && existsSync(file) ? readJson(file) : {};
 }
 
-function cutStory(config, { offset, grid, scenes, script, duration }) {
+export function cutStory(config, { offset, grid, scenes, script, duration }) {
   if (config?.file || offset || grid.source !== "synth:story" || !Array.isArray(grid.sections) || !duration) return null;
   const beats = new Map(script.scenes.map((s) => [s.id, s.beat]));
   let sections;
@@ -91,6 +91,11 @@ function cutStory(config, { offset, grid, scenes, script, duration }) {
   const spec = { duration: duration + 2, sections, seed: config?.seed ?? 7 };
   const tag = createHash("sha256").update(JSON.stringify(spec)).digest("hex").slice(0, 16);
   return { ...spec, src: `music/story-${tag}.wav` };
+}
+
+export function storyBeatGrid(duration) {
+  const beats = gridBeats(STORY_BPM, duration);
+  return { beats, downbeats: everyFourth(beats) };
 }
 
 export function prepareCutMusic(root, config, timeline, script) {
@@ -111,8 +116,7 @@ export function prepareCutMusic(root, config, timeline, script) {
   return true;
 }
 
-export function compileMusic(config, { root, offset, grid, scenes, script, duration, warnings }) {
-  const score = cutStory(config, { offset, grid, scenes, script, duration });
+export function compileMusic(config, { root, offset, grid, scenes, script, duration, warnings, score = cutStory(config, { offset, grid, scenes, script, duration }) }) {
   const useScore = score && root && existsSync(join(root, "public", score.src));
   const musicSrc = useScore ? score.src : sourcePath(config);
   const music = config?.enabled === false ? null : root && existsSync(join(root, "public", musicSrc))

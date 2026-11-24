@@ -7,7 +7,7 @@ import { example } from "./helpers.mjs";
 import { mutedBackdrop, placeCaptions } from "../cli/lib/captions/layout.mjs";
 import { linePointTimes, lineProgress, lineSegmentStart } from "../shared/line-reveal.mjs";
 import { prepareCutMusic, loadMusicGrid, compileMusic } from "../cli/lib/audio/music.mjs";
-import { beatsFile } from "../cli/lib/audio/beats.mjs";
+import { beatsFile, gridBeats } from "../cli/lib/audio/beats.mjs";
 import { readWav } from "../cli/lib/audio/wav.mjs";
 
 test("a re-timed cut gets its own story arrangement long enough to play without looping", () => {
@@ -38,6 +38,33 @@ test("a re-timed cut gets its own story arrangement long enough to play without 
   assert.equal(prepareCutMusic(root, config, updated, script), false);
   assert.equal(compile(4, 3).music.src, "music/bgm.wav");
   assert.equal(readFileSync(base, "utf8"), "original score");
+});
+
+test("an extended story score resolves late beat cues before the audio is generated", () => {
+  const { root } = example({ media: ["music/bgm.wav"] });
+  const beats = gridBeats(80, 5);
+  writeFileSync(beatsFile(join(root, "public", "music", "bgm.wav")), JSON.stringify({
+    source: "synth:story", scored: true, beats, downbeats: [0, 3], cut: { open: 0, finish: 3 },
+    sections: [{ mood: "intro", start: 0, end: 3 }, { mood: "resolve", start: 3, end: 5 }],
+  }));
+  const config = { music: { preset: "story", arc: [{ at: "open", mood: "intro" }, { at: "finish", mood: "resolve" }] } };
+  const script = { scenes: [{ id: "open" }, { id: "finish" }] };
+  const storyboard = { scenes: [
+    { id: "open", type: "title", duration: 6, props: { title: "Open" } },
+    { id: "finish", type: "title", duration: 3, props: { title: "Finish" }, shots: [
+      { at: 0 }, { at: { beat: 1 }, zoom: 1.1 }, { at: 1.54, zoom: 1.05 },
+    ] },
+  ] };
+  const compile = () => compileTimeline({ root, config, script, storyboard });
+  const first = compile();
+  assert.deepEqual(first.errors, []);
+  assert.equal(prepareCutMusic(root, config.music, first.timeline, script), true);
+  const { timeline, errors } = compile();
+  assert.deepEqual(errors, []);
+  assert.match(timeline.music.src, /^music\/story-[a-f0-9]+\.wav$/);
+  assert.equal(readWav(join(root, "public", timeline.music.src)).duration, 11);
+  assert.deepEqual(timeline.scenes[1].shots.filter((s) => s.k !== undefined).map((s) => s.t), [0, 0.75, 1.5]);
+  assert.ok(timeline.beats.includes(8.25));
 });
 
 test("line draws to cued points without shifting or previewing their values", () => {
