@@ -5,39 +5,55 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { sceneSpeech, timingHashes, timingVoice } from "../cli/lib/voice/tts.mjs";
 import { ensureVariantTimings, respan, timingsFresh, variantTimings } from "../cli/lib/voice/variant.mjs";
+import { writeWav } from "../cli/lib/audio/wav.mjs";
 
 const scene = { id: "a", narration: "SpaceX这次上市计划募资超过七百五十亿美元，将成为有史以来规模最大的一次首次公开募股。它凭什么值这么多钱？" };
 const silent = { id: "b" };
 const script = { scenes: [scene, silent] };
 const main = { aspect: "16:9" }, tall = { aspect: "9:16" };
 
-test("ensureVariantTimings replaces stock fallback after main narration restores the clone", async (ctx) => {
+function restoredCloneProject(ctx, scene, overrides = {}) {
   const root = mkdtempSync(join(tmpdir(), "ov-variant-restored-clone-"));
   ctx.after(() => rmSync(root, { recursive: true, force: true }));
   const paths = { script: join(root, "script.json"), timings: join(root, "timings.9x16.json"), linesDir: join(root, "lines") };
-  const tts = { ref: "voice.wav", fallbackVoice: "白桦" };
+  const tts = { ref: "voice.wav", fallbackVoice: "白桦", ...overrides };
   const mainProject = { config: { ...main, tts }, timings: join(root, "timings.json") };
   const config = { ...tall, tts };
   const project = { root, aspect: "9:16", config, paths, main: mainProject };
-  const scene = { id: "a", narration: "甲乙丙丁。" };
   const script = { scenes: [scene] };
   const clone = { model: "mimo-v2.5-tts-voiceclone", voice: "ref:voice.wav" };
   const fallback = { model: "mimo-v2.5-tts", voice: "白桦", fallbackFor: clone };
   const make = (voice, file, config) => {
     const hashes = timingHashes(scene, config, {}, timingVoice(config, voice));
-    const lines = sceneSpeech(scene, config, {}).lines.map((l, i) => ({ ...l, hash: hashes[i], start: 0, end: 1 }));
-    return { voice, scenes: { a: { file, duration: 1, lines } } };
+    const lines = sceneSpeech(scene, config, {}).lines.map((l, i) => ({ ...l, hash: hashes[i], start: i, end: i + 1 }));
+    writeWav(join(root, "public", file), { samples: new Int16Array(24000 * lines.length).fill(2000), sampleRate: 24000, channels: 1 });
+    return { voice, scenes: { a: { file, duration: lines.length, lines } } };
   };
   const stock = make(fallback, "audio/9x16/a.wav", config);
   writeFileSync(paths.script, JSON.stringify(script));
   writeFileSync(paths.timings, JSON.stringify(stock));
+  const restore = () => writeFileSync(mainProject.timings, JSON.stringify(make(clone, "audio/a.wav", mainProject.config)));
+  return { project, script, stock, clone, restore };
+}
+
+test("ensureVariantTimings replaces stock fallback after main narration restores the clone", async (ctx) => {
+  const { project, script, stock, clone, restore } = restoredCloneProject(ctx, { id: "a", narration: "甲乙丙丁。" });
   assert.deepEqual(await ensureVariantTimings(project), stock);
-  writeFileSync(mainProject.timings, JSON.stringify(make(clone, "audio/a.wav", mainProject.config)));
+  restore();
   const out = await ensureVariantTimings(project);
   assert.deepEqual(out.voice, clone);
   assert.equal(out.scenes.a.file, "audio/a.wav");
   assert.notEqual(out.scenes.a.lines[0].hash, stock.scenes.a.lines[0].hash);
-  assert.equal(timingsFresh(script, out, config), true);
+  assert.equal(timingsFresh(script, out, project.config), true);
+});
+
+test("an offline line-mode variant keeps valid stock narration when restored main clone has different cuts", async (ctx) => {
+  const { project, stock, restore } = restoredCloneProject(ctx, scene, { unit: "line", baseUrl: "http://127.0.0.1:1", keyEnv: "OV_TEST_OFFLINE_VARIANT_KEY" });
+  restore();
+  const mainTimings = JSON.parse(readFileSync(project.main.timings, "utf8"));
+  assert.notEqual(mainTimings.scenes.a.lines.length, stock.scenes.a.lines.length);
+  assert.deepEqual(await ensureVariantTimings(project), stock);
+  assert.deepEqual(JSON.parse(readFileSync(project.paths.timings, "utf8")), stock);
 });
 
 // The main timings as tts writes them: one scene audio, three lines on its pauses.

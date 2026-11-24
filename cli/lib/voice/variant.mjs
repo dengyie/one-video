@@ -98,6 +98,7 @@ export async function ensureVariantTimings(project) {
   if (fresh && (!mainFresh || main.voice?.fallbackFor)) return have;
   const derived = mainFresh ? variantTimings(script, main, project.main.config, project.config) : null;
   if (derived) { log(`caption timings for ${project.aspect} from ${relative(project.root, project.main.timings)} (voice audio not cached) → ${to}`); writeJson(project.paths.timings, derived); return derived; }
+  if (fresh) return have;
   log(`caption timings for ${project.aspect} → ${to}`);
   const made = await runTts(project, script);
   writeJson(project.paths.timings, made);
