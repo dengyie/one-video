@@ -158,13 +158,10 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
   const shadow: React.CSSProperties = scene.backdrop ? { textShadow: "0 2px 14px rgba(0,0,0,0.6)" } : {};
   const [dx, dy] = DIR[(out ? tout : tin)?.direction ?? "left"] ?? DIR.left;
   const viewport = scene.type === "canvas" && scene.header ? cameraViewport(height, top) : null;
-  const art = <>
-    <AbsoluteFill style={{ transform: cam || undefined }}>{content}</AbsoluteFill>
-    <Overlays />
-  </>;
   const foreground = (
     <MotionBlur id={scene.id} vx={vel.vx} vy={vel.vy} radial={vel.radial} style={{ transform: viewTransform(view, width, height) }}>
-      {viewport ? <AbsoluteFill style={{ transform: `translateY(${viewport.top}px) scale(${viewport.scale})`, transformOrigin: "top center" }}>{art}</AbsoluteFill> : art}
+      <AbsoluteFill style={{ transform: cam || undefined }}>{content}</AbsoluteFill>
+      <Overlays />
     </MotionBlur>
   );
   return (
@@ -182,7 +179,13 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
         {shots ? <AbsoluteFill style={{ transform: viewTransform(farther(view, 0.55), width, height) }}>{children}</AbsoluteFill>
           : scene.type === "canvas" && scene.backdrop ? <AbsoluteFill style={{ transform: canvasBackdrop(scene.props, t, width, height, u) }}>{children}</AbsoluteFill>
           : children}
-        {viewport ? <AbsoluteFill style={{ clipPath: `inset(${viewport.top}px 0 0)` }}>{foreground}</AbsoluteFill> : foreground}
+        {viewport ? (
+          <AbsoluteFill style={{ clipPath: `inset(${viewport.top}px 0 0)` }}>
+            <AbsoluteFill style={{ transform: `translateY(${viewport.top}px) scale(${viewport.scale})`, transformOrigin: "top center" }}>
+              {foreground}
+            </AbsoluteFill>
+          </AbsoluteFill>
+        ) : foreground}
         {/* The header is frame chrome: it rides the transition but not the camera, so a push-in cannot crop it. */}
         {header}
       </AbsoluteFill>

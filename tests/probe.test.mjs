@@ -132,6 +132,19 @@ test("near-top canvas words share the header-safe viewport", { skip: !existsSync
   }
 });
 
+test("a headed canvas shot preserves bottom text within the fitted frame", { skip: !existsSync(REMOTION_BIN) && "needs template dependencies" }, async () => {
+  for (const [width, height] of [[640, 360], [360, 640]]) {
+    const u = Math.min(width, height) / 1080;
+    await canvasStills(width, height, {
+      shots: [{ t: 0, zoom: 0.7, y: 0.23 }, { t: 0.5, zoom: 0.7, y: 0.16, ease: 0.7 }],
+      props: { items: [{ id: "bottom", type: "text", text: "Bottom edge", x: width / u / 2, y: height / u * 0.853, w: 480, h: 50, size: 24, settled: true }] },
+    }, ({ texts }) => {
+      const bottom = texts.find(({ text }) => text === "Bottom edge");
+      assert.ok(bottom && !bottom.cut && !bottom.v && bottom.box[3] > 0.94 && bottom.box[3] < 1, "the shot keeps the whole line visible near the bottom");
+    });
+  }
+});
+
 test("devices reserve caption space and portrait cards cap wide column counts", () => {
   assert.equal(deviceViewportHeight(1080, 1, false), 860);
   assert.equal(deviceViewportHeight(1920, 1, true), 1530);
