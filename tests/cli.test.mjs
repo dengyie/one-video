@@ -53,6 +53,23 @@ test("SpaceX Motion clears the opening title before the ticker lands", () => {
   }
 });
 
+test("SpaceX Motion keeps a local scrim on featured words over the launch plume", () => {
+  const dir = join(ROOT, "examples", "spacex-motion");
+  const read = (p) => json(join(dir, p));
+  const script = read("plan/script.json"), storyboard = read("plan/storyboard.json"), assets = read("plan/assets.json");
+  for (const asset of assets.items) asset.file = `assets/${asset.id}`;
+  const timings = json(join(ROOT, "tests", "fixtures", "spacex-motion-timings.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const { timeline, errors } = compileTimeline({ config: { ...read("onevideo.json"), aspect }, script, storyboard, assets, timings });
+    assert.deepEqual(errors, []);
+    const [hook] = timeline.scenes;
+    for (const text of ["SPCX", "凭什么？", "$1T+"]) {
+      const overlay = hook.overlays.find((o) => o.type === "word" && o.text === text);
+      assert.ok(overlay?.scrim > 0, `${aspect}: ${text} needs backing even without luma sidecars`);
+    }
+  }
+});
+
 test("SpaceX IPO reveals total revenue and the loss explanation on their narration cues", () => {
   const ex = example();
   const { check: { timeline, errors }, applied } = fixPlan({ config: ex.config, root: ex.root }, { ...ex, assets: ex.fetchedAssets });
