@@ -17,7 +17,7 @@
   },
   "sfx": {
     "transition": "auto",
-    "volume": 0.45,
+    "volume": 0.3,
     "motion": "auto"
   },
   "captions": {
@@ -29,6 +29,7 @@
   },
   "tts": {
     "voice": "白桦",
+    "tempo": 1.32,
     "style": "科普旁白。清晰、好奇、节奏轻快，重音落在数字上，不要播音腔。"
   }
 }
