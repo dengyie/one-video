@@ -156,6 +156,13 @@ test("render concurrency defaults by cores and memory", async () => {
   assert.equal(autoConcurrency(8, 4e9), 2);
 });
 
+test("render normalizes an extensionless H.264 output before creating its sidecar", async () => {
+  const { h264OutputPath } = await import("../cli/commands/render.mjs");
+  assert.equal(h264OutputPath("cut"), "cut.mp4");
+  assert.equal(h264OutputPath("my.project/cut"), "my.project/cut.mp4");
+  assert.equal(h264OutputPath("my.project/cut.mp4"), "my.project/cut.mp4");
+});
+
 test("render --aspect keeps a variant's timeline, caption timings and voice files apart", async () => {
   const { withAspect, aspectTag } = await import("../cli/lib/timeline/aspect.mjs");
   const root = "/p";

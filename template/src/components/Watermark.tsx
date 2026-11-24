@@ -25,7 +25,7 @@ export const Watermark: React.FC<{ mark: Mark }> = ({ mark }) => {
   };
 
   if (mark.style === "text") {
-    return <div style={{ ...place, fontSize: 20 * u, color: theme.colors.muted, opacity: 0.55, letterSpacing: 2 * u }}>{mark.text}</div>;
+    return <div data-qc-overlay="" style={{ ...place, fontSize: 20 * u, color: theme.colors.muted, opacity: 0.55, letterSpacing: 2 * u }}>{mark.text}</div>;
   }
 
   const enter = easeOut(clamp01((t - 0.6) / 0.8));
@@ -41,7 +41,7 @@ export const Watermark: React.FC<{ mark: Mark }> = ({ mark }) => {
     </div>
   );
   return (
-    <div style={{
+    <div data-qc-overlay="" style={{
       ...place,
       display: "flex", alignItems: "center", gap: 10 * u,
       padding: `${6 * u}px ${mark.text ? 16 * u : 6 * u}px ${6 * u}px ${6 * u}px`,

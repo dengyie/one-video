@@ -29,6 +29,8 @@ engine/Video                               只做合成，由 Root 引用
 
 `../../../` 只许指向 `shared/`（`demo.ts` 引 `styles/` 例外）。由 `tests/architecture.test.mjs` 守住。
 
+`engine/QcBounds` 是独立的成片采样层。它只在合成根的 `data-probe="frame"` 内测量由渲染层公开标记为 `data-qc-overlay` 的叠层（字幕和水印），不读取字幕、音频或画面层的实现。
+
 ## 领域模块（`cli/lib/`）
 
 | 目录 | 管什么 | 主要入口 |

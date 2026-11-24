@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { deflateSync } from "node:zlib";
+import { deflateSync, inflateSync } from "node:zlib";
 import { ffmpeg } from "../cli/lib/core/ffmpeg.mjs";
 import { decodeGrayPng, runs, analyzeFrames, QC_DEFAULTS, runQc, sampleGrayFrames, voiceGaps } from "../cli/lib/vision/qc.mjs";
 import { readWav, writeWav } from "../cli/lib/audio/wav.mjs";
@@ -104,6 +104,35 @@ test("black-frame QC sees a dark subject even at either edge of the picture", ()
   });
   const report = analyzeFrames([frame(80), frame(80), subject(2), subject(2), subject(29), subject(29), frame(80), frame(80)], 2);
   assert.deepEqual(report.black, []);
+  const watermark = [[0.8, 0.02, 0.97, 0.12]];
+  assert.deepEqual(analyzeFrames([frame(80), frame(80), subject(2), subject(2), subject(29), subject(29), frame(80), frame(80)],
+    2, QC_DEFAULTS, [[], [], watermark, watermark, watermark, watermark, []]).black, []);
+});
+
+test("measured caption and watermark boxes expose the previously missed 1.0–2.5s black stretch", () => {
+  const light = Buffer.alloc(64 * 36, 90), captioned = Buffer.alloc(64 * 36);
+  for (let x = 22; x < 43; x++) {
+    captioned[30 * 64 + x] = 110;
+    if (x % 4 === 0) captioned[29 * 64 + x] = 120;
+  }
+  captioned.fill(180, 64 + 54, 64 + 62);
+  const boxes = [[22 / 64, 29 / 36, 43 / 64, 30 / 36], [54 / 64, 1 / 36, 62 / 64, 2 / 36]];
+  const samples = [light, light, captioned, captioned, captioned, light, light];
+  assert.deepEqual(analyzeFrames(samples, 2).black, []);
+  assert.deepEqual(analyzeFrames(samples, 2, QC_DEFAULTS, [[], [], boxes, boxes, boxes, [], []]).black, [[1, 2.5]]);
+  assert.deepEqual(analyzeFrames(samples, 2).black, [], "masking does not mutate decoded frames");
+});
+
+test("masking the watermark preserves the dark SpaceX IPO quote", () => {
+  // A 64×36 grayscale sample from 81.0s in the original SpaceX IPO cut.
+  const encoded = readFileSync(new URL("./fixtures/spacex-ipo-quote-gray.b64", import.meta.url), "utf8");
+  const quote = inflateSync(Buffer.from(encoded, "base64"));
+  const light = frame(90, quote.length);
+  const mark = [[0.78, 0.015, 0.99, 0.10]];
+  const report = analyzeFrames([light, light, quote, quote, quote, light, light], 2,
+    QC_DEFAULTS, [[], [], mark, mark, mark, [], []]);
+  assert.ok(report.means[2] < QC_DEFAULTS.black.luma);
+  assert.deepEqual(report.black, []);
 });
 
 test("analyzeFrames compares against the frame one window back, so slow drift is motion", () => {
@@ -132,12 +161,31 @@ test("bundled FFmpeg QC samples the same frames as the PNG pipeline", async () =
     const samples = await sampleGrayFrames(video, 4);
     assert.deepEqual(samples.map((x) => new Uint8Array(x)), legacy);
     const timeline = { width: 64, height: 36, fps: 8, duration: 4, scenes: [{ id: "one", type: "test", start: 0, duration: 4, lines: [{ start: 0.5, end: 2.5 }] }] };
-    const report = await runQc({ video, timeline, outDir, readVoice: (file) => readWav(join(dir, file)) });
+    const report = await runQc({ video, timeline, outDir, bounds: null, readVoice: (file) => readWav(join(dir, file)) });
     assert.equal(report.verdict, "fail");
     assert.deepEqual(report.checks.find((c) => c.id === "black-frames"), { id: "black-frames", status: "fail", detail: "1.0–2.0s" });
     assert.deepEqual(report.checks.find((c) => c.id === "silence-in-narration"), { id: "silence-in-narration", status: "fail", detail: "silent or missing voice stem: 0.5–2.5s" });
     assert.equal(report.frames.length, 1);
     assert.deepEqual(readdirSync(outDir), ["frames"]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("QC reuses exact frame bounds when it samples at a different cadence", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ov-qc-bounds-cadence-"));
+  try {
+    const video = join(dir, "cut.mp4");
+    const captioned = frame(0, 64 * 36);
+    for (let y = 29; y < 32; y++) captioned.fill(150, y * 64 + 20, y * 64 + 44);
+    for (let i = 0; i < 120; i++) {
+      const picture = i >= 30 && i < 90 ? captioned : frame(90, 64 * 36);
+      writeFileSync(join(dir, `in${String(i).padStart(3, "0")}.png`), grayPng(64, 36, picture));
+    }
+    await ffmpeg(["-framerate", "30", "-start_number", "0", "-i", join(dir, "in%03d.png"), "-c:v", "libx264", "-pix_fmt", "yuv420p", video]);
+    const timeline = { width: 64, height: 36, fps: 30, duration: 4, scenes: [] };
+    const boxes = [[20 / 64, 29 / 36, 44 / 64, 32 / 36]];
+    const bounds = { step: 15, samples: [[], [], boxes, boxes, boxes, boxes, [], []] };
+    const report = await runQc({ video, timeline, outDir: join(dir, "qc"), bounds, thresholds: { sampleFps: 1 } });
+    assert.deepEqual(report.checks.find((c) => c.id === "black-frames"), { id: "black-frames", status: "fail", detail: "1.0–3.0s" });
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

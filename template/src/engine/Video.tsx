@@ -7,6 +7,7 @@ import { Watermark } from "../components/Watermark";
 import { FilmLook } from "../components/Overlay";
 import { AudioTracks } from "./Audio";
 import { Captions } from "./Captions";
+import { QcBounds } from "./QcBounds";
 import { SceneVisual } from "./Visuals";
 
 export const Video: React.FC<Timeline> = (timeline) => {
@@ -22,6 +23,7 @@ export const Video: React.FC<Timeline> = (timeline) => {
         <div data-probe="skip" style={{ display: "contents" }}>
           {timeline.watermark && <Watermark mark={timeline.watermark} />}
         </div>
+        <QcBounds />
       </AbsoluteFill>
     </TimelineContext.Provider>
   );

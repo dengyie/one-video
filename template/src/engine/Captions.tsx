@@ -106,6 +106,7 @@ export const Captions: React.FC = () => {
     >
       <div
         data-caption={item.scene}
+        data-qc-overlay=""
         style={{
           maxWidth: position.maxWidth,
           boxSizing: "border-box",

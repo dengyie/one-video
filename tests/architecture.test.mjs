@@ -63,7 +63,7 @@ test("template layers only import downward", () => {
       if (s.startsWith("../../../")) { if (!s.startsWith("../../../shared/") && !(f === "demo.ts" && s.startsWith("../../../styles/"))) bad.push(where); continue; }
       if (d === "engine" && PURE.has(f) && !s.startsWith("./types")) bad.push(`${where} (pure engine module)`);
       if (/\/scenes(\/|$)|^\.\.\/scenes/.test(s) && !(d === "engine" && f === "Visuals.tsx")) bad.push(`${where} (only engine/Visuals mounts scenes)`);
-      if (/engine\/(Video|Captions|Audio|Visuals)$|^\.\/(Video|Captions|Audio|Visuals)$/.test(s) && !(d === "engine" && f === "Video.tsx") && !(d === "." && f === "Root.tsx" && /Video$/.test(s))) bad.push(`${where} (composition root)`);
+      if (/engine\/(Video|Captions|Audio|Visuals|QcBounds)$|^\.\/(Video|Captions|Audio|Visuals|QcBounds)$/.test(s) && !(d === "engine" && f === "Video.tsx") && !(d === "." && f === "Root.tsx" && /Video$/.test(s))) bad.push(`${where} (composition root)`);
       if (d === "components" && s.startsWith("../scenes")) bad.push(where);
     }
     if (d === "engine" && PURE.has(f) && /from\s*["'](react|remotion)["']/.test(src)) bad.push(`${d}/${f}: pure engine module imports react/remotion`);

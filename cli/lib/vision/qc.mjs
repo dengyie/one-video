@@ -18,6 +18,8 @@ export const QC_DEFAULTS = {
   sampleFps: 2,
 };
 
+export const qcSampleStep = (fps, thresholds) => Math.max(1, Math.round(fps / (thresholds?.sampleFps ?? QC_DEFAULTS.sampleFps)));
+
 const SAMPLE_WIDTH = 64, SAMPLE_HEIGHT = 36;
 const SAMPLE_SIZE = SAMPLE_WIDTH * SAMPLE_HEIGHT;
 
@@ -49,19 +51,30 @@ function hasPictureDetail(frame, level) {
   return false;
 }
 
-function isBlackPicture(frame, luma) {
+function isBlackPicture(frame, luma, boxes) {
   if (frame.length !== SAMPLE_SIZE) return frame.every((v) => v < luma);
-  // In likely caption/watermark bands, only substantial connected picture detail counts.
+  const mask = boxes?.length ? new Uint8Array(frame.length) : null;
+  for (const [left, top, right, bottom] of boxes ?? []) {
+    const x0 = Math.max(0, Math.floor(left * SAMPLE_WIDTH) - 1);
+    const y0 = Math.max(0, Math.floor(top * SAMPLE_HEIGHT) - 1);
+    const x1 = Math.min(SAMPLE_WIDTH, Math.ceil(right * SAMPLE_WIDTH) + 1);
+    const y1 = Math.min(SAMPLE_HEIGHT, Math.ceil(bottom * SAMPLE_HEIGHT) + 1);
+    for (let y = y0; y < y1; y++) mask.fill(1, y * SAMPLE_WIDTH + x0, y * SAMPLE_WIDTH + x1);
+  }
+  // Older renders lack overlay bounds, so use the legacy center band and connected detail.
+  const y0 = boxes ? 0 : 8, y1 = boxes ? SAMPLE_HEIGHT : 26;
   let sum = 0, detail = 0, highlights = 0, pixels = 0;
-  for (let y = 8; y < 26; y++) for (let x = 0; x < SAMPLE_WIDTH; x++) {
-    const v = frame[y * SAMPLE_WIDTH + x];
+  const picture = mask ? Uint8Array.from(frame) : frame;
+  for (let i = y0 * SAMPLE_WIDTH; i < y1 * SAMPLE_WIDTH; i++) {
+    if (mask?.[i]) { picture[i] = 0; continue; }
+    const v = picture[i];
     sum += v;
     detail += Number(v >= 1.6 * luma);
     highlights += Number(v >= 3 * luma);
     pixels++;
   }
   return sum < luma * pixels && detail < 0.05 * pixels && highlights < 0.01 * pixels
-    && !hasPictureDetail(frame, 1.6 * luma);
+    && !hasPictureDetail(picture, 1.6 * luma);
 }
 
 // Minimal PNG decoder for 8-bit grayscale, non-interlaced images (what ffmpeg emits with format=gray).
@@ -114,7 +127,7 @@ export function runs(flags, step) {
   return out;
 }
 
-export function analyzeFrames(frames, fps, t = QC_DEFAULTS) {
+export function analyzeFrames(frames, fps, t = QC_DEFAULTS, overlaySamples = []) {
   const step = 1 / fps;
   const means = frames.map((f) => f.reduce((s, v) => s + v, 0) / f.length);
   const lag = Math.max(1, Math.round((t.frozen.window ?? step) * fps));
@@ -126,7 +139,7 @@ export function analyzeFrames(frames, fps, t = QC_DEFAULTS) {
     return d / f.length;
   });
   const total = frames.length * step;
-  const black = runs(frames.map((f) => isBlackPicture(f, t.black.luma)), step)
+  const black = runs(frames.map((f, i) => isBlackPicture(f, t.black.luma, overlaySamples[i])), step)
     .filter(([a, b]) => b - a > t.black.maxRun && a > 0.5 && b < total - 0.5);
   const staticFlags = diffs.map((d) => d < t.frozen.diff);
   const frozen = runs(staticFlags, step).filter(([a, b]) => b - a > t.frozen.maxRun);
@@ -212,7 +225,7 @@ export async function sampleGrayFrames(video, step) {
 
 // A part render starts `offset` seconds into the timeline and runs `span` seconds: the duration
 // check, the narration intervals and the scene samples are taken on the file's own clock.
-export async function runQc({ video, timeline, outDir, readVoice, thresholds = {}, offset = 0, span = timeline.duration - offset }) {
+export async function runQc({ video, timeline, outDir, bounds, readVoice, thresholds = {}, offset = 0, span = timeline.duration - offset }) {
   const t = deepMerge(QC_DEFAULTS, thresholds);
   const checks = [];
   const add = (id, status, detail) => checks.push({ id, status, detail });
@@ -260,9 +273,13 @@ export async function runQc({ video, timeline, outDir, readVoice, thresholds = {
     ? `silent or missing voice stem: ${fmt(inSpeech)}`
     : scheduled.length ? "no gaps in the voice stem" : "no narration scheduled");
 
-  const step = Math.max(1, Math.round(timeline.fps / t.sampleFps));
+  const step = qcSampleStep(timeline.fps, t);
   const frames = await sampleGrayFrames(video, step);
-  const fa = analyzeFrames(frames, timeline.fps / step, t);
+  const overlaySamples = bounds ? frames.map((_, i) => {
+    const frame = i * step;
+    return frame % bounds.step === 0 ? bounds.samples[frame / bounds.step] : undefined;
+  }) : undefined;
+  const fa = analyzeFrames(frames, timeline.fps / step, t, overlaySamples);
   add("black-frames", fa.black.length ? "fail" : "pass", fa.black.length ? fmt(fa.black) : "none");
   add("frozen-segments", fa.frozen.length ? "warn" : "pass", fa.frozen.length ? `${fmt(fa.frozen)} (> ${t.frozen.maxRun}s without motion)` : "none");
   add("static-ratio", fa.staticRatio <= t.staticRatioMax ? "pass" : "warn", `${(fa.staticRatio * 100).toFixed(0)}% of samples nearly static (max ${(t.staticRatioMax * 100).toFixed(0)}%)`);
