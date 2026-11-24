@@ -5,7 +5,7 @@ import { visualLength } from "../core/text.mjs";
 const SENTENCE_END = /[。！？!?；;…]/;
 const CLAUSE_END = /[，,、：:]/;
 const TRAILING = /[。！？!?；;…，,、：:\s]+$/u;
-const TOKEN = /[A-Za-z][A-Za-z\d]*(?:[.-][A-Za-z\d]+)*|\d+(?:[.,]\d+)*(?:%|(?:万亿|亿|万)?(?:美元|元)|万亿|亿|万)?/g;
+const TOKEN = /(?:[A-Za-z]|\d+[A-Za-z])[A-Za-z\d]*(?:[.-][A-Za-z\d]+)*|\d+(?:[.,]\d+)*(?:%|(?:万亿|亿|万)?(?:美元|元)|万亿|亿|万)?/g;
 const segmenter = new Intl.Segmenter("zh", { granularity: "word" });
 
 // Portrait as the engine decides it (height ≥ 1.5 × width), so a custom width/height counts too.

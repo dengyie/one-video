@@ -222,6 +222,16 @@ test("alignLines keeps boundaries in time order when a pause sits past the next 
   for (let k = 1; k < spans.length; k++) assert.ok(spans[k][0] >= spans[k - 1][1]);
 });
 
+test("line-mode speech keeps digit-led tokens whole at a portrait wrap boundary", () => {
+  const config = { aspect: "9:16", tts: { unit: "line" } };
+  for (const token of ["0x1", "0x1F", "3D"]) {
+    const narration = `这里这里这里这里这里这里${token}继续阅读更多内容`;
+    const { lines } = sceneSpeech({ narration }, config, {});
+    assert.ok(lines.some((line) => line.text.includes(token) && line.speak.includes(token)), token);
+    assert.equal(lines.map((line) => line.speak).join(""), narration);
+  }
+});
+
 test("sceneSpeech speaks the narration with its own punctuation", () => {
   const config = { aspect: "16:9" };
   const { lines, speak } = sceneSpeech({ id: "a", narration: "凭什么值一万多亿美元？上涨约19%。" }, config, {});
