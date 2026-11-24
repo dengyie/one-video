@@ -37,6 +37,22 @@ test("Promo Demo keeps its URL readable after the short CTA narration", async ()
   assert.ok(fadeStart - cta.lines[0].end >= 1, "leave the URL readable after the spoken CTA");
 });
 
+test("SpaceX Motion clears the opening title before the ticker lands", () => {
+  const dir = join(ROOT, "examples", "spacex-motion");
+  const read = (p) => json(join(dir, p));
+  const script = read("plan/script.json"), storyboard = read("plan/storyboard.json"), assets = read("plan/assets.json");
+  for (const asset of assets.items) asset.file = `assets/${asset.id}`;
+  const timings = json(join(ROOT, "tests", "fixtures", "spacex-motion-timings.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const { timeline, errors } = compileTimeline({ config: { ...read("onevideo.json"), aspect }, script, storyboard, assets, timings });
+    assert.deepEqual(errors, []);
+    const [hook] = timeline.scenes;
+    const title = hook.props.title;
+    const ticker = hook.overlays.find((overlay) => overlay.text === "SPCX");
+    assert.ok(title.t + title.duration + 0.3 <= ticker.t, `${aspect}: the title including its exit must end before SPCX`);
+  }
+});
+
 test("SpaceX IPO reveals total revenue and the loss explanation on their narration cues", () => {
   const ex = example();
   const { check: { timeline, errors }, applied } = fixPlan({ config: ex.config, root: ex.root }, { ...ex, assets: ex.fetchedAssets });
