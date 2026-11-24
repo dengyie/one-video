@@ -23,10 +23,13 @@
 engine/{types,motion,format,camera,probe}   纯模块：只引 ./types 与 shared/，不引 react / remotion
 engine/*（其余） · components/              → 纯模块；components 不引 scenes
 scenes/                                     → engine, components
-engine/Video · engine/Captions              挂场景的只有 Video；二者只被 Root / Video 引用
+engine/{Captions,Audio,Visuals}             独立渲染层；只有 Visuals 挂场景
+engine/Video                               只做合成，由 Root 引用
 ```
 
 `../../../` 只许指向 `shared/`（`demo.ts` 引 `styles/` 例外）。由 `tests/architecture.test.mjs` 守住。
+
+`engine/QcBounds` 是独立的成片采样层。它只在合成根的 `data-probe="frame"` 内测量由渲染层公开标记为 `data-qc-overlay` 的叠层（字幕和水印），不读取字幕、音频或画面层的实现。
 
 ## 领域模块（`cli/lib/`）
 
@@ -61,7 +64,7 @@ captions                     → vision, core
 voice                        → captions, audio, core
 generate                     → prompts, llm, vision, assets/media, core
 assets                       → generate, prompts, core
-timeline                     → captions, vision, library, audio, assets/media, core
+timeline                     → captions, vision, library, audio, assets, core
 review                       → timeline, captions, voice, library, core
 publish                      → review, timeline, captions, voice, core
 archive                      → core
@@ -72,9 +75,16 @@ commands                     → 以上任意
 - `assets` 与 `generate` 互相用到，但只在文件层单向：`assets/fetch.mjs` → `generate/`，`generate/video.mjs` → `assets/media.mjs`，没有循环。
 - 领域之外从 `index.mjs` 引入；领域内部、或需要避免循环时，直接引具体文件（如 `generate/video.mjs` 引 `assets/media.mjs`，而不是 `assets/index.mjs`）。
 - 加一个提示词：在 `prompts/` 新建 `<名字>.mjs` 导出构造函数，加进 `prompts/index.mjs`，调用方 `ask({ prompt: xxxPrompt({...}) })`。
-- 加一种字幕能力（新格式、新排版规则）：放 `captions/`；时间线编译只调用 `placeCaptions`，播放器渲染在 `template/src/engine/Captions.tsx`。
-- 加一个生成后端或素材源：生成放 `generate/`（复用 `common.mjs` 的 `genConfig` / `firstModel`），素材源加进 `assets/sources.mjs` 的 `PROVIDERS`。
+- 加一个检索站点：在 `assets/sources.mjs` 的 `PROVIDERS` 登记。
 - 时间线新工序：在 `timeline/` 加文件，导出纯函数，由 `compile.mjs` 调用，并加进 `timeline/index.mjs`。
+
+## 字幕、声音、画面如何扩展
+
+三层通过 v1 时间线合成，不需要彼此调用渲染器。分镜与时间线格式没有改变。
+
+- **字幕**：`captions/compile.mjs` 用场景的实测行时间生成全片字幕。编译位置策略接收 `(scenes, items, layout)`，只标注字幕项目（默认 `layout.mjs` 的主体避让）；`engine/Captions.tsx` 的 `captionPosition` 把位置转为样式，`CAPTION_STYLES` 的每项接收字幕行、朗读进度、淡入进度和主题，返回内容和可选底板样式。加新风格时同时登记 project schema 和播放器类型；加新位置时也需同步碰撞门禁使用的 `captionBand`。
+- **声音**：`voice/providers.mjs` 按 `tts.protocol` 选择适配器。新协议接收文本与 TTS 配置、返回 WAV，并在 project schema 登记；拼接、停顿对齐、变速与响度仍由 `voice/tts.mjs` 负责。`audio/music.mjs` 的音乐源提供 `prepare(project, args, pre)`、`src(config)`、`credit(config)`；新源将音频写入 `public/`，可在旁边写节拍缓存，编译和渲染无需知道来源。现有程序作曲和手动提供/下载的歌曲走同一轨道。`engine/Audio.tsx` 的 `AUDIO_TRACKS` 独立挂载旁白、音乐和音效，并保留分轨渲染。
+- **画面**：`assets/fetch.mjs` 的 `VISUAL_SOURCES` 按素材匹配和获取；新来源实现 `matches(item)` 与 `fetch(item, context)`，返回带本地 `file`、`kind` 与授权信息的条目，或返回 `null` 交给下一来源。新生成后端放在 `generate/`（复用 `genConfig` / `firstModel`）。`assets/compile.mjs` 按场景解析引用，统一写入 `timeline.assets`，所以同一剪辑可以从现有视频切到图片或 AI 生成图，不需要为生成图另造场景类型。新场景类型在 storyboard schema 与 `template/src/scenes/index.ts` 的 `SCENES` 登记；`engine/Visuals.tsx` 独立应用镜头与转场。
 
 ## 播放站（`web/`）
 

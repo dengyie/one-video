@@ -49,7 +49,7 @@ test("shared modules are dependency-free leaves", () => {
   assert.deepEqual(bad, []);
 });
 
-// Template layers: engine pure modules → components → scenes → engine/Video → Root.
+// Template layers: engine pure modules → components → scenes → pipeline layers → Video → Root.
 test("template layers only import downward", () => {
   const SRC = join(ROOT, "template", "src");
   const PURE = new Set(["types.ts", "motion.ts", "format.ts", "camera.ts", "probe.ts"]);
@@ -62,8 +62,8 @@ test("template layers only import downward", () => {
       const where = `${d}/${f} → ${s}`;
       if (s.startsWith("../../../")) { if (!s.startsWith("../../../shared/") && !(f === "demo.ts" && s.startsWith("../../../styles/"))) bad.push(where); continue; }
       if (d === "engine" && PURE.has(f) && !s.startsWith("./types")) bad.push(`${where} (pure engine module)`);
-      if (/\/scenes(\/|$)|^\.\.\/scenes/.test(s) && !(d === "engine" && f === "Video.tsx")) bad.push(`${where} (only engine/Video mounts scenes)`);
-      if (/engine\/(Video|Captions)$|^\.\/(Video|Captions)$/.test(s) && !(d === "engine" && f === "Video.tsx") && !(d === "." && f === "Root.tsx" && /Video$/.test(s))) bad.push(`${where} (composition root)`);
+      if (/\/scenes(\/|$)|^\.\.\/scenes/.test(s) && !(d === "engine" && f === "Visuals.tsx")) bad.push(`${where} (only engine/Visuals mounts scenes)`);
+      if (/engine\/(Video|Captions|Audio|Visuals|QcBounds)$|^\.\/(Video|Captions|Audio|Visuals|QcBounds)$/.test(s) && !(d === "engine" && f === "Video.tsx") && !(d === "." && f === "Root.tsx" && /Video$/.test(s))) bad.push(`${where} (composition root)`);
       if (d === "components" && s.startsWith("../scenes")) bad.push(where);
     }
     if (d === "engine" && PURE.has(f) && /from\s*["'](react|remotion)["']/.test(src)) bad.push(`${d}/${f}: pure engine module imports react/remotion`);

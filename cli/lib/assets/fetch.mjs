@@ -18,6 +18,28 @@ async function nextReadable(hits) {
   return null;
 }
 
+async function fetchGenerated(item, { dir, publicDir, gen }) {
+  const opts = { dir, publicDir, aspect: gen.aspect, llm: gen.llm, lookup: gen.lookup, onWarn: gen.onWarn ?? (() => {}) };
+  try {
+    return item.kind === "video" ? await generateVideo(item, { ...opts, defaults: gen.video ?? {} }) : await generateImage(item, { ...opts, defaults: gen.image ?? {} });
+  } catch (e) {
+    const still = item.kind === "video" && stillFallback(item, { publicDir, lookup: gen.lookup, reason: e.message });
+    if (still) {
+      opts.onWarn(`${item.id}: ${e.message.split("\n")[0].slice(0, 200)}; using still "${still.fallback.from}" (camera moves it; the next assets fetch tries the clip again)`);
+      return still;
+    }
+    if (!item.query && !item.url) throw e;
+    opts.onWarn(`${item.id}: ${e.message}; falling back to ${item.url ? "url" : `search "${item.query}"`}`);
+    return null;
+  }
+}
+
+const VISUAL_SOURCES = [
+  { matches: (item) => Boolean(item.capture?.url), fetch: async (item, { publicDir }) => (await import("../../commands/media.mjs")).captureItem(item, publicDir) },
+  { matches: (item) => Boolean(item.generate), fetch: fetchGenerated },
+  { matches: () => true, fetch: fetchExisting },
+];
+
 // Resolve one manifest item to a local file; returns the updated item.
 // `gen` carries generation settings: { aspect: "16:9", image, video, llm, ask, lookup, onWarn } (`ask`,
 // the LLM client's, also picks where a long film is cut). A failed
@@ -29,24 +51,14 @@ export async function fetchAsset(item, { publicDir, aspect = 16 / 9, gen = {} })
   // A still standing in for a failed clip goes back to being the clip it was meant to be.
   if (item.fallback) { const { fallback: _f, file: _file, ...rest } = item; item = { ...rest, kind: "video" }; }
 
-  // A UI capture re-shoots itself with the settings it was taken with.
-  if (item.capture?.url) return (await import("../../commands/media.mjs")).captureItem(item, publicDir);
-
-  if (item.generate) {
-    const opts = { dir, publicDir, aspect: gen.aspect, llm: gen.llm, lookup: gen.lookup, onWarn: gen.onWarn ?? (() => {}) };
-    try {
-      return item.kind === "video" ? await generateVideo(item, { ...opts, defaults: gen.video ?? {} }) : await generateImage(item, { ...opts, defaults: gen.image ?? {} });
-    } catch (e) {
-      const still = item.kind === "video" && stillFallback(item, { publicDir, lookup: gen.lookup, reason: e.message });
-      if (still) {
-        opts.onWarn(`${item.id}: ${e.message.split("\n")[0].slice(0, 200)}; using still "${still.fallback.from}" (camera moves it; the next assets fetch tries the clip again)`);
-        return still;
-      }
-      if (!item.query && !item.url) throw e;
-      opts.onWarn(`${item.id}: ${e.message}; falling back to ${item.url ? "url" : `search "${item.query}"`}`);
-    }
+  for (const source of VISUAL_SOURCES) {
+    if (!source.matches(item)) continue;
+    const resolved = await source.fetch(item, { dir, publicDir, aspect, gen });
+    if (resolved) return resolved;
   }
+}
 
+async function fetchExisting(item, { dir, publicDir, aspect, gen }) {
   let chosen = null;
   let ranked = [];
   if (item.url) chosen = { url: item.url, license: item.license, author: item.author, title: item.title, source: item.source ?? item.url, provider: "url", kind: item.kind ?? "image" };

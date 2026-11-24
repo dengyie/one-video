@@ -1,5 +1,6 @@
-import React, { useLayoutEffect, useState } from "react";
-import { Artifact, continueRender, delayRender } from "remotion";
+import React, { useLayoutEffect, useRef, useState } from "react";
+import { Artifact, continueRender, delayRender, useCurrentFrame } from "remotion";
+import { useTimeline } from "./context";
 
 type Rect = [number, number, number, number];
 
@@ -7,12 +8,13 @@ function overlayBounds(root: HTMLElement): Rect[] {
   const frame = root.getBoundingClientRect();
   if (!frame.width || !frame.height) return [];
   const boxes: Rect[] = [];
-  for (const el of root.querySelectorAll("[data-caption], [data-qc-watermark]")) {
+  for (const el of root.querySelectorAll("[data-qc-overlay]")) {
     const parent = el.parentElement;
-    if (getComputedStyle(el).opacity === "0" || (parent && getComputedStyle(parent).opacity === "0")) continue;
+    const style = getComputedStyle(el);
+    if (style.opacity === "0" || (parent && getComputedStyle(parent).opacity === "0")) continue;
     const r = el.getBoundingClientRect();
     let ink = r;
-    if (el.hasAttribute("data-caption") && (el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight)) {
+    if (style.overflow === "visible" && (el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight)) {
       const range = document.createRange();
       range.selectNodeContents(el);
       ink = range.getBoundingClientRect();
@@ -29,25 +31,35 @@ function overlayBounds(root: HTMLElement): Rect[] {
   return boxes;
 }
 
-export const QcBounds: React.FC<{ root: React.RefObject<HTMLDivElement | null>; filename: string }> = ({ root, filename }) => {
+const QcSample: React.FC<{ filename: string }> = ({ filename }) => {
+  const marker = useRef<HTMLSpanElement>(null);
   const [sample, setSample] = useState<{ handle?: number; boxes: Rect[] } | null>(null);
   useLayoutEffect(() => {
-    if (document.fonts.status === "loaded" && root.current) {
-      setSample({ boxes: overlayBounds(root.current) });
+    const root = marker.current?.closest<HTMLElement>("[data-probe=frame]");
+    if (!root) return;
+    if (document.fonts.status === "loaded") {
+      setSample({ boxes: overlayBounds(root) });
       return;
     }
     const handle = delayRender("QC overlay bounds");
     let active = true;
     void document.fonts.ready.then(() => {
-      if (active) setSample({ handle, boxes: root.current ? overlayBounds(root.current) : [] });
+      if (active) setSample({ handle, boxes: overlayBounds(root) });
     });
     return () => {
       active = false;
       continueRender(handle);
     };
-  }, [root]);
+  }, []);
   useLayoutEffect(() => {
     if (sample?.handle !== undefined) continueRender(sample.handle);
   }, [sample]);
-  return sample ? <Artifact filename={filename} content={JSON.stringify(sample.boxes)} /> : null;
+  return <><span ref={marker} hidden />{sample && <Artifact filename={filename} content={JSON.stringify(sample.boxes)} />}</>;
+};
+
+export const QcBounds: React.FC = () => {
+  const frame = useCurrentFrame();
+  const sample = useTimeline().qcBounds;
+  if (!sample || frame < sample.start || (frame - sample.start) % sample.step !== 0) return null;
+  return <QcSample key={frame} filename={`${sample.id}/${frame}.json`} />;
 };
