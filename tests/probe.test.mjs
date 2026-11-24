@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { REMOTION_BIN, TEMPLATE_DIR, run } from "../cli/lib/core/ffmpeg.mjs";
-import { probeIssues } from "../cli/lib/review/probe.mjs";
+import { overlayProbeFrames, probeIssues } from "../cli/lib/review/probe.mjs";
 import { frameRgb } from "../cli/lib/vision/screen.mjs";
 import { deviceViewportHeight, statCardColumns } from "../shared/safe-layout.mjs";
 import { hitsCaption } from "../shared/probe-order.mjs";
@@ -61,6 +61,34 @@ test("layout probe flags captions in a protected viewport without generating an 
   assert.equal(issue.fix, undefined);
 });
 
+test("kinetic number and unit fit the portrait shot through the count-up and hold", { skip: !existsSync(REMOTION_BIN) && "needs template dependencies" }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ov-kinetic-number-"));
+  try {
+    const theme = JSON.parse(readFileSync(new URL("../styles/vector-flow.json", import.meta.url), "utf8"));
+    const timeline = {
+      width: 540, height: 960, fps: 30, duration: 3, totalFrames: 90, theme,
+      captions: { enabled: false, items: [] }, sfx: [], narration: [], watermark: null,
+      scenes: [{
+        id: "value", type: "kinetic", from: 0, start: 0, duration: 3, durationInFrames: 90,
+        props: { lines: [{ text: "光速" }], number: { value: 299792458, format: { suffix: " 米/秒" }, cue: "number" } },
+        cues: { number: 0.5 }, shots: [{ t: 0, zoom: 1.12, x: 0.52, y: 0.5 }],
+      }],
+    };
+    const props = join(dir, "props.json"), job = join(dir, "job.json"), out = join(dir, "probe.json");
+    const frames = [35, 46, 65].map((frame) => ({ frame, file: join(dir, `${frame}.jpg`) }));
+    writeFileSync(props, JSON.stringify(timeline));
+    writeFileSync(job, JSON.stringify({ entry: "src/index.ts", props, out, probe: true, publicDir: join(TEMPLATE_DIR, "public"), frames }));
+    await run(process.execPath, [join(TEMPLATE_DIR, "stills.mjs"), job]);
+    for (const { scenes } of JSON.parse(readFileSync(out, "utf8"))) {
+      const value = scenes[0].texts.find((t) => t.text.endsWith("米/秒"));
+      assert.ok(value && !value.cut && value.box[0] > 0.015 && value.box[2] < 0.985);
+      assert.ok(value.box[3] - value.box[1] < 0.12, "the value and unit are on one line");
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("probe counts a sticker's hits only when it is drawn in front of the caption", () => {
   const ink = {}, sticker = {}, background = {};
   const caption = { contains: (e) => e === ink || e === caption };
@@ -86,6 +114,25 @@ test("probeIssues flags a sticker hiding a line and finds a clear height", () =>
   assert.deepEqual(out[0].at, { scene: "s", from: 11, to: 15, field: "overlays[0]" });
   const y = Number(out[0].msg.match(/y (0\.\d+)/)[1]);
   assert.ok(y <= 0.47 || y >= 0.54, `y ${y} still meets the line`);
+});
+
+test("overlay probes sample between preview stills and never leave the scene", () => {
+  const scene = { from: 90, duration: 5, durationInFrames: 150, overlays: [
+    { type: "word", t: 2, end: 2.4 }, { type: "stamp", t: 4, end: 5.5 },
+    { type: "flash", t: 3, end: 4 }, { type: "word", t: 5.1, end: 6 },
+  ] };
+  assert.deepEqual(overlayProbeFrames(scene, 30, [129, 219]), [156, 225]);
+});
+
+test("probe fixes avoid covering a different line later in the same overlay", () => {
+  const rec = { i: 0, box: [0.3, 0.44, 0.7, 0.52], covers: [{ t: 0, area: 0.004 }] };
+  const [initial] = probeIssues(shot([rec], [title]), tl());
+  const dy = initial.fix.set.y - 0.5;
+  const laterText = { text: "the next label", box: [0.3, 0.44 + dy, 0.7, 0.52 + dy] };
+  const later = shot([{ ...rec, covers: [] }], [laterText]);
+  const [both] = probeIssues([...shot([rec], [title]), ...later], tl());
+  const moved = both.fix.set.y - 0.5;
+  assert.ok(0.52 + moved <= laterText.box[1] || 0.44 + moved >= laterText.box[3]);
 });
 
 test("probeIssues trusts hit-tested coverage over the bounding box", () => {

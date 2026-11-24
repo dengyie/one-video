@@ -26,10 +26,11 @@ export function readQcBounds(video) {
     if (!data || data.version !== 1 || !Number.isInteger(data.step) || data.step < 1 || !Array.isArray(data.samples)) return null;
     const { size, signature } = identity(video);
     if (data.size !== size || data.signature !== signature) return null;
-    return { step: data.step, samples: data.samples.map((boxes) => Array.isArray(boxes) && boxes.every(isRect) ? boxes : null) };
+    return { step: data.step, samples: data.samples.map((boxes) => Array.isArray(boxes) && boxes.every(isRect) ? boxes : null),
+      ...(data.voiceFallback && { voiceFallback: data.voiceFallback }) };
   } catch { return null; }
 }
 
-export function writeQcBounds(video, { step, samples }) {
-  writeJson(qcBoundsPath(video), { version: 1, ...identity(video), step, samples });
+export function writeQcBounds(video, { step, samples, voiceFallback }) {
+  writeJson(qcBoundsPath(video), { version: 1, ...identity(video), step, samples, voiceFallback });
 }

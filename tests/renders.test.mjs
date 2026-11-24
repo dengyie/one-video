@@ -42,7 +42,8 @@ test("render bounds follow the alias, reject substituted MP4s, and are pruned wi
   const p = project();
   const { file, v } = versionFile(p, {});
   const alias = join(p.paths.out, "demo.mp4");
-  const bounds = { step: 15, samples: [[], [[0.25, 0.8, 0.75, 0.9]], null] };
+  const bounds = { step: 15, samples: [[], [[0.25, 0.8, 0.75, 0.9]], null],
+    voiceFallback: { model: "stock", voice: "白桦", fallbackFor: { model: "clone" } } };
   writeFileSync(file, "first");
   writeQcBounds(file, bounds);
   recordRender(p, { file, v }, { alias });

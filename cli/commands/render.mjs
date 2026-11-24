@@ -19,7 +19,7 @@ import { toSrt, toVtt } from "../lib/captions/index.mjs";
 import { resolveApiKey, trustedKeyHost } from "../lib/core/http.mjs";
 import { ttsConfig } from "../lib/voice/tts.mjs";
 import { ensureVariantTimings } from "../lib/voice/variant.mjs";
-import { probeIssues, saveProbe } from "../lib/review/probe.mjs";
+import { overlayProbeFrames, probeIssues, saveProbe } from "../lib/review/probe.mjs";
 import * as media from "./media.mjs";
 import { assetFileExists, clipFrames, countFrames, framesDir } from "../lib/assets/index.mjs";
 import { IMAGE_DEFAULTS, VIDEO_DEFAULTS } from "../lib/generate/index.mjs";
@@ -88,7 +88,7 @@ async function renderWithBounds(project, flags, tl, file, range) {
     const samples = [];
     for (let frame = start; frame <= end; frame += step) samples.push(readJson(join(artifacts, `${frame}.json`), null));
     if (samples.some((boxes) => boxes === null)) warn("some QC overlay bounds are missing; those samples will use legacy detection");
-    writeQcBounds(video, { step, samples });
+    writeQcBounds(video, { step, samples, voiceFallback: tl.voiceFallback });
   } finally {
     rmSync(artifacts, { recursive: true, force: true });
     rmSync(dir, { recursive: true, force: true });
@@ -168,10 +168,10 @@ export async function versions(args) {
 }
 
 // One JPEG per scene and fraction of it (--at 0.7 or a list 0.3,0.6,0.9; a list adds the fraction to the name).
-async function renderStills(project, tl, { dir, only = null, ats = [0.7] }) {
+async function renderStills(project, tl, { dir, only = null, ats = [0.7], probeOverlays = false }) {
   if (ats.some((a) => !Number.isFinite(a) || a < 0 || a > 1)) throw new UserError(`--at takes fractions 0–1, got "${ats.join(",")}"`);
   mkdirSync(dir, { recursive: true });
-  const shots = [];
+  const shots = [], extras = [];
   for (const [i, s] of tl.scenes.entries()) {
     if (only && !only.includes(s.id)) continue;
     for (const at of ats) {
@@ -179,13 +179,15 @@ async function renderStills(project, tl, { dir, only = null, ats = [0.7] }) {
       const file = join(dir, `${String(i + 1).padStart(2, "0")}-${s.id}${ats.length > 1 ? `@${at}` : ""}.jpg`);
       shots.push({ scene: s.id, at, t: +(frame / tl.fps).toFixed(2), file, frame });
     }
+    if (probeOverlays) extras.push(...overlayProbeFrames(s, tl.fps, shots.filter((shot) => shot.scene === s.id).map((shot) => shot.frame)));
   }
   if (!shots.length) return { shots, probe: [] };
   // One bundle for the batch; each frame also reports where its stickers and text landed.
   const tmp = mkdtempSync(join(tmpdir(), "onevideo-stills-"));
   try {
     const job = join(tmp, "job.json"), out = join(tmp, "probe.json");
-    writeFileSync(job, JSON.stringify({ entry: ENTRY, composition: COMPOSITION, props: project.paths.timeline, publicDir: project.p("public"), scale: 0.5, probe: true, frames: shots.map(({ frame, file }) => ({ frame, file })), out }));
+    const frames = [...shots.map(({ frame, file }) => ({ frame, file })), ...extras.map((frame) => ({ frame, file: join(tmp, `overlay-${frame}.jpg`) }))];
+    writeFileSync(job, JSON.stringify({ entry: ENTRY, composition: COMPOSITION, props: project.paths.timeline, publicDir: project.p("public"), scale: 0.5, probe: true, frames, out }));
     await run(process.execPath, [join(TEMPLATE_DIR, "stills.mjs"), job], { cwd: TEMPLATE_DIR, stdio: "inherit" });
     const probe = probeIssues(readJson(out), tl, { variant: project.aspect ?? null });
     saveProbe(project, tl.aspect, probe);
@@ -203,7 +205,7 @@ export async function stills(args) {
   await ensureVariantTimings(project);
   const tl = freshTimeline(project, { force: Boolean(args.force) });
   const dir = join(project.paths.out, "stills", ...(project.aspect ? [aspectTag(project.aspect)] : []));
-  const { probe } = await renderStills(project, tl, { dir, only: typeof args.scene === "string" ? args.scene.split(",") : null, ats: args.at !== undefined ? String(args.at).split(",").map(Number) : [0.7] });
+  const { probe } = await renderStills(project, tl, { dir, only: typeof args.scene === "string" ? args.scene.split(",") : null, ats: args.at !== undefined ? String(args.at).split(",").map(Number) : [0.7], probeOverlays: args.at === undefined });
   printIssues(probe);
 }
 
@@ -220,7 +222,7 @@ export async function preview(args) {
   const dir = join(project.paths.out, "preview");
   rmSync(dir, { recursive: true, force: true });
   const ats = args.at !== undefined ? String(args.at).split(",").map(Number) : PREVIEW_AT;
-  const { shots, probe } = await renderStills(project, tl, { dir, ats });
+  const { shots, probe } = await renderStills(project, tl, { dir, ats, probeOverlays: true });
   const sheets = await writeImageSheets(shots, join(project.paths.out, "qc"), { prefix: "preview", cols: ats.length * 2 });
   const { issues } = checkProject(project, { needTimings: true });
   printIssues(probe);

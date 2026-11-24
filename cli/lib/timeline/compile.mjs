@@ -359,6 +359,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     watermark,
     captions,
     narration,
+    ...(narration.length && timings?.voice?.fallbackFor && { voiceFallback: timings.voice }),
     music,
     sfx,
     chapters,

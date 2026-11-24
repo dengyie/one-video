@@ -1,15 +1,60 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { sceneSpeech, timingHashes } from "../cli/lib/voice/tts.mjs";
+import { sceneSpeech, timingHashes, timingVoice } from "../cli/lib/voice/tts.mjs";
 import { ensureVariantTimings, respan, timingsFresh, variantTimings } from "../cli/lib/voice/variant.mjs";
+import { writeWav } from "../cli/lib/audio/wav.mjs";
 
 const scene = { id: "a", narration: "SpaceX这次上市计划募资超过七百五十亿美元，将成为有史以来规模最大的一次首次公开募股。它凭什么值这么多钱？" };
 const silent = { id: "b" };
 const script = { scenes: [scene, silent] };
 const main = { aspect: "16:9" }, tall = { aspect: "9:16" };
+
+function restoredCloneProject(ctx, scene, overrides = {}) {
+  const root = mkdtempSync(join(tmpdir(), "ov-variant-restored-clone-"));
+  ctx.after(() => rmSync(root, { recursive: true, force: true }));
+  const paths = { script: join(root, "script.json"), timings: join(root, "timings.9x16.json"), linesDir: join(root, "lines") };
+  const tts = { ref: "voice.wav", fallbackVoice: "白桦", ...overrides };
+  const mainProject = { config: { ...main, tts }, timings: join(root, "timings.json") };
+  const config = { ...tall, tts };
+  const project = { root, aspect: "9:16", config, paths, main: mainProject };
+  const script = { scenes: [scene] };
+  const clone = { model: "mimo-v2.5-tts-voiceclone", voice: "ref:voice.wav" };
+  const fallback = { model: "mimo-v2.5-tts", voice: "白桦", fallbackFor: clone };
+  const make = (voice, file, config) => {
+    const hashes = timingHashes(scene, config, {}, timingVoice(config, voice));
+    const lines = sceneSpeech(scene, config, {}).lines.map((l, i) => ({ ...l, hash: hashes[i], start: i, end: i + 1 }));
+    writeWav(join(root, "public", file), { samples: new Int16Array(24000 * lines.length).fill(2000), sampleRate: 24000, channels: 1 });
+    return { voice, scenes: { a: { file, duration: lines.length, lines } } };
+  };
+  const stock = make(fallback, "audio/9x16/a.wav", config);
+  writeFileSync(paths.script, JSON.stringify(script));
+  writeFileSync(paths.timings, JSON.stringify(stock));
+  const restore = () => writeFileSync(mainProject.timings, JSON.stringify(make(clone, "audio/a.wav", mainProject.config)));
+  return { project, script, stock, clone, restore };
+}
+
+test("ensureVariantTimings replaces stock fallback after main narration restores the clone", async (ctx) => {
+  const { project, script, stock, clone, restore } = restoredCloneProject(ctx, { id: "a", narration: "甲乙丙丁。" });
+  assert.deepEqual(await ensureVariantTimings(project), stock);
+  restore();
+  const out = await ensureVariantTimings(project);
+  assert.deepEqual(out.voice, clone);
+  assert.equal(out.scenes.a.file, "audio/a.wav");
+  assert.notEqual(out.scenes.a.lines[0].hash, stock.scenes.a.lines[0].hash);
+  assert.equal(timingsFresh(script, out, project.config), true);
+});
+
+test("an offline line-mode variant keeps valid stock narration when restored main clone has different cuts", async (ctx) => {
+  const { project, stock, restore } = restoredCloneProject(ctx, scene, { unit: "line", baseUrl: "http://127.0.0.1:1", keyEnv: "OV_TEST_OFFLINE_VARIANT_KEY" });
+  restore();
+  const mainTimings = JSON.parse(readFileSync(project.main.timings, "utf8"));
+  assert.notEqual(mainTimings.scenes.a.lines.length, stock.scenes.a.lines.length);
+  assert.deepEqual(await ensureVariantTimings(project), stock);
+  assert.deepEqual(JSON.parse(readFileSync(project.paths.timings, "utf8")), stock);
+});
 
 // The main timings as tts writes them: one scene audio, three lines on its pauses.
 function mainTimings(spans = [[0, 3.1], [3.4, 6.6], [7, 8.5]]) {
@@ -52,6 +97,22 @@ test("variantTimings gives up when the variant speaks other audio or the main mi
   assert.equal(variantTimings(script, { scenes: {} }, main, tall), null);
   // Another lexicon changes what is spoken: the scene audio differs.
   assert.equal(variantTimings(script, tl, main, { ...tall, lexicon: { SpaceX: "太空探索" } }), null);
+});
+
+test("updated caption boundaries cannot reuse stale text with the same scene audio hash and line count", () => {
+  const s = { id: "c", narration: "这个数是国际单位制直接定义的。" };
+  const config = { aspect: "9:16" };
+  const hashes = timingHashes(s, config, {});
+  const old = { scenes: { c: { file: "audio/c.wav", duration: 3, lines: [
+    { text: "这个数是国际单位制直接定义", start: 0, end: 2, hash: hashes[0] },
+    { text: "的", start: 2, end: 3, hash: hashes[1] },
+  ] } } };
+  const script = { scenes: [s] };
+  assert.equal(timingsFresh(script, old, config), false);
+  const updated = variantTimings(script, old, config, config);
+  assert.ok(timingsFresh(script, updated, config));
+  assert.equal(updated.scenes.c.file, "audio/c.wav");
+  assert.equal(updated.scenes.c.lines[1].text, "直接定义的");
 });
 
 test("ensureVariantTimings derives the variant's timings from fresh main ones without audio or key", async () => {

@@ -109,7 +109,7 @@ async function send(url, config, timeoutSec, retries) {
     try {
       const res = await runCurl(config, timeoutSec);
       if (res.status >= 200 && res.status < 300) return res;
-      last = new Error(`HTTP ${res.status} from ${new URL(url).host}: ${res.body.subarray(0, 300).toString()}`);
+      last = Object.assign(new Error(`HTTP ${res.status} from ${new URL(url).host}: ${res.body.subarray(0, 300).toString()}`), { status: res.status });
       if (res.status < 500 && res.status !== 429) break;
     } catch (e) {
       last = e;
@@ -132,16 +132,23 @@ export async function download(url, opts) {
   return (await request(url, { timeoutSec: 300, ...opts })).body;
 }
 
-// Run tasks with bounded concurrency, preserving result order.
+// Run tasks with bounded concurrency, preserving result order. On failure, drain only work
+// already started before rejecting so a caller can safely retry with a different strategy.
 export async function pool(items, limit, fn) {
   const out = new Array(items.length);
   let next = 0;
+  let failure;
   const worker = async () => {
-    while (next < items.length) {
+    while (!failure && next < items.length) {
       const i = next++;
-      out[i] = await fn(items[i], i);
+      try {
+        out[i] = await fn(items[i], i);
+      } catch (error) {
+        failure ??= { error };
+      }
     }
   };
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  if (failure) throw failure.error;
   return out;
 }

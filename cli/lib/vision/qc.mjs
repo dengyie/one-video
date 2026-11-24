@@ -229,6 +229,8 @@ export async function runQc({ video, timeline, outDir, bounds, readVoice, thresh
   const t = deepMerge(QC_DEFAULTS, thresholds);
   const checks = [];
   const add = (id, status, detail) => checks.push({ id, status, detail });
+  const fallback = bounds?.voiceFallback;
+  if (fallback?.fallbackFor) add("voice-fallback", "warn", `used stock voice "${fallback.voice}" (${fallback.model}) instead of the requested clone (${fallback.fallbackFor.model})`);
 
   const probe = await ffprobe(video);
   const v = probe.streams.find((s) => s.codec_type === "video");

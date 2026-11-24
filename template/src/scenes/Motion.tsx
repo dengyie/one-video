@@ -1,7 +1,8 @@
 import React from "react";
 import { Img, staticFile } from "remotion";
 import { Highlight, Underline } from "@remotion/rough-notation";
-import { colorAt, cueOr, textEms, useLayout, useRevealAt, useScene, useTheme, useTime, useTimeline } from "../engine/context";
+import { colorAt, cueOr, fitFont, textEms, useLayout, useRevealAt, useScene, useTheme, useTime, useTimeline } from "../engine/context";
+import { seenSpan } from "../engine/camera";
 import { fmt, fmtCount } from "../engine/format";
 import { clamp01, easeInOut, easeOut, easeOutBack, lerp } from "../engine/motion";
 import type { Format } from "../engine/types";
@@ -66,13 +67,16 @@ export const KineticScene: React.FC<{ lines: KLine[]; align?: "left" | "center";
   lines, align = "center", kicker, number,
 }) => {
   const theme = useTheme();
-  const { u } = useLayout();
+  const { u, width, pad } = useLayout();
   const at = useRevealAt();
   const scene = useScene();
   const t = useTime();
   const k = easeOut((t - 0.05) / 0.5);
   const nAt = number ? cueOr(scene, number.cue, at(lines.length, lines.length + 1)) : 0;
   const np = number ? easeOut((t - nAt) / 0.9) : 0;
+  const [left, right] = seenSpan(number ? scene.shots : undefined, nAt, scene.duration);
+  const room = align === "center" ? Math.min(0.5 - left, right - 0.5) * 2 * width : right * width - pad;
+  const numberSize = number ? fitFont(fmtCount(number.value, number.value, number.format), Math.max(1, Math.min(width - 2 * pad, room)) * 0.94, 190 * u) : 0;
   // The count-up runs small, then slams to full size; easeOutBack's overshoot is the pop, so it settles without a jump.
   const slam = number ? easeOutBack(clamp01((t - nAt - 0.75) / 0.3)) : 0;
   return (
@@ -81,7 +85,7 @@ export const KineticScene: React.FC<{ lines: KLine[]; align?: "left" | "center";
       {lines.map((l, i) => <KineticLine key={i} line={l} at={at(i, lines.length + (number ? 1 : 0), l.cue)} align={align} />)}
       {number && (
         <div style={{ textAlign: align, opacity: clamp01((t - nAt) / 0.2) }}>
-          <div style={{ fontFamily: theme.fonts.number, fontSize: 190 * u, fontWeight: 900, lineHeight: 1, color: theme.colors.accent, transform: `scale(${lerp(0.76, 1, slam)})` }}>
+          <div style={{ fontFamily: theme.fonts.number, fontSize: numberSize, fontWeight: 900, whiteSpace: "nowrap", lineHeight: 1, color: theme.colors.accent, transform: `scale(${lerp(0.76, 1, slam)})` }}>
             {fmtCount(number.value * np, number.value, number.format)}
           </div>
           {number.label && <div style={{ fontSize: 34 * u, color: theme.colors.muted, marginTop: 10 * u }}>{number.label}</div>}

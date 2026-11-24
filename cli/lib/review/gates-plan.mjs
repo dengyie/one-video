@@ -3,7 +3,7 @@
 import { loadSchema, validate } from "../core/schema.mjs";
 import { normalizeLicense } from "../core/license.mjs";
 import { extractNumbers, parseNumber, spokenLength } from "../core/text.mjs";
-import { timingHashes } from "../voice/tts.mjs";
+import { timingHashes, timingLinesMatch, timingVoice } from "../voice/tts.mjs";
 import { sceneLines } from "../captions/lines.mjs";
 import { named, sameWorld } from "../timeline/index.mjs";
 import { GATE_DEFAULTS, STATIC_TYPES, issue } from "./issue.mjs";
@@ -146,12 +146,12 @@ function cueRefs(v, out = []) {
 // otherwise captions and cues would be timed against audio of a different script.
 export function timingsGate(script, timings, config) {
   const lexicon = { ...(config.lexicon ?? {}), ...(script.lexicon ?? {}) };
+  const voice = timingVoice(config, timings.voice);
   const out = [];
   for (const s of script.scenes) {
-    const want = timingHashes(s, config, lexicon);
-    const have = (timings.scenes?.[s.id]?.lines ?? []).map((l) => l.hash);
-    if (!want.length && !have.length) continue;
-    if (want.join() !== have.join()) out.push(issue("error", "timings", `scene "${s.id}" narration or voice changed since tts; run: onevideo tts`));
+    const want = timingHashes(s, config, lexicon, voice ?? undefined);
+    const have = timings.scenes?.[s.id]?.lines ?? [];
+    if ((want.length && !voice) || !timingLinesMatch(have, want, sceneLines(s, config))) out.push(issue("error", "timings", `scene "${s.id}" narration, captions or voice changed since tts; run: onevideo tts`));
   }
   return out;
 }

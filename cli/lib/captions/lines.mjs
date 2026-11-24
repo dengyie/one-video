@@ -5,6 +5,8 @@ import { visualLength } from "../core/text.mjs";
 const SENTENCE_END = /[。！？!?；;…]/;
 const CLAUSE_END = /[，,、：:]/;
 const TRAILING = /[。！？!?；;…，,、：:\s]+$/u;
+const TOKEN = /(?:[A-Za-z]|\d+[A-Za-z])[A-Za-z\d]*(?:[.-][A-Za-z\d]+)*|\d+(?:[.,]\d+)*(?:%|(?:万亿|亿|万)?(?:美元|元)|万亿|亿|万)?/g;
+const segmenter = new Intl.Segmenter("zh", { granularity: "word" });
 
 // Portrait as the engine decides it (height ≥ 1.5 × width), so a custom width/height counts too.
 export function captionMaxChars(config) {
@@ -40,9 +42,11 @@ export function splitLines(text, maxChars = 24) {
 function chunk(text, re) {
   const out = [];
   let cur = "";
-  for (const ch of text.replace(/\s*\n\s*/g, "")) {
+  const chars = [...text.replace(/\s*\n\s*/g, "")];
+  for (const [i, ch] of chars.entries()) {
     cur += ch;
-    if (re.test(ch)) { out.push(cur); cur = ""; }
+    const numericComma = ch === "," && /\d/.test(chars[i - 1] ?? "") && /\d/.test(chars[i + 1] ?? "");
+    if (!numericComma && re.test(ch)) { out.push(cur); cur = ""; }
   }
   if (cur.trim()) out.push(cur);
   return out.map((s) => s.trim()).filter(Boolean);
@@ -53,21 +57,35 @@ function push(lines, raw, pause) {
   if (text) lines.push({ text, pause });
 }
 
-// A clause longer than maxChars is cut at the last safe boundary (never inside a Latin word or number).
+// Keep fitting Latin words and numbers intact, and rebalance a short tail of a forced wrap.
 function flushLong(lines, s, maxChars, pause) {
-  let rest = s;
-  while (visualLength(rest.replace(TRAILING, "")) > maxChars) {
+  let rest = s.replace(TRAILING, "").trim();
+  while (visualLength(rest) > maxChars) {
     const chars = [...rest];
-    let cut = 0, w = 0;
-    for (let i = 0; i < chars.length; i++) {
-      w += visualLength(chars[i]);
-      if (w > maxChars) break;
-      const a = chars[i], b = chars[i + 1] ?? "";
-      if (!(/[A-Za-z0-9.%]/.test(a) && /[A-Za-z0-9.%]/.test(b))) cut = i + 1;
+    const protectedCuts = new Set();
+    for (const m of rest.matchAll(TOKEN)) {
+      for (let k = m.index + 1; k < m.index + m[0].length; k++) protectedCuts.add(k);
     }
-    if (cut === 0) cut = Math.max(1, Math.floor(chars.length / 2));
-    push(lines, chars.slice(0, cut).join(""), "clause");
-    rest = chars.slice(cut).join("");
+    const safe = [];
+    let w = 0, limit = 0;
+    for (const ch of chars) {
+      w += visualLength(ch);
+      if (w > maxChars) break;
+      limit += ch.length;
+      if (!protectedCuts.has(limit)) safe.push(limit);
+    }
+    let cut = safe.at(-1) ?? (limit || chars[0].length);
+    if (visualLength(rest.slice(cut).trim()) <= 2) {
+      const min = Math.min(4, maxChars / 3);
+      const balanced = safe.filter((k) => {
+        const tail = visualLength(rest.slice(k).trim());
+        return tail >= min && tail <= maxChars && visualLength(rest.slice(0, k).trim()) >= min;
+      });
+      const words = new Set(Array.from(segmenter.segment(rest), ({ index }) => index));
+      cut = balanced.findLast((k) => words.has(k)) ?? balanced.at(-1) ?? cut;
+    }
+    push(lines, rest.slice(0, cut), "clause");
+    rest = rest.slice(cut).trimStart();
   }
   push(lines, rest, pause);
 }

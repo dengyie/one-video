@@ -1,12 +1,79 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { createServer } from "node:http";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { alignLines, lineHash, runTts, sceneSpeech, timingHashes, ttsConfig } from "../cli/lib/voice/tts.mjs";
+import { alignLines, lineHash, runTts, sceneSpeech, timingHashes, timingVoice, ttsConfig } from "../cli/lib/voice/tts.mjs";
 import { findPauses, readWav, toMono, writeWav } from "../cli/lib/audio/wav.mjs";
 import { captionAt, captionWindows } from "../shared/caption-timing.mjs";
-import { rateGate } from "../cli/lib/review/gates.mjs";
+import { rateGate, timingsGate } from "../cli/lib/review/gates.mjs";
+import { pool } from "../cli/lib/core/http.mjs";
+
+test("a failed clone worker drains in-flight synthesis but never starts queued clone jobs", async () => {
+  let finishInflight;
+  const inflight = new Promise((resolve) => { finishInflight = resolve; });
+  const unavailable = new Error("clone unavailable");
+  const started = [];
+  let drained = false;
+  const take = pool(["failing", "in flight", "queued"], 2, async (scene) => {
+    started.push(scene);
+    if (scene === "failing") throw unavailable;
+    if (scene === "in flight") {
+      await inflight;
+      drained = true;
+    }
+  });
+  const rejected = assert.rejects(take, (error) => {
+    assert.equal(drained, true, "fallback must not race an in-flight clone");
+    return error === unavailable;
+  });
+  await new Promise(setImmediate);
+  finishInflight();
+  await rejected;
+  assert.deepEqual(started, ["failing", "in flight"]);
+});
+
+test("a clone outage retries, then uses the opted-in stock voice for the entire take", async (ctx) => {
+  const root = mkdtempSync(join(tmpdir(), "ov-voice-fallback-"));
+  ctx.after(() => rmSync(root, { recursive: true, force: true }));
+  const paths = { linesDir: join(root, "lines"), audioDir: join(root, "audio") };
+  const reference = "voice.wav";
+  writeWav(join(root, reference), { samples: new Int16Array(24000).fill(2000), sampleRate: 24000, channels: 1 });
+  const data = readFileSync(join(root, reference)).toString("base64");
+  const calls = [];
+  const server = createServer(async (req, res) => {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    const { model, audio } = JSON.parse(body);
+    calls.push({ model, voice: audio.voice.replace(/^data:audio\/wav;base64,.*/, "(reference WAV)") });
+    if (model === "mimo-v2.5-tts-voiceclone") res.writeHead(503).end();
+    else res.end(JSON.stringify({ choices: [{ message: { audio: { data } } }] }));
+  });
+  await new Promise((ready) => server.listen(0, "127.0.0.1", ready));
+  ctx.after(() => server.close());
+  const keyEnv = "OV_TEST_VOICE_FALLBACK_KEY";
+  process.env[keyEnv] = "test";
+  ctx.after(() => delete process.env[keyEnv]);
+  const config = { tts: { baseUrl: `http://127.0.0.1:${server.address().port}`, keyEnv, ref: reference, fallbackVoice: "白桦", loudness: false } };
+  const script = { scenes: [{ id: "a", narration: "甲乙。" }, { id: "b", narration: "丙丁。" }] };
+  const t = ttsConfig(config);
+  const cloneCache = join(paths.linesDir, `${lineHash(sceneSpeech(script.scenes[0], config, {}).speak, t)}.wav`);
+  writeWav(cloneCache, { samples: new Int16Array(48000).fill(2000), sampleRate: 24000, channels: 1 });
+
+  const result = await runTts({ root, config, paths }, script);
+  assert.equal(calls.length, 6);
+  assert.deepEqual(calls.slice(0, 4), Array(4).fill({ model: t.model, voice: "(reference WAV)" }));
+  assert.deepEqual(calls.slice(4), Array(2).fill({ model: "mimo-v2.5-tts", voice: "白桦" }));
+  assert.equal(result.voice.voice, "白桦");
+  assert.equal(result.voice.fallbackFor.model, t.model);
+  assert.equal(result.scenes.a.duration, 1.5, "the cached clone for scene a was not mixed into this take");
+  const hashes = result.scenes.a.lines.map((l) => l.hash);
+  assert.deepEqual(hashes, timingHashes(script.scenes[0], config, {}, timingVoice(config, result.voice)));
+  assert.notDeepEqual(hashes, timingHashes(script.scenes[0], config, {}));
+  assert.deepEqual(timingsGate(script, result, config), []);
+  assert.equal(await runTts({ root, config, paths }, script, { cachedOnly: true }), null, "fallback is not a clone cache hit");
+});
 
 async function cachedSceneWithPause({ duration, pause, tempo }) {
   const root = mkdtempSync(join(tmpdir(), "ov-pause-tempo-"));
@@ -153,6 +220,16 @@ test("alignLines keeps boundaries in time order when a pause sits past the next 
   const spans = alignLines([50, 1, 49], 10, [[5.5, 6.0]], ["sentence", "clause"]);
   assert.deepEqual(spans, [[0, 5], [5, 5.5], [6, 10]]);
   for (let k = 1; k < spans.length; k++) assert.ok(spans[k][0] >= spans[k - 1][1]);
+});
+
+test("line-mode speech keeps digit-led tokens whole at a portrait wrap boundary", () => {
+  const config = { aspect: "9:16", tts: { unit: "line" } };
+  for (const token of ["0x1", "0x1F", "3D"]) {
+    const narration = `这里这里这里这里这里这里${token}继续阅读更多内容`;
+    const { lines } = sceneSpeech({ narration }, config, {});
+    assert.ok(lines.some((line) => line.text.includes(token) && line.speak.includes(token)), token);
+    assert.equal(lines.map((line) => line.speak).join(""), narration);
+  }
 });
 
 test("sceneSpeech speaks the narration with its own punctuation", () => {

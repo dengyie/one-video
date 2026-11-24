@@ -1,6 +1,13 @@
 import { request } from "../core/http.mjs";
 import { parseWav } from "../audio/wav.mjs";
 
+export class TtsUnavailable extends Error {
+  constructor(model) {
+    super(`TTS model "${model}" is unavailable (HTTP 503 after retries)`);
+    this.model = model;
+  }
+}
+
 // The chat request for one synthesis: the style (or speaker description) is the user
 // turn, the text the assistant turn. Voice design itself takes no voice.
 export function chatRequest(speak, t) {
@@ -30,7 +37,13 @@ const PROVIDERS = {
 
 export async function synthesize(speak, t, key, send = request) {
   const provider = Object.hasOwn(PROVIDERS, t.protocol) ? PROVIDERS[t.protocol] : PROVIDERS.speech;
-  const wav = await provider(speak, t, key, t.baseUrl.replace(/\/$/, ""), send);
+  let wav;
+  try {
+    wav = await provider(speak, t, key, t.baseUrl.replace(/\/$/, ""), send);
+  } catch (error) {
+    if (error.status === 503) throw new TtsUnavailable(t.model);
+    throw error;
+  }
   if (wav.subarray(0, 4).toString() !== "RIFF") throw new Error(`TTS returned non-WAV data: ${wav.subarray(0, 200).toString()}`);
   parseWav(wav, { strict: true }); // fail fast on a truncated file
   return wav;
