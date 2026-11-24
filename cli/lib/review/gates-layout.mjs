@@ -3,7 +3,7 @@
 // material density. Overlay boxes are frame fractions; the camera, caption band, reveal rhythm and
 // map labels come from shared/, the renderer's own models.
 import { normalizeLicense } from "../core/license.mjs";
-import { captionBand, seenBox } from "../../../shared/camera.mjs";
+import { captionBand, seenBox, viewAt } from "../../../shared/camera.mjs";
 import { meets } from "../../../shared/boxes.mjs";
 import { textEms } from "../../../shared/labels.mjs";
 import { paceOf } from "../../../shared/reveal.mjs";
@@ -174,6 +174,28 @@ export function densityGate(timeline, assets, config) {
   for (const sc of timeline.scenes) {
     if (!TEXT_TYPES.has(sc.type) || sc.type === "sources" || sc.duration <= g.bareTextMax) continue;
     if (!assetRefs(sc).size) out.push(issue("warn", "density", `scene "${sc.id}" is ${sc.duration.toFixed(1)}s of ${sc.type} text with no photo, footage or logo — add a backdrop, photo-stack or image overlay`));
+  }
+  return out;
+}
+
+const HEAVY_UPSCALE = 1.75;
+export function footageUpscaleGate(timeline, assets) {
+  const byId = new Map((assets?.items ?? []).map((a) => [a.id, a]));
+  const out = [];
+  for (const sc of timeline.scenes) {
+    if (sc.type !== "footage") continue;
+    const a = byId.get(sc.props.asset);
+    if (a?.kind !== "video" || !(a.width > 0 && a.height > 0)) continue;
+    const cover = Math.max(timeline.width / a.width, timeline.height / a.height);
+    let peak = 0, peakFrame = 0;
+    for (let frame = 0; frame < sc.durationInFrames + (sc.transitionOut?.tail ?? 0); frame++) {
+      const scale = cover * viewAt(sc.shots, frame / timeline.fps).zoom;
+      if (scale > peak) { peak = scale; peakFrame = frame; }
+    }
+    if (peak < HEAVY_UPSCALE) continue;
+    const from = sc.start + peakFrame / timeline.fps;
+    out.push(issue("warn", "assets", `scene "${sc.id}" footage "${a.id}": ${a.width}×${a.height} source enlarged up to ${peak.toFixed(2)}× by cover crop and shot zoom; use a higher-resolution or aspect-matched clip, or reduce the shot zoom`,
+      { scene: sc.id, from, to: from + 1 / timeline.fps }));
   }
   return out;
 }

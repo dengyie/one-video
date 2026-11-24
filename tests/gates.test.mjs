@@ -1,12 +1,27 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, timingsGate, normalizeLicense, summarize, questionGate, echoGate, layoutGate, fitOverlays, densityGate, drawnGate } from "../cli/lib/review/gates.mjs";
-import { revealGate, rhythmGate, screenEvents } from "../cli/lib/review/gates.mjs";
+import { revealGate, rhythmGate, screenEvents, footageUpscaleGate } from "../cli/lib/review/gates.mjs";
 import { checkNotes, checkTone, matchGates, meanLuma, mergePasses, median, noteKind, storyboardSpot, toneOf } from "../cli/lib/review/look-check.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { example } from "./helpers.mjs";
 
 const msgs = (issues, gate) => issues.filter((i) => !gate || i.gate === gate).map((i) => i.msg);
+
+test("footage upscale warnings account for the cover crop and the shot at rendered frames", () => {
+  const scene = { id: "hook", type: "footage", props: { asset: "clip" }, start: 0, durationInFrames: 60,
+    shots: [{ t: 0, zoom: 1 }, { t: 1, zoom: 1.2, cut: true }, { t: 2, zoom: 2, cut: true }] };
+  const assets = { items: [{ id: "clip", kind: "video", width: 1920, height: 1080 }] };
+  const timeline = { fps: 30, width: 1920, height: 1080, scenes: [scene] };
+  assert.deepEqual(footageUpscaleGate(timeline, assets), []);
+  const portrait = { ...timeline, width: 1080, height: 1920 };
+  assert.deepEqual(footageUpscaleGate(portrait, assets), [{
+    level: "warn", gate: "assets",
+    msg: 'scene "hook" footage "clip": 1920×1080 source enlarged up to 2.13× by cover crop and shot zoom; use a higher-resolution or aspect-matched clip, or reduce the shot zoom',
+    at: { scene: "hook", from: 1, to: 1.033 },
+  }]);
+  assert.deepEqual(footageUpscaleGate(portrait, { items: [{ id: "clip", kind: "video" }] }), []);
+});
 
 test("the SpaceX example passes every pre-compose gate", () => {
   const ex = example();
