@@ -229,12 +229,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     }
     const chapter = sb.chapter ?? sc.chapter;
     if (chapter) chapters.push({ title: chapter, start: r3(start) });
-    // A shot track also covers long stretches where nothing else changes (rhythm gate's maxStill).
     const captions = sceneCaptions(sb, lines);
-    if (shots && sb.type !== "sources" && sb.type !== "canvas" && sb.type !== "tableau" && !laidOut(sb.type)) {
-      const seen = { id: sb.id, type: sb.type, start: 0, duration, cues, props, overlays, lines, captions };
-      shots = stillShots(shots, screenEvents({ scenes: [seen], theme }).map((e) => e.t), duration, config.gates?.maxStill ?? MAX_STILL);
-    }
 
     scenes.push({
       id: sb.id,
@@ -313,6 +308,11 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       const t0 = title.t ?? 0.2, box = wordBox({ ...title, size: title.size ?? 260, y: title.y ?? 0.42 }, width, height);
       const hit = words.find((w) => w.t > t0 && w.t < t0 + (title.duration ?? Infinity) + 0.3 && overlaps(box, wordBox(w, width, height)));
       if (hit) title.duration = r3(Math.max(0.4, hit.t - t0 - 0.3));
+    }
+    const { shots, ...seen } = sc;
+    if (shots && sc.type !== "sources" && sc.type !== "canvas" && sc.type !== "tableau" && !laidOut(sc.type)) {
+      const times = screenEvents({ scenes: [{ ...seen, start: 0 }], theme }).map((e) => e.t);
+      sc.shots = stillShots(shots, times, sc.durationInFrames / fps, config.gates?.maxStill ?? MAX_STILL);
     }
   }
   const captions = compileCaptions(scenes, config.captions, { root, usedAssets, fps, width, height });
