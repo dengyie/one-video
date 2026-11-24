@@ -164,6 +164,16 @@ test("probeIssues flags a sticker hiding a line and finds a clear height", () =>
   assert.ok(y <= 0.47 || y >= 0.54, `y ${y} still meets the line`);
 });
 
+test("canvas probe fixes translate authored moves through the fitted viewport", () => {
+  const timeline = { ...tl(), width: 1920, height: 1080 };
+  const [scene] = timeline.scenes;
+  Object.assign(scene, { type: "canvas", header: { title: "Scene header" } });
+  const rec = shot([{ i: 0, box: [0.45, 0.52, 0.55, 0.56], covers: [{ t: 0, area: 0.004 }] }], [{ text: "Card", box: [0.25, 0.51, 0.75, 0.57] }]);
+  const [finding] = probeIssues(rec, timeline);
+  const { y } = finding.fix.set;
+  assert.ok(y <= 0.43 || y >= 0.57, "the move in authored coordinates must clear the measured line after the fit");
+});
+
 test("overlay probes sample between preview stills and never leave the scene", () => {
   const scene = { from: 90, duration: 5, durationInFrames: 150, overlays: [
     { type: "word", t: 2, end: 2.4 }, { type: "stamp", t: 4, end: 5.5 },

@@ -7,7 +7,7 @@ import { captionBand, seenBox } from "../../../shared/camera.mjs";
 import { meets } from "../../../shared/boxes.mjs";
 import { textEms } from "../../../shared/labels.mjs";
 import { paceOf } from "../../../shared/reveal.mjs";
-import { deviceCaptionSlot } from "../../../shared/safe-layout.mjs";
+import { canvasViewport, captionPlateSlot, deviceCaptionSlot } from "../../../shared/safe-layout.mjs";
 import { LAID_OUT_ZOOM, laidOut } from "../timeline/shots.mjs";
 import { mapBoxes } from "./map-model.mjs";
 import { assetRefs } from "./gates-plan.mjs";
@@ -51,6 +51,9 @@ export function layoutGate(timeline, config) {
   const spoken = timeline.captions?.enabled !== false && timeline.captions?.style !== "none" ? timeline.captions.items ?? [] : [];
   for (const sc of timeline.scenes) {
     const slot = sc.type === "device" ? { ...deviceCaptionSlot(height, Math.min(width, height) / 1080, portrait), height } : undefined;
+    const fit = canvasViewport(sc, width, height);
+    if (fit?.scale === 0) continue;
+    const viewport = fit && { width, height, ...fit };
     const placed = [];
     const boxes = (sc.overlays ?? []).map((o) => overlayBox(o, width, height));
     for (const [i, o] of (sc.overlays ?? []).entries()) {
@@ -61,12 +64,13 @@ export function layoutGate(timeline, config) {
       // The band is checked through the whole overlap: a push-in partway through can carry the overlay into it.
       const inBand = (c, bx = box) => {
         const a = Math.max(o.t, c.start - sc.start), b = Math.min(o.end, c.end - sc.start);
-        for (let t = a; t < b; t += 0.25) if (meets(bx, captionBand(sc.shots, t, portrait, slot))) return true;
+        const bandSlot = viewport ? captionPlateSlot(c.text, width, height, portrait) : slot;
+        for (let t = a; t < b; t += 0.25) if (meets(bx, captionBand(sc.shots, t, portrait, bandSlot, viewport))) return true;
         return false;
       };
       const bandHit = (bx) => sc.captions !== false && spoken.find((c) => c.scene === sc.id && (slot || !c.top) && inBand(c, bx));
       // The part of the frame on screen through the overlay's whole life: a push-in crops its edges.
-      const vis = seenBox(sc.shots, o.t, Math.min(o.end, sc.duration));
+      const vis = seenBox(sc.shots, o.t, Math.min(o.end, sc.duration), 0.25, viewport);
       const mapped = [];
       if (sc.type === "map") for (let t = o.t; t < o.end; t += 0.25) mapped.push(...mapBoxes(sc, t, width, height, pace));
       // Where to move it: pulled inside the frame on screen (0.02 margin), then up to the first place that

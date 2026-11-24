@@ -20,6 +20,7 @@ export function probeBoxes(layer: HTMLElement, list: Overlay[]) {
   const doc = layer.ownerDocument;
   const root = layer.closest("[data-probe=frame]") ?? doc.body;
   const F = root.getBoundingClientRect();
+  const viewport = layer.closest("[data-canvas-viewport]");
   const frame = (r: DOMRect): Frac | null => {
     const b: Frac = [Math.max(0, (r.left - F.left) / F.width), Math.max(0, (r.top - F.top) / F.height), Math.min(1, (r.right - F.left) / F.width), Math.min(1, (r.bottom - F.top) / F.height)];
     return b[2] - b[0] > 0.002 && b[3] - b[1] > 0.002 ? (b.map((v) => Math.round(v * 1000) / 1000) as Frac) : null;
@@ -140,7 +141,8 @@ export function probeBoxes(layer: HTMLElement, list: Overlay[]) {
     const i = Number(el.dataset.ov);
     if (!list[i] || !PROBED.has(list[i].type)) continue;
     const r = union([...el.querySelectorAll("*")].map((c) => c.getBoundingClientRect()).filter((c) => c.width > 0 && c.height > 0));
-    const box = r && frame(r);
+    const visible = r && (viewport ? clipOf(el, r).shown : r);
+    const box = visible && frame(visible);
     if (!box) continue;
     const covers: { t: number; area: number }[] = [];
     texts.forEach((tx, k) => {

@@ -3,6 +3,7 @@ import { useCurrentFrame, useVideoConfig } from "remotion";
 import type { Scene, Theme, Timeline } from "./types";
 import { PACE, progress } from "./motion";
 import { textEms as sharedEms } from "../../../shared/labels.mjs";
+import { layoutTop } from "../../../shared/safe-layout.mjs";
 import { cueOr as sharedCueOr, revealAt as sharedRevealAt } from "../../../shared/reveal.mjs";
 
 export const TimelineContext = createContext<Timeline | null>(null);
@@ -42,13 +43,8 @@ export function useLayout() {
   const narrow = width < height * 1.5;
   // Content starts below the header as Header lays it out (title, source line, rule), counting the lines a
   // long title or source list wraps to (9:16 has half the width); never above the fixed top.
-  const header = useContext(SceneContext)?.header;
-  const block = (text: string, size: number, latin: number) =>
-    Math.max(1, Math.ceil((textEms(text, latin) * size * u) / (width - pad * 2))) * size * u * 1.45;
-  const below = header
-    ? (portrait ? 120 : 56) * u + block(header.title, portrait ? 60 : 48, 0.62) + (header.subtitle ? 8 * u + block(header.subtitle, portrait ? 32 : 25, 0.55) : 0) + 20 * u
-    : 0;
-  return { width, height, u, portrait, narrow, pad, top: Math.max((portrait ? 220 : 190) * u, below), bottom: (portrait ? 420 : 170) * u };
+  const top = layoutTop(width, height, useContext(SceneContext)?.header);
+  return { width, height, u, portrait, narrow, pad, top, bottom: (portrait ? 420 : 170) * u };
 }
 
 // The font size (px) at which text that must stay on one line fits `room` px, at most `max`.
