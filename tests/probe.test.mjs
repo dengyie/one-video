@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { REMOTION_BIN, TEMPLATE_DIR, run } from "../cli/lib/core/ffmpeg.mjs";
 import { probeIssues } from "../cli/lib/review/probe.mjs";
+import { frameRgb } from "../cli/lib/vision/screen.mjs";
 import { deviceViewportHeight, statCardColumns } from "../shared/safe-layout.mjs";
 import { hitsCaption } from "../shared/probe-order.mjs";
 
@@ -11,6 +16,41 @@ const tl = () => ({
 });
 const shot = (overlays, texts) => [{ frame: 0, file: "x.jpg", scenes: [{ scene: "s", t: 2, overlays, texts }] }];
 const title = { text: "募资", box: [0.2, 0.45, 0.8, 0.48] };
+
+test("closing fade dims the default backdrop and hides clipped text from the stills probe", { skip: !existsSync(REMOTION_BIN) && "needs template dependencies" }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ov-closing-probe-"));
+  try {
+    const theme = JSON.parse(readFileSync(new URL("../styles/midnight-data.json", import.meta.url), "utf8"));
+    theme.background = "plain";
+    const timeline = {
+      width: 640, height: 360, fps: 30, duration: 2, totalFrames: 60, theme,
+      captions: { enabled: false, items: [] }, sfx: [], narration: [], watermark: null,
+      scenes: [{
+        id: "credits", type: "sources", from: 0, start: 0, duration: 2, durationInFrames: 60,
+        props: { title: "W".repeat(100) }, camera: { move: "static" },
+        transitionOut: { type: "fade", frames: 18, tail: 0, direction: "left" },
+      }],
+    };
+    const props = join(dir, "props.json"), job = join(dir, "job.json"), out = join(dir, "probe.json");
+    const frames = [41, 42, 46, 50, 59].map((frame) => ({ frame, file: join(dir, `${frame}.jpg`) }));
+    writeFileSync(props, JSON.stringify(timeline));
+    writeFileSync(job, JSON.stringify({ entry: "src/index.ts", props, out, probe: true, publicDir: join(TEMPLATE_DIR, "public"), frames }));
+    await run(process.execPath, [join(TEMPLATE_DIR, "stills.mjs"), job]);
+    const [visible, start, fading, middle, black] = JSON.parse(readFileSync(out, "utf8"));
+    assert.match(probeIssues([visible], timeline)[0]?.msg ?? "", /runs off the right edge/);
+    assert.ok(fading.scenes[0]?.texts.some(({ text, a }) => text.startsWith("WWW") && a > 0.8 && a < 1));
+    const backdropBlue = async ({ file }) => (await frameRgb(file, { width: 64 })).rgb[2];
+    const [beforeBlue, startBlue, middleBlue] = await Promise.all([visible, start, middle].map(backdropBlue));
+    assert.equal(startBlue, beforeBlue, "the backdrop is unchanged on the first fade frame");
+    assert.ok(middleBlue > 0 && middleBlue < beforeBlue, "the backdrop has partly dimmed mid-fade");
+    const { rgb } = await frameRgb(black.file, { width: 64 });
+    assert.ok(rgb.every((channel) => channel === 0), "last still is black");
+    assert.equal(black.scenes[0]?.scene, "credits");
+    assert.deepEqual(probeIssues([black], timeline), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test("layout probe flags captions in a protected viewport without generating an overlay fix", () => {
   const frames = shot([], []);

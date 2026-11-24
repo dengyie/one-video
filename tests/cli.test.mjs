@@ -239,9 +239,12 @@ test("graphics pipeline: the drawn example compiles with no media, and asset sea
   assert.equal(r.status, 0, r.stdout + r.stderr);
   const out = r.stdout + r.stderr;
   assert.doesNotMatch(out, /\[(drawn|density|schema:\w+|facts|ids)\]/);
+  assert.doesNotMatch(out, /consecutive "zoom" transitions/);
   const tl = json(join(dir, "plan", "timeline.json"));
   assert.ok(!JSON.stringify(tl.scenes).includes('"asset"'));
   assert.ok(tl.scenes.some((s) => s.background === "particles"));
+  assert.equal(tl.scenes.find((s) => s.id === "travel").transitionIn.type, "cut");
+  assert.equal(tl.sfx.find((s) => s.motion === "fly")?.volume, 0.24);
 
   const sb = json(join(dir, "plan", "storyboard.json"));
   sb.scenes[1].backdrop = { asset: "earth-photo" };
@@ -302,7 +305,9 @@ test("postman example: an inland world compiles clean, the walker keeps to the n
     const s = stateAt(postman, walk.props.elements, t);
     assert.ok(Math.abs(s.y - ridgeTop(elementAt(hills, t), hills.layers - 1, s.x).y) < 1e-9, `t=${t}`);
   }
-  for (const id of ["walk", "snow", "lights", "dawn"]) assert.ok(["fade", "dip"].includes(tl.scenes.find((s) => s.id === id).transitionIn.type), id);
+  assert.deepEqual(tl.scenes.map((s) => [s.id, s.transitionIn.type]), [
+    ["hook", "cut"], ["walk", "cut"], ["snow", "dip"], ["lights", "cut"], ["dawn", "dip"], ["credits", "dip"],
+  ]);
 });
 
 test("init --pipeline graphics carries the drawn defaults", () => {

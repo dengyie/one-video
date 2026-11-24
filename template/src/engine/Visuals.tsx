@@ -12,7 +12,7 @@ import { Header } from "../components/Header";
 import { Overlays } from "../components/Overlay";
 import { SCENES } from "../scenes";
 import { canvasBackdrop } from "../scenes/Canvas";
-import { dipOpacity, whipBlur, zoomScale } from "../../../shared/transition.mjs";
+import { closingFade, dipOpacity, whipBlur, zoomScale } from "../../../shared/transition.mjs";
 
 // Unit vector the incoming scene travels along: "left" means it enters from the right.
 const DIR: Record<Direction, [number, number]> = { left: [1, 0], right: [-1, 0], up: [0, 1], down: [0, -1] };
@@ -117,6 +117,7 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const { u } = useLayout();
+  const tl = useTimeline();
   const tin = scene.transitionIn;
   const tout = scene.transitionOut;
   let look: Look = { style: {} };
@@ -132,11 +133,10 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
     out = true;
     const local = frame - (length - tout.frames);
     if (tout.type === "dip") dip = dipOpacity("out", local, tout.frames, tout.frames - tout.tail);
-    else look = presentation(tout.type, "out", easeInOut(local / tout.frames), tout.direction, width, height, tout.nextOpaque);
+    else if (tout.type !== "fade" || scene !== tl.scenes.at(-1)) look = presentation(tout.type, "out", easeInOut(local / tout.frames), tout.direction, width, height, tout.nextOpaque);
   }
   const solid = !scene.opaque && active !== null && SOLID.includes(active);
   const t = (frame - (tin?.lead ?? 0)) / fps;
-  const tl = useTimeline();
   if (active === "through") {
     const prev = out ? scene : tl.scenes[tl.scenes.findIndex((s) => s.id === scene.id) - 1];
     const f = out ? tout?.focus : tin?.focus;
@@ -182,7 +182,7 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
   );
 };
 
-export const SceneVisual: React.FC<{ scene: Scene; theme: Theme }> = ({ scene, theme }) => {
+const SceneVisual: React.FC<{ scene: Scene; theme: Theme }> = ({ scene, theme }) => {
   const Comp = Object.hasOwn(SCENES, scene.type) ? SCENES[scene.type] : undefined;
   if (!Comp) throw new Error(`unknown scene type "${scene.type}" in scene "${scene.id}"`);
   const lead = scene.transitionIn?.lead ?? 0;
@@ -203,5 +203,23 @@ export const SceneVisual: React.FC<{ scene: Scene; theme: Theme }> = ({ scene, t
         </SceneFrame>
       </SceneContext.Provider>
     </Sequence>
+  );
+};
+
+export const VisualTrack: React.FC = () => {
+  const { scenes, theme, totalFrames } = useTimeline();
+  const frame = useCurrentFrame();
+  const last = scenes.at(-1);
+  const frames = last?.transitionOut?.type === "fade" ? Math.min(last.transitionOut.frames, last.durationInFrames) : 0;
+  const local = frame - (totalFrames - frames);
+  const opacity = frames > 0 && local >= 0 ? 1 - closingFade(local, frames) : undefined;
+  return (
+    <>
+      {opacity !== undefined && <AbsoluteFill style={{ backgroundColor: "#000" }} />}
+      <AbsoluteFill style={{ opacity }}>
+        <Backdrop variant={theme.background} />
+        {scenes.map((scene) => <SceneVisual key={scene.id} scene={scene} theme={theme} />)}
+      </AbsoluteFill>
+    </>
   );
 };
