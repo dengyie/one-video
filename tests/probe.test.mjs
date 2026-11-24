@@ -8,6 +8,7 @@ import { overlayProbeFrames, probeIssues } from "../cli/lib/review/probe.mjs";
 import { frameRgb } from "../cli/lib/vision/screen.mjs";
 import { deviceViewportHeight, statCardColumns } from "../shared/safe-layout.mjs";
 import { hitsCaption } from "../shared/probe-order.mjs";
+import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 
 // A 9:16 timeline with one scene and a stamp at y 0.5; probes are what Overlay.tsx probeBoxes logs.
 const tl = () => ({
@@ -95,6 +96,47 @@ test("probe counts a sticker's hits only when it is drawn in front of the captio
   const overlay = { contains: (e) => e === sticker || e === overlay };
   assert.equal(hitsCaption([ink, caption, sticker, overlay, background], overlay, caption), false);
   assert.equal(hitsCaption([sticker, overlay, ink, caption, background], overlay, caption), true);
+});
+
+test("the SpaceX Motion proceeds card stays below the header on the first-day camera flight", { skip: !existsSync(REMOTION_BIN) && "needs template dependencies" }, async () => {
+  const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
+  const example = (path) => read(`../examples/spacex-motion/${path}`);
+  const script = example("plan/script.json");
+  const storyboard = example("plan/storyboard.json");
+  const assets = example("plan/assets.json");
+  for (const asset of assets.items) asset.file = `assets/${asset.id}`;
+  const timings = read("./fixtures/spacex-motion-timings.json");
+  const dir = mkdtempSync(join(tmpdir(), "ov-spacex-header-"));
+  try {
+    for (const aspect of ["16:9", "9:16"]) {
+      const config = { ...example("onevideo.json"), aspect };
+      const { timeline, errors } = compileTimeline({ script, storyboard, assets, timings, config });
+      assert.deepEqual(errors, []);
+      const ipo = timeline.scenes.find((s) => s.id === "ipo");
+      const takeoff = ipo.props.path.find((s) => s.cue === "pop").t;
+      const morph = ipo.props.items.find((i) => i.id === "raise").morph[0].t;
+      const frames = [...new Set([0, 0.2, 0.4, 0.6, 0.8, 1.3, morph - takeoff - 0.05].map(
+        (offset) => Math.round((takeoff + offset) * timeline.fps),
+      ))].map((frame) => ({ frame, file: join(dir, `${aspect.replace(":", "x")}-${frame}.jpg`) }));
+      const props = join(dir, "props.json"), job = join(dir, "job.json"), out = join(dir, "probe.json");
+      writeFileSync(props, JSON.stringify({
+        ...timeline, totalFrames: ipo.durationInFrames, duration: ipo.duration,
+        music: null, captions: { enabled: false, items: [] }, sfx: [], narration: [], watermark: null,
+        scenes: [{ ...ipo, from: 0, start: 0, audio: null, transitionIn: null, transitionOut: null, backdrop: null }],
+      }));
+      writeFileSync(job, JSON.stringify({ entry: "src/index.ts", props, out, probe: true, publicDir: join(TEMPLATE_DIR, "public"), frames }));
+      await run(process.execPath, [join(TEMPLATE_DIR, "stills.mjs"), job]);
+      for (const { frame, scenes: [{ texts }] } of JSON.parse(readFileSync(out, "utf8"))) {
+        const source = texts.find(({ text }) => text === ipo.header.subtitle);
+        const label = texts.find(({ text }) => text === "募资（含超额配售）");
+        const proceeds = texts.find(({ text }) => text === "857亿美元");
+        assert.ok(source && label && proceeds && label.box[1] > source.box[3] + 0.01 && proceeds.box[1] > source.box[3] + 0.01,
+          `${aspect} frame ${frame}: the proceeds stat and label must both be visible below the header`);
+      }
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("devices reserve caption space and portrait cards cap wide column counts", () => {
