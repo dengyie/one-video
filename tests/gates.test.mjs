@@ -243,6 +243,18 @@ test("aspect overlay refit shrinks words that cannot fit anywhere in a push-in",
   assert.deepEqual(layoutGate(tl, {}), []);
 });
 
+test("aspect overlay refit places simultaneous oversized words one at a time", () => {
+  const words = ["星链 > 60%", "收入 > 80%"].map((text, i) => ({
+    type: "word", text, x: 0.5, y: 0.86 + 0.03 * i, size: 220, t: 0, end: 4,
+  }));
+  const tl = { width: 1080, height: 1920, captions: { enabled: true, items: [{ scene: "a", text: "旁白", start: 0, end: 4 }] },
+    scenes: [{ id: "a", type: "footage", start: 0, duration: 4, overlays: words,
+      shots: [{ t: 0, zoom: 1.15, x: 0.5, y: 0.5 }] }] };
+  fitOverlays(tl, {});
+  assert.notEqual(words[0].y, words[1].y);
+  assert.deepEqual(layoutGate(tl, {}), []);
+});
+
 test("portrait device overlays check the reserved caption slot, not the ordinary portrait band", () => {
   const items = [{ scene: "device", text: "A chapter", start: 1, end: 3 }];
   const run = (y) => layoutGate({

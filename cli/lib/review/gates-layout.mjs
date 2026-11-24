@@ -134,14 +134,20 @@ export function layoutGate(timeline, config) {
 // spot layoutGate suggests, in that cut's timeline only. A few passes, since one move can block another.
 export function fitOverlays(timeline, config) {
   const moved = [];
-  for (let pass = 0; pass < 3; pass++) {
-    const fixes = layoutGate(timeline, config).filter((i) => i.fix?.path?.[0] === "overlays");
-    if (!fixes.length) break;
-    for (const { fix } of fixes) {
-      const o = timeline.scenes.find((s) => s.id === fix.scene)?.overlays?.[fix.path[1]];
-      if (!o || Object.entries(fix.set).every(([k, v]) => o[k] === v)) continue;
-      Object.assign(o, fix.set);
-      moved.push({ scene: fix.scene, i: fix.path[1], set: fix.set });
+  for (const sc of timeline.scenes) {
+    if (!sc.overlays?.length) continue;
+    const scope = { ...timeline, scenes: [sc] };
+    const fixes = () => layoutGate(scope, config).map((i) => i.fix).filter((f) => f?.path[0] === "overlays");
+    let current = fixes();
+    for (let pass = 0; pass < 3 && current.length; pass++) {
+      for (const i of new Set(current.map((f) => f.path[1]))) {
+        const fix = current.find((f) => f.path[1] === i);
+        const o = sc.overlays[i];
+        if (!fix || Object.entries(fix.set).every(([k, v]) => o[k] === v)) continue;
+        Object.assign(o, fix.set);
+        moved.push({ scene: sc.id, i, set: fix.set });
+        current = fixes();
+      }
     }
   }
   return moved;
