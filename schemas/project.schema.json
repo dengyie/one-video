@@ -178,6 +178,11 @@
         "cloneModel": {
           "type": "string"
         },
+        "fallbackVoice": {
+          "description": "Optional built-in MiMo voice for all narration if voice design or cloning returns HTTP 503 after retries. Requires design or ref; never falls back during a partial --only run.",
+          "type": "string",
+          "minLength": 1
+        },
         "ref": {
           "description": "project-relative WAV recording (5–30 s) of the voice to clone; rename the file to re-synthesize after replacing it",
           "type": "string"

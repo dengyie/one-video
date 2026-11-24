@@ -54,6 +54,22 @@ test("variantTimings gives up when the variant speaks other audio or the main mi
   assert.equal(variantTimings(script, tl, main, { ...tall, lexicon: { SpaceX: "太空探索" } }), null);
 });
 
+test("updated caption boundaries cannot reuse stale text with the same scene audio hash and line count", () => {
+  const s = { id: "c", narration: "这个数是国际单位制直接定义的。" };
+  const config = { aspect: "9:16" };
+  const hashes = timingHashes(s, config, {});
+  const old = { scenes: { c: { file: "audio/c.wav", duration: 3, lines: [
+    { text: "这个数是国际单位制直接定义", start: 0, end: 2, hash: hashes[0] },
+    { text: "的", start: 2, end: 3, hash: hashes[1] },
+  ] } } };
+  const script = { scenes: [s] };
+  assert.equal(timingsFresh(script, old, config), false);
+  const updated = variantTimings(script, old, config, config);
+  assert.ok(timingsFresh(script, updated, config));
+  assert.equal(updated.scenes.c.file, "audio/c.wav");
+  assert.equal(updated.scenes.c.lines[1].text, "直接定义的");
+});
+
 test("ensureVariantTimings derives the variant's timings from fresh main ones without audio or key", async () => {
   // No variant audio is cached under linesDir, so a key is never asked for on this path.
   const root = mkdtempSync(join(tmpdir(), "ov-variant-"));

@@ -109,7 +109,7 @@ async function send(url, config, timeoutSec, retries) {
     try {
       const res = await runCurl(config, timeoutSec);
       if (res.status >= 200 && res.status < 300) return res;
-      last = new Error(`HTTP ${res.status} from ${new URL(url).host}: ${res.body.subarray(0, 300).toString()}`);
+      last = Object.assign(new Error(`HTTP ${res.status} from ${new URL(url).host}: ${res.body.subarray(0, 300).toString()}`), { status: res.status });
       if (res.status < 500 && res.status !== 429) break;
     } catch (e) {
       last = e;

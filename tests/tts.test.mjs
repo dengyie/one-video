@@ -1,12 +1,51 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { createServer } from "node:http";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { alignLines, lineHash, runTts, sceneSpeech, timingHashes, ttsConfig } from "../cli/lib/voice/tts.mjs";
 import { findPauses, readWav, toMono, writeWav } from "../cli/lib/audio/wav.mjs";
 import { captionAt, captionWindows } from "../shared/caption-timing.mjs";
 import { rateGate } from "../cli/lib/review/gates.mjs";
+
+test("a clone outage retries, then uses the opted-in stock voice for the entire take", async (ctx) => {
+  const root = mkdtempSync(join(tmpdir(), "ov-voice-fallback-"));
+  ctx.after(() => rmSync(root, { recursive: true, force: true }));
+  const paths = { linesDir: join(root, "lines"), audioDir: join(root, "audio") };
+  const reference = "voice.wav";
+  writeWav(join(root, reference), { samples: new Int16Array(24000).fill(2000), sampleRate: 24000, channels: 1 });
+  const data = readFileSync(join(root, reference)).toString("base64");
+  const calls = [];
+  const server = createServer(async (req, res) => {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    const { model, audio } = JSON.parse(body);
+    calls.push({ model, voice: audio.voice.replace(/^data:audio\/wav;base64,.*/, "(reference WAV)") });
+    if (model === "mimo-v2.5-tts-voiceclone") res.writeHead(503).end();
+    else res.end(JSON.stringify({ choices: [{ message: { audio: { data } } }] }));
+  });
+  await new Promise((ready) => server.listen(0, "127.0.0.1", ready));
+  ctx.after(() => server.close());
+  const keyEnv = "OV_TEST_VOICE_FALLBACK_KEY";
+  process.env[keyEnv] = "test";
+  ctx.after(() => delete process.env[keyEnv]);
+  const config = { tts: { baseUrl: `http://127.0.0.1:${server.address().port}`, keyEnv, ref: reference, fallbackVoice: "白桦", loudness: false } };
+  const script = { scenes: [{ id: "a", narration: "甲乙。" }, { id: "b", narration: "丙丁。" }] };
+  const t = ttsConfig(config);
+  const cloneCache = join(paths.linesDir, `${lineHash(sceneSpeech(script.scenes[0], config, {}).speak, t)}.wav`);
+  writeWav(cloneCache, { samples: new Int16Array(48000).fill(2000), sampleRate: 24000, channels: 1 });
+
+  const result = await runTts({ root, config, paths }, script);
+  assert.equal(calls.length, 6);
+  assert.deepEqual(calls.slice(0, 4), Array(4).fill({ model: t.model, voice: "(reference WAV)" }));
+  assert.deepEqual(calls.slice(4), Array(2).fill({ model: "mimo-v2.5-tts", voice: "白桦" }));
+  assert.equal(result.voice.voice, "白桦");
+  assert.equal(result.voice.fallbackFor.model, t.model);
+  assert.equal(result.scenes.a.duration, 1.5, "the cached clone for scene a was not mixed into this take");
+  assert.deepEqual(result.scenes.a.lines.map((l) => l.hash), timingHashes(script.scenes[0], config, {}));
+  assert.equal(await runTts({ root, config, paths }, script, { cachedOnly: true }), null, "fallback is not a clone cache hit");
+});
 
 async function cachedSceneWithPause({ duration, pause, tempo }) {
   const root = mkdtempSync(join(tmpdir(), "ov-pause-tempo-"));

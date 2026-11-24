@@ -7,7 +7,7 @@ import { existsSync } from "node:fs";
 import { relative } from "node:path";
 import { log, readJson, writeJson } from "../core/project.mjs";
 import { normalizeForMatch, spokenLength } from "../core/text.mjs";
-import { runTts, sceneSpeech, timingHashes, ttsConfig } from "./tts.mjs";
+import { runTts, sceneSpeech, timingHashes, timingLinesMatch, ttsConfig } from "./tts.mjs";
 
 const round = (x) => Math.round(x * 1000) / 1000;
 const audioHash = (hashes) => (hashes[0] ?? "").split(".")[0];
@@ -58,10 +58,10 @@ export function variantTimings(script, mainTimings, mainConfig, config) {
     const hashes = timingHashes(scene, config, lexicon);
     if (!hashes.length) { out.scenes[scene.id] = main ?? { file: null, duration: 0, lines: [] }; continue; }
     if (!main?.lines?.length) return null;
-    const have = main.lines.map((l) => l.hash);
-    if (have.join() === hashes.join()) { out.scenes[scene.id] = main; continue; }
-    if (t.unit !== "scene" || audioHash(have) !== audioHash(timingHashes(scene, mainConfig, mainLex)) || audioHash(hashes) !== audioHash(have)) return null;
     const { lines } = sceneSpeech(scene, config, lexicon);
+    const have = main.lines.map((l) => l.hash);
+    if (timingLinesMatch(main.lines, hashes, lines)) { out.scenes[scene.id] = main; continue; }
+    if (t.unit !== "scene" || audioHash(have) !== audioHash(timingHashes(scene, mainConfig, mainLex)) || audioHash(hashes) !== audioHash(have)) return null;
     const spans = respan(main.lines, lines);
     if (!spans) return null;
     out.scenes[scene.id] = { ...main, lines: lines.map((l, i) => ({ text: l.text, speak: l.speak, hash: hashes[i], start: spans[i][0], end: spans[i][1] })) };
@@ -72,7 +72,8 @@ export function variantTimings(script, mainTimings, mainConfig, config) {
 // Timings that match the script line for line under this config (what the timings gate checks).
 export function timingsFresh(script, timings, config) {
   const lexicon = { ...(config.lexicon ?? {}), ...(script.lexicon ?? {}) };
-  return script.scenes.every((s) => timingHashes(s, config, lexicon).join() === (timings?.scenes?.[s.id]?.lines ?? []).map((l) => l.hash).join());
+  return script.scenes.every((s) => timingLinesMatch(timings?.scenes?.[s.id]?.lines ?? [],
+    timingHashes(s, config, lexicon), sceneSpeech(s, config, lexicon).lines));
 }
 
 // A variant project's (timeline/aspect.mjs withAspect) caption timings, kept fresh: placed on the

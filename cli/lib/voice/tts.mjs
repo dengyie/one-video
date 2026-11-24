@@ -11,9 +11,9 @@ import { requireApiKey, pool } from "../core/http.mjs";
 import { readWav, toMono, trimSilence, shortenPauses, concatWithGaps, findPauses, timeStretch, writeWav } from "../audio/wav.mjs";
 import { speakable, spokenLength } from "../core/text.mjs";
 import { sceneLines } from "../captions/lines.mjs";
-import { log, UserError } from "../core/project.mjs";
+import { log, warn, UserError } from "../core/project.mjs";
 import { integratedLoudness, normalizeLoudness } from "../audio/loudness.mjs";
-import { synthesize } from "./providers.mjs";
+import { synthesize, TtsUnavailable } from "./providers.mjs";
 
 export { chatRequest } from "./providers.mjs";
 
@@ -67,6 +67,9 @@ const sha = (...parts) => createHash("sha1").update(parts.join("\u0001")).digest
 export function ttsConfig(config) {
   const t = { ...TTS_DEFAULTS, ...(config.tts ?? {}) };
   t.pause = { ...TTS_DEFAULTS.pause, ...(config.tts?.pause ?? {}) };
+  if (t.fallbackVoice !== undefined && (!(t.design || t.ref) || typeof t.fallbackVoice !== "string" || !t.fallbackVoice.trim())) {
+    throw new UserError("tts.fallbackVoice: set a nonempty stock voice name with tts.design or tts.ref");
+  }
   if (t.tempo !== undefined && t.tempo !== "auto" && !(typeof t.tempo === "number" && t.tempo >= TEMPO_RANGE[0] && t.tempo <= TEMPO_RANGE[1])) {
     throw new UserError(`tts.tempo: "auto" or a factor ${TEMPO_RANGE.join("–")} (1.15 = 15% faster), not ${JSON.stringify(t.tempo)}`);
   }
@@ -98,14 +101,18 @@ export function sceneSpeech(scene, config, lexicon) {
 }
 
 // Hash per caption line, as stored in timings. Scene unit: every line of a scene carries the
-// scene audio hash plus its index, so a voice, style, text or line-split change all invalidate.
+// scene audio hash plus its index. Compare the line text as well when checking freshness.
 export function timingHashes(scene, config, lexicon) {
   const t = ttsConfig(config);
   const { lines, speak } = sceneSpeech(scene, config, lexicon);
-  const tag = tempoTag(t);
+  const tag = tempoTag(t) + (t.fallbackVoice ? `~f${sha(t.fallbackVoice)}` : "");
   if (t.unit === "line") return lines.map((l) => lineHash(l.speak, t) + tag);
   const h = lineHash(speak, t) + tag;
   return lines.map((_, i) => `${h}.${i}`);
+}
+
+export function timingLinesMatch(have, hashes, lines) {
+  return have.length === hashes.length && have.every((l, i) => l.hash === hashes[i] && l.text === lines[i].text);
 }
 
 // Where the designed voice's reference clip is cached (per description).
@@ -191,9 +198,29 @@ export function alignLines(weights, duration, pauses, kinds = []) {
 // Build plan/timings.json from the script. Audio is cached by content hash, so editing one
 // scene (or one line, in line unit) re-synthesizes only that part. `cachedOnly` returns null
 // instead of synthesizing when some unit is not cached yet (no key needed).
-export async function runTts(project, script, { force = false, only = [], dry = false, cachedOnly = false } = {}) {
+export async function runTts(project, script, options = {}) {
+  const t = ttsConfig(project.config);
+  try {
+    return await synthesizeNarration(project, script, t, options);
+  } catch (error) {
+    if (!(error instanceof TtsUnavailable)) throw error;
+    if (!t.voiceTag) throw new UserError(`${error.message}; retry later or choose another TTS model`);
+    if (!t.fallbackVoice) throw new UserError(`${error.message}; retry later or explicitly set tts.fallbackVoice to use a stock voice`);
+    if (options.only?.length) throw new UserError(`${error.message}; rerun without --only to use tts.fallbackVoice for all narration`);
+    const fallback = { ...t, model: TTS_DEFAULTS.model, voice: t.fallbackVoice, voiceTag: undefined, refData: undefined };
+    warn(`${error.message}; using stock voice "${fallback.voice}" (${fallback.model}) for all narration, not the requested clone`);
+    try {
+      return await synthesizeNarration(project, script, fallback, { ...options, force: false },
+        { model: t.model, voice: t.voice, unavailableModel: error.model });
+    } catch (fallbackError) {
+      if (!(fallbackError instanceof TtsUnavailable)) throw fallbackError;
+      throw new UserError(`${fallbackError.message}; both the requested clone and its configured stock fallback are unavailable`);
+    }
+  }
+}
+
+async function synthesizeNarration(project, script, t, { force = false, only = [], dry = false, cachedOnly = false }, fallbackFor) {
   const { config, paths } = project;
-  const t = ttsConfig(config);
   const lexicon = { ...(config.lexicon ?? {}), ...(script.lexicon ?? {}) };
   const jobs = [];
   const scenes = script.scenes.map((scene) => {
@@ -235,7 +262,8 @@ export async function runTts(project, script, { force = false, only = [], dry = 
   const uncached = scenes.flatMap((s) => s.units).filter((u) => !existsSync(u.file));
   if (uncached.length) throw new UserError(`${uncached.length} ${t.unit}(s) outside --only are not synthesized yet (first: scene "${uncached[0].scene}"); run: onevideo tts`);
 
-  const out = { sampleRate: t.sampleRate, voice: { model: t.model, voice: t.voice, protocol: t.protocol, unit: t.unit, ...(t.design && { design: t.design }) }, scenes: {} };
+  const out = { sampleRate: t.sampleRate, voice: { model: t.model, voice: t.voice, protocol: t.protocol, unit: t.unit,
+    ...(t.design && !fallbackFor && { design: t.design }), ...(fallbackFor && { fallbackFor }) }, scenes: {} };
   const prepared = {};
   const maxTempo = t.tempo === "auto" ? AUTO_TEMPO[1] : Math.max(1, t.tempo ?? 1);
   const minSpan = Math.ceil(1000 / (config.fps ?? 30)) / 1000 * maxTempo;

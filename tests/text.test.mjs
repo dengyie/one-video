@@ -30,6 +30,15 @@ test("splitLines never cuts inside a number or Latin word", () => {
   assert.ok(lines.some((l) => l.text.includes("SpaceX")));
 });
 
+test("portrait captions preserve grouped values and rebalance one-character tails", () => {
+  const lines = splitLines("精确地说，是299,792,458米。这个数是国际单位制直接定义的。连接业务的经营利润约44亿美元", 13);
+  assert.ok(lines.some((l) => l.text.includes("299,792,458")));
+  assert.ok(lines.some((l) => l.text.includes("44亿美元")));
+  assert.ok(lines.every((l) => visualLength(l.text) <= 13 && visualLength(l.text) > 2));
+  assert.equal(lines.filter((l) => l.pause === "sentence").length, 3);
+  assert.equal(lines.map((l) => l.text).join("").replace("，", ""), "精确地说是299,792,458米这个数是国际单位制直接定义的连接业务的经营利润约44亿美元");
+});
+
 test("speakable applies lexicon (longest first) and built-in rules", () => {
   assert.equal(speakable("SPCX涨了19%", { SPCX: "S P C X", SP: "错" }), "S P C X涨了百分之19");
   assert.equal(speakable("3~5年"), "3到5年");

@@ -10,11 +10,28 @@ import { area, meets, overlap as cut } from "../../../shared/boxes.mjs";
 // A sticker counts as covering a line once it hides about a third of one character (a glyph is
 // roughly line-height square); a graze along an edge reads fine.
 export const COVER_GLYPH = 0.35;
+const STICKERS = new Set(["image", "icon", "lottie", "stamp", "word"]);
+
+export function overlayProbeFrames(scene, fps, existing) {
+  const frames = new Set(existing);
+  const added = new Set();
+  for (const o of scene.overlays ?? []) {
+    if (!STICKERS.has(o.type)) continue;
+    const end = Math.min(o.end, scene.duration);
+    if (end <= o.t) continue;
+    const active = end - o.t;
+    for (const at of [o.t + Math.min(0.3, active / 2), o.t + active / 2]) {
+      const frame = Math.min(scene.durationInFrames - 1, Math.round(at * fps)) + scene.from;
+      if (!frames.has(frame)) { frames.add(frame); added.add(frame); }
+    }
+  }
+  return [...added].sort((a, b) => a - b);
+}
 
 // The nearest spot (in pixels; a move along one axis wins a tie) in hundredths of the frame where the
 // overlay's measured box clears every measured line and the other stickers, stays out of the caption
 // band and inside the frame. Returns the move { dx, dy } as frame fractions, or null.
-function clearSpot(box, texts, others, { portrait, aspect }) {
+function clearSpot(samples, { portrait, aspect }) {
   const band = portrait ? [0.74, 0.86] : [0.84, 0.96];
   let best = null;
   for (let i = -50; i <= 50; i++) for (let j = -80; j <= 80; j++) {
@@ -22,9 +39,11 @@ function clearSpot(box, texts, others, { portrait, aspect }) {
     const dx = i / 100, dy = j / 100;
     const cost = Math.hypot(dx * aspect, dy) + (i && j ? 0.03 : 0);
     if (best && cost >= best.cost) continue;
-    const b = [box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy];
-    if (b[0] < 0.02 || b[2] > 0.98 || b[1] < 0.02 || b[3] > 0.98 || (b[3] > band[0] && b[1] < band[1])) continue;
-    if (texts.some((t) => meets(t.box, b)) || others.some((q) => meets(q, b))) continue;
+    if (samples.some(({ box, texts, others }) => {
+      const b = [box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy];
+      return b[0] < 0.02 || b[2] > 0.98 || b[1] < 0.02 || b[3] > 0.98 || (b[3] > band[0] && b[1] < band[1])
+        || texts.some((t) => meets(t.box, b)) || others.some((q) => meets(q, b));
+    })) continue;
     best = { cost, dx, dy };
   }
   return best;
@@ -43,6 +62,12 @@ export function probeIssues(probes, timeline, { variant = null } = {}) {
   const portrait = timeline.height >= timeline.width * 1.5;
   const glyph = (b) => (b[3] - b[1]) ** 2 * (timeline.height / timeline.width);
   const byId = new Map(timeline.scenes.map((s) => [s.id, s]));
+  const placements = new Map();
+  for (const p of probes) for (const rec of p.scenes ?? []) for (const { i, box } of rec.overlays) {
+    const key = JSON.stringify([rec.scene, i]);
+    if (!placements.has(key)) placements.set(key, []);
+    placements.get(key).push({ box, texts: rec.texts, others: rec.overlays.filter((q) => q.i !== i).map((q) => q.box) });
+  }
   const out = [], said = new Set();
   for (const p of probes) for (const rec of p.scenes ?? []) {
     const sc = byId.get(rec.scene);
@@ -110,8 +135,7 @@ export function probeIssues(probes, timeline, { variant = null } = {}) {
       if (!fresh.length) continue;
       for (const t of fresh) said.add(`${sc.id}#${i}#${t.text}`);
       const name = `scene "${sc.id}" overlay ${i} (${o.type}${o.text ? ` "${o.text}"` : o.asset ? ` ${o.asset}` : ""})`;
-      const others = rec.overlays.filter((q) => q.i !== i).map((q) => q.box);
-      const move = clearSpot(box, rec.texts, others, { portrait, aspect: timeline.width / timeline.height });
+      const move = clearSpot(placements.get(JSON.stringify([sc.id, i])), { portrait, aspect: timeline.width / timeline.height });
       const set = move && moveKeys(o, move, timeline);
       const at = { scene: sc.id, from: sc.start + o.t, to: sc.start + Math.min(o.end, sc.duration), field: `overlays[${i}]` };
       const fix = !set ? undefined : variant

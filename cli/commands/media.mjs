@@ -48,7 +48,7 @@ export async function tts(args) {
     const s = res.scenes._sample;
     const text = s.lines.map((l) => l.text).join(" / ");
     log(`sample: public/${s.file} (${s.duration.toFixed(2)}s, ${measuredRate(s).toFixed(1)} syllables/s) — "${text}"`);
-    log(`voice ${ttsConfig(project.config).voice}; listen, then run: onevideo tts`);
+    log(`voice ${res.voice.voice}; listen, then run: onevideo tts`);
     return;
   }
   const res = await runTts(project, script, { force: Boolean(args.force), only: list(args.only), dry: Boolean(args.dry) });
