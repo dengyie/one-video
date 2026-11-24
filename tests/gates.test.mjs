@@ -230,6 +230,19 @@ test("fitOverlays moves overlays placed for 16:9 out of a 9:16 caption band and 
   assert.deepEqual(fitOverlays(tl, {}), [], "nothing left to move");
 });
 
+test("aspect overlay refit shrinks words that cannot fit anywhere in a push-in", () => {
+  const word = { type: "word", text: "星链 > 60%", y: 0.4, size: 170, t: 0, end: 4 };
+  const tl = { width: 1080, height: 1920, captions: { enabled: false },
+    scenes: [{ id: "a", type: "footage", start: 0, duration: 4, overlays: [word],
+      shots: [{ t: 0, zoom: 1 }, { t: 1, zoom: 1.22, x: 0.5, y: 0.5 }] }] };
+  assert.match(layoutGate(tl, {})[0].msg, /once the shot pushes in.*reduce its size/);
+  assert.equal(fitOverlays(tl, {}).length, 1);
+  assert.ok(word.size < 170);
+  assert.equal(word.y, 0.4);
+  assert.equal(word.x, undefined);
+  assert.deepEqual(layoutGate(tl, {}), []);
+});
+
 test("portrait device overlays check the reserved caption slot, not the ordinary portrait band", () => {
   const items = [{ scene: "device", text: "A chapter", start: 1, end: 3 }];
   const run = (y) => layoutGate({

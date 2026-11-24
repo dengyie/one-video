@@ -137,7 +137,7 @@ export function paletteAt(elements, t) {
 // ease, or cut to. `sway` (0..1) adds a slow handheld drift, for a storm.
 /** @typedef {{ x: number, y: number, zoom: number, sway: number }} Cam */
 /** @param {any[]} keys @param {number} t @returns {Cam} */
-export function cameraAt(keys, t) {
+export function cameraPoseAt(keys, t) {
   /** @type {Cam} */
   let cam = { x: 0.5, y: 0.5, zoom: 1, sway: 0 };
   for (const [i, k] of (keys ?? []).entries()) {
@@ -148,8 +148,14 @@ export function cameraAt(keys, t) {
     const p = easeInOut(clamp01((t - kt) / Math.max(0.05, k.dur ?? 2)));
     cam = { x: lerp(cam.x, to.x, p), y: lerp(cam.y, to.y, p), zoom: Math.exp(lerp(Math.log(cam.zoom), Math.log(to.zoom), p)), sway: lerp(cam.sway, to.sway, p) };
   }
+  return cam;
+}
+
+/** @param {any[]} keys @param {number} t @returns {Cam} */
+export function cameraAt(keys, t) {
+  const cam = cameraPoseAt(keys, t);
   if (cam.sway > 0) {
-    cam = { ...cam, x: cam.x + cam.sway * 0.006 * Math.sin(t * 0.9) + cam.sway * 0.003 * Math.sin(t * 2.3 + 1), y: cam.y + cam.sway * 0.005 * Math.sin(t * 1.3 + 2) };
+    return { ...cam, x: cam.x + cam.sway * 0.006 * Math.sin(t * 0.9) + cam.sway * 0.003 * Math.sin(t * 2.3 + 1), y: cam.y + cam.sway * 0.005 * Math.sin(t * 1.3 + 2) };
   }
   return cam;
 }

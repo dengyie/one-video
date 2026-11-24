@@ -114,7 +114,7 @@
           { "id": "zhou", "type": "figure", "x": 0.4, "y": 0.92, "size": 0.16, "depth": 0.8, "lantern": 0, "facing": 1, "to": [{ "cue": "in", "dur": 4, "x": 0.52 }] }
         ],
         "camera": [
-          { "at": 0, "x": 0.42, "y": 0.62, "zoom": 1.3 },
+          { "at": 0, "x": 0.42, "y": 0.62, "zoom": 1.3, "cut": true, "snap": false },
           { "cue": "in", "zoom": 1.4, "dur": 3.2, "on": "town" },
           { "cue": "all", "x": 0.5, "y": 0.5, "zoom": 1, "dur": 4 }
         ]

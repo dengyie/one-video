@@ -22,6 +22,7 @@ import { resolveDeviceRects, resolvePropTimes, settled, settledElement } from ".
 import { resolveTableauRefs } from "./tableau.mjs";
 import { libraryCredit, sourceList } from "./credits.mjs";
 import { clampT, r3 } from "./util.mjs";
+import { cameraPoseAt } from "../../../shared/tableau.mjs";
 
 export const DIMENSIONS = { "16:9": [1920, 1080], "9:16": [1080, 1920], "1:1": [1080, 1080], "4:5": [1080, 1350] };
 export const DEFAULT_HOLD = 0.5;
@@ -191,14 +192,15 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
         const before = new Map(lastTableau.elements.map((el) => [el.id, el]));
         const carried = (el) => (el.type === undefined && before.has(el.id) ? { ...settledElement(before.get(el.id)), ...el, t: 0, settled: true, to: el.to ?? [] } : el);
         props.elements = [...lastTableau.elements.filter((el) => !own.has(el.id)).map(settledElement), ...(props.elements ?? []).map(carried)];
-        const end = lastTableau.camera?.[lastTableau.camera.length - 1];
-        if (end) props.camera = [{ ...end, at: 0, cue: undefined, t: undefined, cut: true }, ...(props.camera ?? [])];
+        props.camera = [{ ...lastTableau.cameraEnd, at: 0, cut: true }, ...(props.camera ?? [])];
       }
     }
     for (const [i, el] of (props.elements ?? []).entries()) if (sb.type === "tableau" && !el.type) errors.push(`scene "${sb.id}" element ${el.id ?? i}: no type (only an inheriting scene may continue an element by id)`);
     resolvePropTimes(sb.type, props, ctx, errors, `scene "${sb.id}"`);
-    if (sb.type === "tableau") resolveTableauRefs(props, { width, height, duration: ctx.duration }, errors, `scene "${sb.id}"`);
-    if (sb.type === "tableau") lastTableau = { elements: props.elements ?? [], camera: props.camera ?? [] };
+    if (sb.type === "tableau") {
+      resolveTableauRefs(props, { width, height, duration, inheritedCamera: Boolean(props.inherit && lastTableau) }, errors, `scene "${sb.id}"`);
+      lastTableau = { elements: props.elements ?? [], cameraEnd: cameraPoseAt(props.camera, duration) };
+    }
     if (sb.type === "device") resolveDeviceRects(props, assetById, errors, `scene "${sb.id}"`);
     if (sb.type === "canvas") lastCanvas = { items: props.items ?? [], path: props.path ?? [] };
     let shots;

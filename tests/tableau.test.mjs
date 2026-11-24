@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  KIND_NAMES, PALETTES, bandDepth, bandFor, cameraAt, cameraMoving, elementAt, flashAt, flashTotal, lampLevel, layerView,
+  KIND_NAMES, PALETTES, bandDepth, bandFor, cameraAt, cameraMoving, cameraPoseAt, elementAt, flashAt, flashTotal, lampLevel, layerView,
   mixHex, paletteAt, settledElement, tableauTimes, waveY, SEA_BANDS,
   boxOnScreen, cameraFor, elementGeometry, insideShare, onScreen, stageOf, zoomToFit, STAGE_ASPECT,
   horizonAt, ridgeDepth, ridgeTop, stateAt, townBlocks, treeRow, windowOn,
@@ -139,6 +139,26 @@ test("compileTimeline: tableau times, strikes on the beat, inherit carries the w
   sb.scenes[0] = { ...sb.scenes[0], type: "kinetic", props: { lines: [{ text: "x" }] } };
   const again = compileTimeline({ ...ex, storyboard: sb, assets: ex.fetchedAssets });
   assert.ok(again.errors.some((e) => /tableau inherit needs/.test(e)));
+});
+
+test("inherited tableau begins at the outgoing rendered camera pose in both aspects", () => {
+  const ex = example();
+  const sb = structuredClone(ex.storyboard);
+  sb.scenes[0] = { ...sb.scenes[0], type: "tableau", backdrop: undefined, shots: undefined, overlays: [], props: {
+    elements: [{ id: "tower", type: "lighthouse", x: 0.25 }, { id: "walker", type: "figure", x: 0.72 }],
+    camera: [{ x: 0.25, y: 0.5, zoom: 1.1 }, { at: 1, on: "walker", zoom: 2, dur: 12, sway: 0.5 }],
+  } };
+  sb.scenes[1] = { ...sb.scenes[1], type: "tableau", backdrop: undefined, shots: undefined, overlays: [], props: {
+    inherit: true, elements: [{ id: "walker", x: 0.3 }], camera: [{ at: 0, zoom: 1.3 }],
+  } };
+  for (const aspect of ["16:9", "9:16"]) {
+    const { timeline, errors } = compileTimeline({ ...ex, config: { ...ex.config, aspect }, storyboard: sb, assets: ex.fetchedAssets });
+    assert.deepEqual(errors, []);
+    const [a, b] = timeline.scenes;
+    const end = cameraPoseAt(a.props.camera, a.durationInFrames / timeline.fps);
+    assert.ok(end.zoom > 1.1 && end.zoom < 2);
+    assert.deepEqual(cameraPoseAt(b.props.camera, 0), end, aspect);
+  }
 });
 
 test("tableau geometry: anchors, cameraFor inverts the parallax, zoomToFit fills the frame", () => {
