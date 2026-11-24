@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { alignLines, lineHash, runTts, sceneSpeech, timingHashes, ttsConfig } from "../cli/lib/voice/tts.mjs";
 import { findPauses, readWav, toMono, writeWav } from "../cli/lib/audio/wav.mjs";
+import { captionAt, captionWindows } from "../shared/caption-timing.mjs";
 
 test("cached TTS shortens dead air before measuring narration and aligning captions", async () => {
   const root = mkdtempSync(join(tmpdir(), "ov-pause-"));
@@ -46,6 +47,31 @@ test("shortening a sentence break does not move the caption boundary to the next
     const { duration, lines } = result.scenes.speech;
     assert.equal(duration, 5.4);
     assert.deepEqual([lines[0].end, lines[1].start], [1.15, 1.65]);
+    const faster = await runTts({ root, config: { tts: { ...config.tts, tempo: 1.25 } }, paths }, { scenes: [scene] }, { cachedOnly: true });
+    assert.deepEqual(faster.scenes.speech.lines.map((line) => [line.start, line.end]), [[0.15, 0.95], [1.35, 4.07]]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an excised gap cannot collapse two estimated boundaries onto a missing caption", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ov-caption-cut-"));
+  try {
+    const paths = { linesDir: join(root, "lines"), audioDir: join(root, "audio") };
+    const config = { tts: { loudness: false } };
+    const t = ttsConfig(config);
+    const scene = { id: "speech", lines: [{ text: "甲乙。" }, { text: "丙丁。" }, { text: "戊己。" }] };
+    const samples = Int16Array.from({ length: t.sampleRate * 9 }, (_, i) => Math.round(8000 * Math.sin(i * 2 * Math.PI * 440 / t.sampleRate)));
+    samples.fill(0, t.sampleRate * 1.5, t.sampleRate * 7.5);
+    samples.fill(0, t.sampleRate * 8.1, t.sampleRate * 8.25);
+    const cache = join(paths.linesDir, `${lineHash(sceneSpeech(scene, config, {}).speak, t)}.wav`);
+    writeWav(cache, { samples, sampleRate: t.sampleRate, channels: 1 });
+    const result = await runTts({ root, config, paths }, { scenes: [scene] }, { cachedOnly: true });
+    const { duration, lines } = result.scenes.speech;
+    assert.equal(duration, 4);
+    assert.ok(lines.every((line) => line.start < line.end));
+    const windows = captionWindows(lines);
+    assert.deepEqual([1.1, 2.4, 3.3].map((time) => captionAt(windows, time)?.item.text), lines.map((line) => line.text));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
