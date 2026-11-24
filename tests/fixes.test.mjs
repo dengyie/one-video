@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { applyFix, describeFix, fixPlan } from "../cli/lib/review/fixes.mjs";
 import { numberReveals } from "../cli/lib/review/reveals.mjs";
+import { revealGate } from "../cli/lib/review/gates.mjs";
+import { racePeriods } from "../cli/lib/timeline/events.mjs";
 import { example } from "./helpers.mjs";
 
 test("applyFix: merges into the storyboard object or replaces a value; unknown targets are left alone", () => {
@@ -69,7 +71,7 @@ test("numberReveals: chart values the narration says get a cue on those words; d
 
 test("numberReveals: timeline events and bar-race periods get a cue where their date is said, bar-race bars where their value is; written cues stay", () => {
   const race = [{ start: 0, end: 4, text: "1990年，微软还很小。" }, { start: 4, end: 9, text: "2010年苹果登顶，36年后排在第一。" }];
-  const r = numberReveals({ type: "bar-race", lines: race, cues: { y2026: 1 }, props: { periods: ["1990", "2000", "2010", "2026"], periodCues: [null, null, null, "y2026"] } });
+  const r = numberReveals({ type: "bar-race", duration: 9, lines: race, cues: { y2026: 7 }, props: { periods: ["1990", "2000", "2010", "2026"], periodCues: [null, null, null, "y2026"] } });
   assert.deepEqual([r.cues, r.refs], [{ n1: "1990年", n2: "2010年" }, [{ path: ["props", "periodCues"], value: ["n1", null, "n2", "y2026"] }]]);
   assert.equal(numberReveals({ type: "bar-race", lines: race, props: { periods: ["1990", "2010"], periodCues: ["a", "b"] } }), null);
   const said$ = [{ start: 0, end: 4, text: "第一是NTT，约1187亿美元；" }, { start: 4, end: 8, text: "如今苹果约5.1万亿美元。" }];
@@ -84,6 +86,21 @@ test("numberReveals: timeline events and bar-race periods get a cue where their 
   assert.deepEqual(tl.cues, { n1: "11月5日", n2: "11月8日" }, "\"2024年，11月5日\" is two dates, and a month alone is not 12.01");
   assert.deepEqual(tl.refs.map((x) => x.path[2]), [0, 1]);
   assert.ok(tl.times[1] > tl.times[0]);
+});
+
+test("reveal fixes preserve a reachable authored race swap when an earlier year is spoken late", () => {
+  const scene = { id: "race", type: "bar-race", start: 0, duration: 8, cues: { latest: 5 },
+    props: { periods: ["1990", "2010", "2026"], periodCues: [null, null, "latest"] },
+    lines: [{ text: "1990年", start: 1, end: 2 }, { text: "2010年", start: 7.9, end: 8 }] };
+  assert.equal(racePeriods(scene)[2], 5);
+  const [{ fix }] = revealGate({ scenes: [scene] });
+  const storyboard = { scenes: [structuredClone(scene)] };
+  applyFix(storyboard, fix);
+  const [fixed] = storyboard.scenes;
+  const cueTimes = { "1990年": 0.8, "2010年": 7.7 };
+  fixed.cues = Object.fromEntries(Object.entries(fixed.cues).map(([key, value]) => [key, cueTimes[value] ?? value]));
+  assert.equal(racePeriods(fixed)[2], 5);
+  assert.deepEqual(fixed.props.periodCues, ["n1", null, "latest"]);
 });
 
 test("numberReveals: a card note or compare item said after its card comes in on its words; one said with the card, barely said or too short does not", () => {

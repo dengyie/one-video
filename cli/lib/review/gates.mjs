@@ -10,7 +10,7 @@ export { captionGate } from "../captions/gate.mjs";
 export { screenEvents } from "../timeline/index.mjs";
 export { GATE_DEFAULTS, STATIC_TYPES, summarize } from "./issue.mjs";
 export { schemaGate, numbersGate, storyboardGate, timingsGate, rateGate, assetsGate, budgetGate, drawnGate, assetPaths, assetRefs, SYLLABLES_PER_SEC } from "./gates-plan.mjs";
-export { openingGate, rhythmGate, DEVICE_HOLD, deviceGate, questionGate, echoGate } from "./gates-pacing.mjs";
+export { openingGate, rhythmGate, revealGate, DEVICE_HOLD, deviceGate, questionGate, echoGate } from "./gates-pacing.mjs";
 export { LAYOUT_DEFAULTS, layoutGate, fitOverlays, DENSITY_DEFAULTS, densityGate } from "./gates-layout.mjs";
 export { mapBoxes } from "./map-model.mjs";
 export { FRAMING_DEFAULTS, framingGate, groundingGate } from "./gates-tableau.mjs";

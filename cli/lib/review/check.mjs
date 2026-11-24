@@ -1,7 +1,7 @@
 // Collects every pre-compose issue for a project; used by `validate`, `timeline` and `render`.
 import { existsSync } from "node:fs";
 import { readJson } from "../core/project.mjs";
-import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, drawnGate, timingsGate, rhythmGate, openingGate, questionGate, echoGate, deviceGate, layoutGate, fitOverlays, densityGate, framingGate, groundingGate, summarize } from "./gates.mjs";
+import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, drawnGate, timingsGate, rhythmGate, revealGate, openingGate, questionGate, echoGate, deviceGate, layoutGate, fitOverlays, densityGate, framingGate, groundingGate, summarize } from "./gates.mjs";
 import { compileTimeline } from "../timeline/index.mjs";
 
 export function loadPlan(project) {
@@ -57,7 +57,11 @@ export function checkProject(project, { needTimings = false, plan = loadPlan(pro
         const last = new Map(moved.map((m) => [`${m.scene}#${m.i}`, m]));
         for (const m of last.values()) issues.push({ level: "info", gate: "layout", msg: `scene "${m.scene}" overlay ${m.i} moved to ${Object.entries(m.set).map(([k, v]) => `${k} ${v}`).join(", ")} for ${project.aspect}` });
       }
-      if (res.timeline) issues.push(...rhythmGate(res.timeline, config), ...openingGate(res.timeline, config), ...echoGate(res.timeline, config), ...deviceGate(res.timeline, config), ...layoutGate(res.timeline, config), ...framingGate(res.timeline, config), ...groundingGate(res.timeline, config, plan.storyboard), ...densityGate(res.timeline, plan.assets, config));
+      if (res.timeline) {
+        const rhythm = rhythmGate(res.timeline, config);
+        const covered = new Set(rhythm.filter((i) => i.fix?.with && i.fix.path[0] === "cues").map((i) => i.fix.scene));
+        issues.push(...revealGate(res.timeline).filter((i) => !covered.has(i.at.scene)), ...rhythm, ...openingGate(res.timeline, config), ...echoGate(res.timeline, config), ...deviceGate(res.timeline, config), ...layoutGate(res.timeline, config), ...framingGate(res.timeline, config), ...groundingGate(res.timeline, config, plan.storyboard), ...densityGate(res.timeline, plan.assets, config));
+      }
       timeline = res.timeline;
     } else if (needTimings) issues.push({ level: "error", gate: "files", msg: "missing plan/timings.json; run: onevideo tts" });
   }

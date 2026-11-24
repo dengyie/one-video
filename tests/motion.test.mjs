@@ -139,6 +139,24 @@ test("compileTimeline: a slammed word clears stickers left up from earlier lines
   assert.deepEqual([by("timed").end, by("spotlight").end, by("with").end, by("NOW").end], [Math.min(9.2, tail), tail, tail, tail]);
 });
 
+test("compileTimeline fills a still gap exposed by overlapping words", () => {
+  const ex = example();
+  const sb = { scenes: [{
+    id: "words", type: "kinetic", minDuration: 10, shots: [{ at: 0 }],
+    props: { lines: [{ text: "Title" }] },
+    overlays: [
+      { type: "word", text: "first", at: 0.5, duration: 6, y: 0.5 },
+      { type: "word", text: "second", at: 3, y: 0.5 },
+    ],
+  }] };
+  const script = { scenes: [{ id: "words", narration: "" }] };
+  const { timeline, errors } = compileTimeline({ ...ex, script, storyboard: sb, timings: { scenes: {} } });
+  assert.deepEqual(errors, []);
+  const [sc] = timeline.scenes;
+  assert.equal(sc.overlays[0].end, 3);
+  assert.ok(sc.shots.some((shot) => shot.t > 3 && shot.t < 7.5), "add a drift before the gap exceeds 4.5s");
+});
+
 test("compileTimeline: shot track, prop times, beats, canvas inherit", () => {
   const ex = example({ media: ["sfx/whoosh.wav", "sfx/pop.wav", "music/inspired.mp3"] });
   const sb = structuredClone(ex.storyboard);

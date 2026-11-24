@@ -120,6 +120,32 @@ export function findPauses(mono, sampleRate, { minMs = 90, relative = 0.04, floo
   return out;
 }
 
+export function shortenPauses(mono, sampleRate, { preserve = [], minSpan = 0 } = {}) {
+  const pauses = findPauses(mono, sampleRate, { minMs: 850, relative: 0.01, floor: 120 });
+  const cuts = pauses.flatMap(([a, b]) => {
+    const lo = Math.round(a * sampleRate), hi = Math.round(b * sampleRate);
+    const ratio = preserve.reduce((floor, [start, end]) => start < b && end > a && end > start
+      ? Math.max(floor, Math.min(1, minSpan / (end - start))) : floor, 0);
+    const keep = Math.max(Math.round(sampleRate * 0.5), Math.ceil((hi - lo) * ratio));
+    const removed = hi - lo - keep;
+    if (removed <= 0) return [];
+    const from = lo + Math.floor(keep / 2);
+    return [{ a, b, from, to: from + removed }];
+  });
+  if (!cuts.length) return { samples: mono, timeAt: (t) => t };
+  const out = new Float32Array(mono.length - cuts.reduce((n, { from, to }) => n + to - from, 0));
+  let pos = 0, written = 0;
+  for (const { from, to } of cuts) {
+    out.set(mono.subarray(pos, from), written);
+    written += from - pos;
+    pos = to;
+  }
+  out.set(mono.subarray(pos), written);
+  const timeAt = (t) => t - cuts.reduce((removed, { a, b, from, to }) =>
+    removed + Math.max(0, Math.min(1, (t - a) / (b - a))) * (to - from) / sampleRate, 0);
+  return { samples: out, timeAt };
+}
+
 // Change the pace of speech without changing its pitch (WSOLA): 30 ms Hann frames laid down at a
 // fixed hop, each read from where the faster (or slower) clock says it should start, nudged up to
 // ±10 ms to the offset that best continues the frame before it, so the waveform stays in phase.

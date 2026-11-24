@@ -5,6 +5,7 @@
 
 /** Motion pace multipliers (theme.motion.pace): slower pace, later and longer reveals. */
 export const PACE = /** @type {const} */ ({ slow: 1.35, medium: 1, fast: 0.7 });
+export const TITLE_DETAIL = /** @type {const} */ ([0.9, 0.7]);
 
 /** @param {string | undefined} pace @returns {number} */
 export const paceOf = (pace) => (pace && pace in PACE ? PACE[/** @type {keyof typeof PACE} */ (pace)] : 1);

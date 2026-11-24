@@ -3,6 +3,7 @@ import { fitFont, textEms, useLayout, useScene, useReveal, useRevealAt, useTheme
 import { MediaFill } from "../components/Media";
 import { Icon } from "../components/Icon";
 import { Stage } from "./Stage";
+import { TITLE_DETAIL } from "../../../shared/reveal.mjs";
 
 export const TitleScene: React.FC<{ kicker?: string; title: string; subtitle?: string; date?: string }> = ({ kicker, title, subtitle, date }) => {
   const theme = useTheme();
@@ -11,7 +12,7 @@ export const TitleScene: React.FC<{ kicker?: string; title: string; subtitle?: s
   const tt = useReveal(0.3, 0.8);
   // A long unbreakable word (a URL, a ticker run) cannot wrap: shrink it to one line of the frame.
   const titleSize = Math.min(...title.split(/\s+/).map((w) => fitFont(w, (width - 2 * pad) * 0.92, (portrait ? 100 : 104) * u)));
-  const s = useReveal(0.9, 0.7);
+  const s = useReveal(...TITLE_DETAIL);
   const t = useTime();
   return (
     <Stage center style={{ alignItems: "center", textAlign: "center" }}>

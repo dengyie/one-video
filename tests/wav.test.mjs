@@ -1,6 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { encodeWav, parseWav, toMono, trimSilence, concatWithGaps, findPauses } from "../cli/lib/audio/wav.mjs";
+import { encodeWav, parseWav, toMono, trimSilence, concatWithGaps, findPauses, shortenPauses } from "../cli/lib/audio/wav.mjs";
+
+test("shortenPauses maps the middle of silence to the middle of its retained window and keeps short spans visible", () => {
+  const sr = 1000;
+  const mono = new Float32Array(10000).fill(8000);
+  mono.fill(0, 1000, 9000);
+  const { samples, timeAt } = shortenPauses(mono, sr, { preserve: [[4.9, 5.1]], minSpan: 0.034 });
+  assert.ok(samples.length < mono.length);
+  assert.equal(timeAt(0.5), 0.5);
+  assert.ok(Math.abs(timeAt(5) - (timeAt(1) + timeAt(9)) / 2) < 1e-9);
+  assert.ok(timeAt(5.1) - timeAt(4.9) >= 0.034 - 1e-9);
+  assert.ok(Math.abs(timeAt(10) - samples.length / sr) < 1e-9);
+});
 
 test("encodeWav/parseWav round-trip", () => {
   const samples = Int16Array.from([0, 1000, -1000, 32767, -32768]);

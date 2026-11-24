@@ -1,6 +1,136 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { alignLines, sceneSpeech, timingHashes, ttsConfig } from "../cli/lib/voice/tts.mjs";
+import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { alignLines, lineHash, runTts, sceneSpeech, timingHashes, ttsConfig } from "../cli/lib/voice/tts.mjs";
+import { findPauses, readWav, toMono, writeWav } from "../cli/lib/audio/wav.mjs";
+import { captionAt, captionWindows } from "../shared/caption-timing.mjs";
+import { rateGate } from "../cli/lib/review/gates.mjs";
+
+async function cachedSceneWithPause({ duration, pause, tempo }) {
+  const root = mkdtempSync(join(tmpdir(), "ov-pause-tempo-"));
+  try {
+    const paths = { linesDir: join(root, "lines"), audioDir: join(root, "audio") };
+    const script = { scenes: [{ id: "speech", lines: [{ text: "甲乙丙丁戊己。" }] }] };
+    const config = { tts: { loudness: false, tempo } };
+    const t = ttsConfig(config);
+    const samples = Int16Array.from({ length: t.sampleRate * duration }, (_, i) => Math.round(8000 * Math.sin(i * 2 * Math.PI * 440 / t.sampleRate)));
+    samples.fill(0, t.sampleRate * pause[0], t.sampleRate * pause[1]);
+    const cache = join(paths.linesDir, `${lineHash(sceneSpeech(script.scenes[0], config, {}).speak, t)}.wav`);
+    writeWav(cache, { samples, sampleRate: t.sampleRate, channels: 1 });
+    const timings = await runTts({ root, config, paths }, script, { cachedOnly: true });
+    return { timings, config, script };
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test("auto tempo measures the narration after the same silence edit used in the final clip", async () => {
+  const { timings, config, script } = await cachedSceneWithPause({ duration: 2.15, pause: [0.3, 1.9], tempo: "auto" });
+  assert.equal(timings.scenes.speech.duration, 1.55);
+  assert.equal(timings.voice.tempo ?? 1, 1);
+  assert.deepEqual(rateGate(script, timings, config), []);
+});
+
+test("an explicit tempo cannot prevent trimming a pause that qualifies at the base rate", async () => {
+  const base = { duration: 1.85, pause: [0.4, 1.35] };
+  const normal = await cachedSceneWithPause(base);
+  const faster = await cachedSceneWithPause({ ...base, tempo: 1.4 });
+  assert.equal(normal.timings.scenes.speech.duration, 1.9);
+  assert.equal(faster.timings.scenes.speech.duration, 1.5);
+});
+
+test("cached TTS shortens dead air before measuring narration and aligning captions", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ov-pause-"));
+  try {
+    const paths = { linesDir: join(root, "lines"), audioDir: join(root, "audio") };
+    mkdirSync(paths.linesDir);
+    const config = { tts: { loudness: false } };
+    const t = ttsConfig(config);
+    const scene = { id: "cta", lines: [{ text: "Open the link" }, { text: "Watch it now" }] };
+    const samples = Int16Array.from({ length: t.sampleRate * 4 }, (_, i) => Math.round(8000 * Math.sin(i * 2 * Math.PI * 440 / t.sampleRate)));
+    samples.fill(0, t.sampleRate * 0.4, t.sampleRate * 0.7);
+    samples.fill(0, t.sampleRate, t.sampleRate * 2.2);
+    const cache = join(paths.linesDir, `${lineHash(sceneSpeech(scene, config, {}).speak, t)}.wav`);
+    writeWav(cache, { samples, sampleRate: t.sampleRate, channels: 1 });
+    const result = await runTts({ root, config, paths }, { scenes: [scene] }, { cachedOnly: true });
+    const { duration, lines } = result.scenes.cta;
+    assert.equal(duration, 3.8);
+    assert.equal(Math.round((lines[1].start - lines[0].end) * 100), 50);
+    const gaps = findPauses(toMono(readWav(join(paths.audioDir, "cta.wav")), t.sampleRate), t.sampleRate);
+    assert.deepEqual(gaps.slice(1).map(([a, b]) => Math.round((b - a) * 100)), [30, 50]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("shortening a sentence break does not move the caption boundary to the next sentence's internal pause", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ov-sentence-break-"));
+  try {
+    const paths = { linesDir: join(root, "lines"), audioDir: join(root, "audio") };
+    const config = { tts: { loudness: false } };
+    const t = ttsConfig(config);
+    const scene = { id: "speech", lines: [{ text: "甲乙丙丁。" }, { text: "一二三四五。" }] };
+    const samples = Int16Array.from({ length: t.sampleRate * 6 }, (_, i) => Math.round(8000 * Math.sin(i * 2 * Math.PI * 440 / t.sampleRate)));
+    samples.fill(0, t.sampleRate, t.sampleRate * 2.6);
+    samples.fill(0, t.sampleRate * 3.4, t.sampleRate * 3.62);
+    const cache = join(paths.linesDir, `${lineHash(sceneSpeech(scene, config, {}).speak, t)}.wav`);
+    writeWav(cache, { samples, sampleRate: t.sampleRate, channels: 1 });
+    const result = await runTts({ root, config, paths }, { scenes: [scene] }, { cachedOnly: true });
+    const { duration, lines } = result.scenes.speech;
+    assert.equal(duration, 5.4);
+    assert.deepEqual([lines[0].end, lines[1].start], [1.15, 1.65]);
+    const faster = await runTts({ root, config: { tts: { ...config.tts, tempo: 1.25 } }, paths }, { scenes: [scene] }, { cachedOnly: true });
+    const [first, next] = faster.scenes.speech.lines;
+    assert.deepEqual([first.end, next.start], [0.95, 1.35]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an excised gap cannot collapse two estimated boundaries onto a missing caption", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ov-caption-cut-"));
+  try {
+    const paths = { linesDir: join(root, "lines"), audioDir: join(root, "audio") };
+    const config = { tts: { loudness: false } };
+    const t = ttsConfig(config);
+    const scene = { id: "speech", lines: [{ text: "甲乙。" }, { text: "丙丁。" }, { text: "戊己。" }] };
+    const samples = Int16Array.from({ length: t.sampleRate * 9 }, (_, i) => Math.round(8000 * Math.sin(i * 2 * Math.PI * 440 / t.sampleRate)));
+    samples.fill(0, t.sampleRate * 1.5, t.sampleRate * 7.5);
+    samples.fill(0, t.sampleRate * 8.1, t.sampleRate * 8.25);
+    const cache = join(paths.linesDir, `${lineHash(sceneSpeech(scene, config, {}).speak, t)}.wav`);
+    writeWav(cache, { samples, sampleRate: t.sampleRate, channels: 1 });
+    const result = await runTts({ root, config, paths }, { scenes: [scene] }, { cachedOnly: true });
+    const { duration, lines } = result.scenes.speech;
+    assert.equal(duration, 4);
+    assert.deepEqual([lines[1].start, lines[1].end], [1.775, 2.025]);
+    const windows = captionWindows(lines);
+    assert.deepEqual([1.1, 1.9, 3.3].map((time) => captionAt(windows, time)?.item.text), lines.map((line) => line.text));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("removing a later pause does not reassign an earlier caption boundary in unchanged speech", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ov-caption-unchanged-"));
+  try {
+    const paths = { linesDir: join(root, "lines"), audioDir: join(root, "audio") };
+    const config = { tts: { loudness: false } };
+    const t = ttsConfig(config);
+    const scene = { id: "speech", lines: [{ text: "甲乙。" }, { text: "丙丁戊。" }, { text: "己庚。" }] };
+    const samples = Int16Array.from({ length: t.sampleRate * 8 }, (_, i) => Math.round(8000 * Math.sin(i * 2 * Math.PI * 440 / t.sampleRate)));
+    samples.fill(0, t.sampleRate * 0.4, t.sampleRate * 0.56);
+    samples.fill(0, t.sampleRate * 3, t.sampleRate * 6);
+    const cache = join(paths.linesDir, `${lineHash(sceneSpeech(scene, config, {}).speak, t)}.wav`);
+    writeWav(cache, { samples, sampleRate: t.sampleRate, channels: 1 });
+    const result = await runTts({ root, config, paths }, { scenes: [scene] }, { cachedOnly: true });
+    assert.equal(result.scenes.speech.duration, 6);
+    assert.deepEqual(result.scenes.speech.lines.map(({ start, end }) => [start, end]), [[0.15, 2.436], [2.436, 3.15], [3.65, 5.65]]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("alignLines snaps line boundaries to the pauses nearest their syllable share", () => {
   // Three equal lines over 9 s; pauses near 3 s and 6 s, plus a distracting short one at 4.5 s.

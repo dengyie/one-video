@@ -4,11 +4,12 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ROOT, estimatedTimings } from "./helpers.mjs";
+import { ROOT, estimatedTimings, example } from "./helpers.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { elementAt, ridgeTop, stateAt } from "../shared/tableau.mjs";
 import { resolveApiKey, viaApiBase, requireApiKey } from "../cli/lib/core/http.mjs";
 import { reviewSubject } from "../cli/lib/core/state.mjs";
+import { fixPlan } from "../cli/lib/review/fixes.mjs";
 
 const CLI = join(ROOT, "cli", "onevideo.mjs");
 const ov = (cwd, ...args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: "utf8", env: { ...process.env, HOME: cwd, ONEVIDEO_WORKERS: "" } });
@@ -20,6 +21,39 @@ function exampleProject() {
   assert.equal(r.status, 0, r.stderr);
   return dir;
 }
+
+test("Promo Demo keeps its URL readable after the short CTA narration", async () => {
+  const dir = join(ROOT, "examples", "promo-demo");
+  const config = json(join(dir, "onevideo.json"));
+  const script = { scenes: [json(join(dir, "plan", "script.json")).scenes.at(-1)] };
+  const storyboard = { scenes: [json(join(dir, "plan", "storyboard.json")).scenes.at(-1)] };
+  const timings = await estimatedTimings(script, config);
+  const { timeline, errors } = compileTimeline({ config, script, storyboard, timings });
+  assert.deepEqual(errors, []);
+  const [cta] = timeline.scenes;
+  assert.equal(cta.type, "title");
+  assert.equal(cta.lines[0].text, "打开链接就能看");
+  const fadeStart = cta.duration - cta.transitionOut.frames / timeline.fps;
+  assert.ok(fadeStart - cta.lines[0].end >= 1, "leave the URL readable after the spoken CTA");
+});
+
+test("SpaceX IPO reveals total revenue and the loss explanation on their narration cues", () => {
+  const ex = example();
+  const { check: { timeline, errors }, applied } = fixPlan({ config: ex.config, root: ex.root }, { ...ex, assets: ex.fetchedAssets });
+  assert.deepEqual(errors, []);
+  for (const scene of ["ipo", "revenue", "profit"]) assert.ok(applied.some((fix) => fix.scene === scene && fix.path[0] === "cues"));
+  const revenue = timeline.scenes.find((s) => s.id === "revenue");
+  const totalCue = revenue.cues[revenue.props.total?.cue];
+  const totalLine = revenue.lines.find((line) => line.text.includes("187亿"));
+  assert.ok(totalCue >= totalLine.start && totalCue < totalLine.end);
+  assert.ok(totalCue < revenue.cues[revenue.props.segments[0].cue]);
+  const profit = timeline.scenes.find((s) => s.id === "profit");
+  const dragCue = profit.cues[profit.props.right.itemCues?.[0]];
+  const dragLine = profit.lines.find((line) => line.text.includes("主要拖累"));
+  assert.ok(dragCue > profit.cues[profit.props.right.cue]);
+  assert.ok(dragCue >= dragLine.start - 0.21 && dragCue < dragLine.end);
+  assert.ok(timeline.scenes.find((s) => s.id === "ipo").props.cards[1].noteCue);
+});
 
 test("approve script blocks an unsourced number even before a storyboard exists", () => {
   const dir = exampleProject();
