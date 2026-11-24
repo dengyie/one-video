@@ -3,7 +3,7 @@
 // into the storyboard as phrases.
 import { normalizeForMatch, parseNumber } from "../core/text.mjs";
 import { CUE_LEAD, phraseTime } from "../timeline/cues.mjs";
-import { racePeriods } from "../timeline/events.mjs";
+import { periodTimes, racePeriods } from "../timeline/events.mjs";
 
 // Same tokens as extractNumbers; dates and counts of years are not values a chart shows.
 const NUMBER = /\d+(?:[.,]\d+)*(?:万亿|亿|万|千|百|%|倍|年|月|日|美元|元)?/g;
@@ -147,10 +147,20 @@ export function numberReveals(sc) {
   } else if (sc.type === "bar-race") {
     // Periods with no cue get one where their year is said; the cued ones keep theirs.
     const old = sc.props.periodCues ?? [];
-    const pc = (sc.props.periods ?? []).map((label, k) => {
+    const periods = sc.props.periods ?? [];
+    const anchors = periods.map((_, k) => sc.cues?.[old[k]]);
+    const before = racePeriods(sc);
+    const pc = periods.map((label, k) => {
       if (old[k]) return old[k];
       const s = matchDate(label);
       if (!s) return null;
+      anchors[k] = s.t;
+      const after = periodTimes(periods.length, sc.duration, (j) => anchors[j]);
+      if (after.some((t, j) => (before[j] < sc.duration && t >= sc.duration)
+          || (anchors[j] !== undefined && Math.abs(t - (old[j] ? before[j] : anchors[j])) > 1e-6))) {
+        anchors[k] = undefined;
+        return null;
+      }
       used.add(s);
       const n = name();
       cues[n] = s.phrase;
@@ -162,7 +172,7 @@ export function numberReveals(sc) {
     // period (each period counted from half a second before the swap into it); a bar
     // whose name is said, while it is in the top ranks then. A value said just before its period
     // arrives (by the end of that line) calls the bar out on that period's cue instead.
-    const T = racePeriods(sc);
+    const T = periodTimes(periods.length, sc.duration, (k) => anchors[k]);
     const series = sc.props.series ?? [];
     const top = sc.props.top ?? 10;
     const shown = (t) => T.findIndex((_, k) => (k ? T[k] - 0.5 : 0) <= t && (k === T.length - 1 || t < T[k + 1] - 0.5));
