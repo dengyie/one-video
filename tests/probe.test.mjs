@@ -97,6 +97,41 @@ test("probe counts a sticker's hits only when it is drawn in front of the captio
   assert.equal(hitsCaption([sticker, overlay, ink, caption, background], overlay, caption), true);
 });
 
+async function canvasStills(width, height, scene, check) {
+  const dir = mkdtempSync(join(tmpdir(), "ov-headed-canvas-"));
+  try {
+    const theme = JSON.parse(readFileSync(new URL("../styles/vector-flow.json", import.meta.url), "utf8"));
+    const timeline = {
+      width, height, fps: 30, duration: 3, totalFrames: 90, theme,
+      captions: { enabled: false, items: [] }, sfx: [], narration: [], watermark: null,
+      scenes: [{
+        id: "canvas", type: "canvas", from: 0, start: 0, duration: 3, durationInFrames: 90,
+        camera: { move: "static" }, header: { title: "Scene header" }, props: {}, ...scene,
+      }],
+    };
+    const props = join(dir, "props.json"), job = join(dir, "job.json"), out = join(dir, "probe.json");
+    const frames = [20, 35, 50].map((frame) => ({ frame, file: join(dir, `${frame}.jpg`) }));
+    writeFileSync(props, JSON.stringify(timeline));
+    writeFileSync(job, JSON.stringify({ entry: "src/index.ts", props, out, probe: true, publicDir: join(TEMPLATE_DIR, "public"), frames }));
+    await run(process.execPath, [join(TEMPLATE_DIR, "stills.mjs"), job]);
+    for (const { scenes: [frame] } of JSON.parse(readFileSync(out, "utf8"))) check(frame);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("near-top canvas words share the header-safe viewport", { skip: !existsSync(REMOTION_BIN) && "needs template dependencies" }, async () => {
+  for (const [width, height] of [[640, 360], [360, 640]]) {
+    await canvasStills(width, height, {
+      overlays: [{ type: "word", text: "Near top", t: 0, end: 3, x: 0.5, y: 0.055, size: 36 }],
+    }, ({ overlays, texts }) => {
+      const word = overlays.find(({ i }) => i === 0);
+      const header = texts.find(({ text }) => text === "Scene header");
+      assert.ok(word && header && word.box[1] > header.box[3], "the overlay is visible below the header");
+    });
+  }
+});
+
 test("devices reserve caption space and portrait cards cap wide column counts", () => {
   assert.equal(deviceViewportHeight(1080, 1, false), 860);
   assert.equal(deviceViewportHeight(1920, 1, true), 1530);

@@ -158,11 +158,13 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
   const shadow: React.CSSProperties = scene.backdrop ? { textShadow: "0 2px 14px rgba(0,0,0,0.6)" } : {};
   const [dx, dy] = DIR[(out ? tout : tin)?.direction ?? "left"] ?? DIR.left;
   const viewport = scene.type === "canvas" && scene.header ? cameraViewport(height, top) : null;
-  const art = <AbsoluteFill style={{ transform: cam || undefined }}>{content}</AbsoluteFill>;
+  const art = <>
+    <AbsoluteFill style={{ transform: cam || undefined }}>{content}</AbsoluteFill>
+    <Overlays />
+  </>;
   const foreground = (
     <MotionBlur id={scene.id} vx={vel.vx} vy={vel.vy} radial={vel.radial} style={{ transform: viewTransform(view, width, height) }}>
       {viewport ? <AbsoluteFill style={{ transform: `translateY(${viewport.top}px) scale(${viewport.scale})`, transformOrigin: "top center" }}>{art}</AbsoluteFill> : art}
-      <Overlays />
     </MotionBlur>
   );
   return (
