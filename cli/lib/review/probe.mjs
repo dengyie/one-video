@@ -160,5 +160,5 @@ export function storedProbes(project) {
   const dir = join(project.paths.out, "qc");
   if (!existsSync(dir)) return [];
   const hash = boardHash(project);
-  return readdirSync(dir).filter((f) => /^probe\..+\.json$/.test(f)).map((f) => readJson(join(dir, f))).filter((p) => p.storyboard === hash).flatMap((p) => p.issues);
+  return readdirSync(dir).filter((f) => /^probe\..+\.json$/.test(f)).map((f) => readJson(join(dir, f))).filter((p) => p.storyboard === hash).flatMap((p) => p.issues.map((i) => ({ ...i, aspect: p.aspect })));
 }

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  KIND_NAMES, PALETTES, bandDepth, bandFor, cameraAt, cameraMoving, elementAt, flashAt, flashTotal, lampLevel, layerView,
+  KIND_NAMES, PALETTES, bandDepth, bandFor, cameraAt, cameraMoving, cameraPoseAt, elementAt, flashAt, flashTotal, lampLevel, layerView,
   mixHex, paletteAt, settledElement, tableauTimes, waveY, SEA_BANDS,
   boxOnScreen, cameraFor, elementGeometry, insideShare, onScreen, stageOf, zoomToFit, STAGE_ASPECT,
   horizonAt, ridgeDepth, ridgeTop, stateAt, townBlocks, treeRow, windowOn,
@@ -139,6 +139,62 @@ test("compileTimeline: tableau times, strikes on the beat, inherit carries the w
   sb.scenes[0] = { ...sb.scenes[0], type: "kinetic", props: { lines: [{ text: "x" }] } };
   const again = compileTimeline({ ...ex, storyboard: sb, assets: ex.fetchedAssets });
   assert.ok(again.errors.some((e) => /tableau inherit needs/.test(e)));
+});
+
+test("inherited tableau begins at the outgoing rendered camera pose in both aspects", () => {
+  const ex = example();
+  const sb = structuredClone(ex.storyboard);
+  sb.scenes[0] = { ...sb.scenes[0], type: "tableau", backdrop: undefined, shots: undefined, overlays: [], props: {
+    elements: [{ id: "tower", type: "lighthouse", x: 0.25 }, { id: "walker", type: "figure", x: 0.72 }],
+    camera: [{ x: 0.25, y: 0.5, zoom: 1.1 }, { at: 1, on: "walker", zoom: 2, dur: 12, sway: 0.5 }],
+  } };
+  sb.scenes[1] = { ...sb.scenes[1], type: "tableau", backdrop: undefined, shots: undefined, overlays: [], props: {
+    inherit: true, elements: [{ id: "walker", x: 0.3 }], camera: [{ at: 0, zoom: 1.3 }],
+  } };
+  for (const aspect of ["16:9", "9:16"]) {
+    const { timeline, errors } = compileTimeline({ ...ex, config: { ...ex.config, aspect }, storyboard: sb, assets: ex.fetchedAssets });
+    assert.deepEqual(errors, []);
+    const [a, b] = timeline.scenes;
+    const end = cameraPoseAt(a.props.camera, a.durationInFrames / timeline.fps);
+    assert.ok(end.zoom > 1.1 && end.zoom < 2);
+    assert.deepEqual(cameraPoseAt(b.props.camera, 0), end, aspect);
+  }
+});
+
+test("an inheriting hard cut starts at its authored tableau framing", () => {
+  const ex = example();
+  const sb = structuredClone(ex.storyboard);
+  sb.scenes[0] = { ...sb.scenes[0], type: "tableau", exit: "cut", backdrop: undefined, shots: undefined, overlays: [], props: {
+    elements: [{ id: "tower", type: "lighthouse", x: 0.2 }],
+  } };
+  sb.scenes[1] = { ...sb.scenes[1], type: "tableau", enter: undefined, backdrop: undefined, shots: undefined, overlays: [], props: {
+    inherit: true, camera: [{ at: 0, x: 0.2, y: 0.5, zoom: 2 }],
+  } };
+  for (const camera of [undefined, [{ x: 0.7 }, { at: 1, x: 0.6 }]]) {
+    sb.scenes[0].props.camera = camera;
+    const { timeline, errors } = compileTimeline({ ...ex, storyboard: sb, assets: ex.fetchedAssets });
+    assert.deepEqual(errors, []);
+    const b = timeline.scenes[1];
+    assert.equal(b.transitionIn.type, "cut");
+    assert.deepEqual(cameraPoseAt(b.props.camera, 0), { x: 0.2, y: 0.5, zoom: 2, sway: 0 });
+  }
+});
+
+test("an unauthored tableau camera keeps the outgoing held portrait pose on a cut", () => {
+  const ex = example();
+  const sb = structuredClone(ex.storyboard);
+  sb.scenes[0] = { ...sb.scenes[0], type: "tableau", exit: "cut", backdrop: undefined, shots: undefined, overlays: [], props: {
+    elements: [{ id: "tower", type: "lighthouse", x: 0.18 }],
+    camera: [{ on: "tower", zoom: 1.6 }],
+  } };
+  sb.scenes[1] = { ...sb.scenes[1], type: "tableau", enter: undefined, backdrop: undefined, shots: undefined, overlays: [], props: { inherit: true } };
+  const { timeline, errors } = compileTimeline({ ...ex, config: { ...ex.config, aspect: "9:16" }, storyboard: sb, assets: ex.fetchedAssets });
+  assert.deepEqual(errors, []);
+  const [a, b] = timeline.scenes;
+  assert.equal(b.transitionIn.type, "cut");
+  const held = cameraPoseAt(a.props.camera, a.duration);
+  assert.ok(held.x < 0.3 && held.zoom === 1.6);
+  assert.deepEqual(cameraPoseAt(b.props.camera, 0), held);
 });
 
 test("tableau geometry: anchors, cameraFor inverts the parallax, zoomToFit fills the frame", () => {
@@ -406,3 +462,22 @@ for (const name of ["keeper", "postman"]) {
     assert.deepEqual(framingGate(r.timeline, config).map((i) => i.msg), []);
   });
 }
+
+test("Keeper's dawn dip opens on the returning boat in both aspects", async () => {
+  const dir = join(ROOT, "examples", "keeper"), j = (p) => JSON.parse(readFileSync(join(dir, p), "utf8"));
+  const script = j("plan/script.json"), storyboard = j("plan/storyboard.json");
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...j("onevideo.json"), aspect };
+    const { timeline, errors } = compileTimeline({ script, storyboard, timings: await estimatedTimings(script, config), config, root: dir });
+    assert.deepEqual(errors, []);
+    const home = timeline.scenes.find((s) => s.id === "home");
+    assert.equal(home.transitionIn.type, "dip");
+    const t = (home.transitionIn.frames - home.transitionIn.lead) / timeline.fps;
+    const frame = { W: timeline.width, H: timeline.height, horizon: horizonAt(home.props.elements, t) };
+    const boat = home.props.elements.find((e) => e.id === "boat");
+    const g = elementGeometry(stateAt(boat, home.props.elements, t), frame);
+    const camera = cameraAt(home.props.camera, t);
+    const kx = Math.max(1, STAGE_ASPECT / (frame.W / frame.H));
+    assert.ok(insideShare(boxOnScreen(camera, g.depth, g.box, kx)) > 0.95, `${aspect}: returning boat is cropped`);
+  }
+});

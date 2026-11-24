@@ -73,18 +73,27 @@ export function layoutGate(timeline, config) {
       // stays out of the caption band through every shot move and clear of every sticker up at the same
       // time and of the map's pins and labels. Heights are tried in hundredths, so the suggestion is a value to type in.
       const others = boxes.filter((b, k) => b && k !== i && sc.overlays[k].t < o.end && o.t < sc.overlays[k].end);
-      const dx = box[0] < vis[0] + 0.02 ? vis[0] + 0.02 - box[0] : box[2] > vis[2] - 0.02 ? vis[2] - 0.02 - box[2] : 0;
-      const dy0 = box[1] < vis[1] + 0.02 ? vis[1] + 0.02 - box[1] : box[3] > vis[3] - 0.02 ? vis[3] - 0.02 - box[3] : 0;
       const r2 = (v) => Math.round(v * 100) / 100;
       const spot = () => {
-        if (box[2] - box[0] > vis[2] - vis[0] - 0.04) return null;
+        const w = box[2] - box[0], room = vis[2] - vis[0] - 0.04;
+        let size;
+        if (w > room) {
+          if (o.type !== "word") return null;
+          size = Math.floor((o.size ?? 150) * (room - 0.02) / w);
+          if (size < 8) return null;
+        }
+        const fit = size === undefined ? box : overlayBox({ ...o, size }, width, height);
+        const dx = fit[0] < vis[0] + 0.02 ? vis[0] + 0.02 - fit[0] : fit[2] > vis[2] - 0.02 ? vis[2] - 0.02 - fit[2] : 0;
+        const dy0 = fit[1] < vis[1] + 0.02 ? vis[1] + 0.02 - fit[1] : fit[3] > vis[3] - 0.02 ? vis[3] - 0.02 - fit[3] : 0;
         const y0 = o.y ?? 0.5;
-        for (let y = Math.floor((y0 + dy0) * 100 + 1e-6) / 100; box[1] + y - y0 >= vis[1] + 0.02 - 1e-9; y = r2(y - 0.01)) {
+        for (let y = Math.floor((y0 + dy0) * 100 + 1e-6) / 100; fit[1] + y - y0 >= vis[1] + 0.02 - 1e-9; y = r2(y - 0.01)) {
           const dy = y - y0;
-          const bx = [box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy];
+          const bx = [fit[0] + dx, fit[1] + dy, fit[2] + dx, fit[3] + dy];
           if (bandHit(bx) || others.some((b) => meets(b, bx)) || mapped.some((m) => meets(m.box, bx))) continue;
-          const set = { ...(dx && { x: r2((o.x ?? 0.5) + dx) }), y: r2(y) };
-          return { text: dx ? `move it to x ${set.x}, y ${set.y}` : `move it ${dy < 0 ? "up " : ""}to y ${set.y}`, fix: { scene: sc.id, path: ["overlays", i], set } };
+          const set = { ...(dx && { x: r2((o.x ?? 0.5) + dx) }), y: r2(y), ...(size !== undefined && { size }) };
+          const move = dx ? `move it to x ${set.x}, y ${set.y}` : `move it ${dy < 0 ? "up " : ""}to y ${set.y}`;
+          const text = size === undefined ? move : `reduce its size to ${size}${dx || dy ? ` and ${move}` : ""}`;
+          return { text, fix: { scene: sc.id, path: ["overlays", i], set } };
         }
         return null;
       };
@@ -125,14 +134,20 @@ export function layoutGate(timeline, config) {
 // spot layoutGate suggests, in that cut's timeline only. A few passes, since one move can block another.
 export function fitOverlays(timeline, config) {
   const moved = [];
-  for (let pass = 0; pass < 3; pass++) {
-    const fixes = layoutGate(timeline, config).filter((i) => i.fix?.path?.[0] === "overlays");
-    if (!fixes.length) break;
-    for (const { fix } of fixes) {
-      const o = timeline.scenes.find((s) => s.id === fix.scene)?.overlays?.[fix.path[1]];
-      if (!o || Object.entries(fix.set).every(([k, v]) => o[k] === v)) continue;
-      Object.assign(o, fix.set);
-      moved.push({ scene: fix.scene, i: fix.path[1], set: fix.set });
+  for (const sc of timeline.scenes) {
+    if (!sc.overlays?.length) continue;
+    const scope = { ...timeline, scenes: [sc] };
+    const fixes = () => layoutGate(scope, config).map((i) => i.fix).filter((f) => f?.path[0] === "overlays");
+    let current = fixes();
+    for (let pass = 0; pass < 3 && current.length; pass++) {
+      for (const i of new Set(current.map((f) => f.path[1]))) {
+        const fix = current.find((f) => f.path[1] === i);
+        const o = sc.overlays[i];
+        if (!fix || Object.entries(fix.set).every(([k, v]) => o[k] === v)) continue;
+        Object.assign(o, fix.set);
+        moved.push({ scene: sc.id, i, set: fix.set });
+        current = fixes();
+      }
     }
   }
   return moved;

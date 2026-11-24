@@ -11,7 +11,7 @@ import { r3 } from "./util.mjs";
 export const DEFAULT_FILL = 0.5;
 const MAX_AUTO_ZOOM = 3;
 
-export function resolveTableauRefs(props, { width, height, duration = 0 }, errors, where) {
+export function resolveTableauRefs(props, { width, height, duration = 0, inheritedCamera = false }, errors, where) {
   const els = props.elements ?? [];
   const byId = new Map(els.filter((e) => e.id).map((e) => [e.id, e]));
   const names = () => els.filter((e) => BODIES.includes(e.type)).map((e) => e.id).join(", ") || "none";
@@ -90,7 +90,7 @@ export function resolveTableauRefs(props, { width, height, duration = 0 }, error
     for (const f of ["on", "anchor", "place", "fill"]) delete k[f];
     k.aimed = ids;
   }
-  if (kx > 1.01) reframe(props.camera ?? [], els, { W: width, H: height }, kx, duration);
+  if (kx > 1.01) reframe(props.camera ?? [], els, { W: width, H: height }, kx, duration, inheritedCamera);
   for (const k of props.camera ?? []) delete k.aimed;
 }
 
@@ -104,7 +104,7 @@ const EDGE = 0.05;
 // takes over, so a walking figure stays in too. A key aimed with `on`
 // keeps its target where it was put. Either way the slide avoids leaving another body half in the
 // frame (it goes wholly in or wholly out); y and zoom stay.
-function reframe(keys, els, frame, kx, duration) {
+function reframe(keys, els, frame, kx, duration, inheritedCamera) {
   const T = (k) => k.t ?? 0;
   const rest = keys.map((k, i) => (i + 1 < keys.length && !keys[i + 1].cut ? Math.min(T(keys[i + 1]), T(k) + (k.dur ?? 2)) : T(k) + (i === 0 || k.cut ? 0 : k.dur ?? 2)));
   // Bodies at t with the camera across at k's x (its y and zoom as the keys have them then — the next
@@ -127,7 +127,7 @@ function reframe(keys, els, frame, kx, duration) {
   // The slides that keep a set inside [EDGE, 1 - EDGE].
   const span = (set) => [Math.max(...set.map((o) => (o.b[2] - 1 + EDGE) / o.f)), Math.min(...set.map((o) => (o.b[0] - EDGE) / o.f))];
   for (const [i, k] of keys.entries()) {
-    if (k.x === undefined) continue;
+    if ((i === 0 && inheritedCamera) || k.x === undefined) continue;
     const t = rest[i];
     const bodies = bodiesAt(k, t, k.aimed);
     const keep = k.aimed ? bodies.filter((o) => o.aimedAt) : bodies.filter((o) => insideShare(o.wide) > 0.5).sort((a, b) => a.rank - b.rank);
