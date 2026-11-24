@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { join } from "node:path";
 import { applyFix, describeFix, fixPlan } from "../cli/lib/review/fixes.mjs";
+import { saveProbe, storedProbes } from "../cli/lib/review/probe.mjs";
+import { writeJson } from "../cli/lib/core/project.mjs";
 import { numberReveals } from "../cli/lib/review/reveals.mjs";
 import { revealGate } from "../cli/lib/review/gates.mjs";
 import { racePeriods } from "../cli/lib/timeline/events.mjs";
@@ -70,6 +73,25 @@ test("fixPlan: a cropped portrait word is repaired in its authored aspect overri
   assert.equal(word.aspects["9:16"].x, 0.5);
   assert.ok(word.aspects["9:16"].size < 240);
   assert.ok(!check.issues.some((i) => i.at?.scene === sc.id && /runs off the frame/.test(i.msg)));
+});
+
+test("fixPlan: a saved main-cut probe and layout gate share the aspect overlay target", () => {
+  const ex = example();
+  const sc = ex.storyboard.scenes[0];
+  sc.overlays = [{
+    type: "word", text: "星链 > 60%", at: 1, duration: 2, y: 0.4, size: 120,
+    aspects: { "9:16": { size: 240 }, "16:9": { x: 0.5 } },
+  }];
+  const project = { root: ex.root, config: { ...ex.config, aspect: "9:16" }, paths: { out: join(ex.root, "out") } };
+  writeJson(join(ex.root, "plan", "storyboard.json"), ex.storyboard);
+  saveProbe(project, "9:16", [{ gate: "probe", level: "warn", msg: "word covers text",
+    fix: { scene: sc.id, path: ["overlays", 0], set: { y: 0.2 } },
+  }]);
+  const plan = { script: ex.script, storyboard: ex.storyboard, research: ex.research, timings: ex.timings, assets: ex.fetchedAssets };
+  const { applied } = fixPlan(project, plan, { extra: storedProbes(project) });
+  assert.equal(sc.overlays[0].y, 0.4);
+  assert.equal(sc.overlays[0].aspects["9:16"].y, 0.4);
+  assert.deepEqual(applied.filter((a) => a.scene === sc.id && a.path[0] === "overlays").map((a) => a.gate), ["layout"]);
 });
 
 test("numberReveals: chart values the narration says get a cue on those words; dates, cued elements and unsaid values do not", () => {

@@ -50,10 +50,20 @@ export function fixPlan(project, plan, { rounds = 8, extra = [] } = {}) {
   const applied = [];
   const touched = new Set();
   let check = checkProject(project, { plan });
+  const mainAspect = check.timeline?.aspect ?? project.config.aspect ?? "16:9";
+  const authored = new Map(plan.storyboard?.scenes?.map((s) => [s.id, s.overlays]));
+  const aspectFix = (i) => {
+    const { fix } = i;
+    if (fix?.path[0] !== "overlays" || fix.path.length !== 2 || !fix.set) return i;
+    const aspect = i.aspect ?? mainAspect;
+    const hasOverride = authored.get(fix.scene)?.[fix.path[1]]?.aspects?.[aspect];
+    if (!hasOverride && aspect === mainAspect) return i;
+    return { ...i, fix: { ...fix, path: [...fix.path, "aspects"], set: { [aspect]: fix.set }, add: true } };
+  };
   for (let r = 0; r < rounds; r++) {
-    const target = (f) => `${f.scene}/${f.path.join(".")}`;
+    const target = (f) => `${f.scene}/${f.path.join(".")}${f.path.at(-1) === "aspects" ? `:${Object.keys(f.set).join(",")}` : ""}`;
     const scenes = new Set();
-    const pick = [...check.issues, ...extra].filter((i) => i.fix && !touched.has(target(i.fix)))
+    const pick = [...check.issues, ...extra].map(aspectFix).filter((i) => i.fix && !touched.has(target(i.fix)))
       .sort((a, b) => FIRST.indexOf(b.fix.path[0]) - FIRST.indexOf(a.fix.path[0]))
       .filter((i) => !scenes.has(i.fix.scene) && scenes.add(i.fix.scene));
     let n = 0;

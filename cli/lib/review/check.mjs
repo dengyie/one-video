@@ -60,16 +60,7 @@ export function checkProject(project, { needTimings = false, plan = loadPlan(pro
       if (res.timeline) {
         const rhythm = rhythmGate(res.timeline, config);
         const covered = new Set(rhythm.filter((i) => i.fix?.with && i.fix.path[0] === "cues").map((i) => i.fix.scene));
-        const layout = layoutGate(res.timeline, config);
-        const aspect = res.timeline.aspect;
-        const authored = new Map(plan.storyboard.scenes.map((s) => [s.id, s.overlays]));
-        for (const i of layout) {
-          const { scene, path, set } = i.fix ?? {};
-          if (path?.[0] === "overlays" && authored.get(scene)?.[path[1]]?.aspects?.[aspect]) {
-            i.fix = { scene, path: [...path, "aspects"], set: { [aspect]: set } };
-          }
-        }
-        issues.push(...revealGate(res.timeline).filter((i) => !covered.has(i.at.scene)), ...rhythm, ...openingGate(res.timeline, config), ...echoGate(res.timeline, config), ...deviceGate(res.timeline, config), ...layout, ...framingGate(res.timeline, config), ...groundingGate(res.timeline, config, plan.storyboard), ...densityGate(res.timeline, plan.assets, config));
+        issues.push(...revealGate(res.timeline).filter((i) => !covered.has(i.at.scene)), ...rhythm, ...openingGate(res.timeline, config), ...echoGate(res.timeline, config), ...deviceGate(res.timeline, config), ...layoutGate(res.timeline, config), ...framingGate(res.timeline, config), ...groundingGate(res.timeline, config, plan.storyboard), ...densityGate(res.timeline, plan.assets, config));
       }
       timeline = res.timeline;
     } else if (needTimings) issues.push({ level: "error", gate: "files", msg: "missing plan/timings.json; run: onevideo tts" });
