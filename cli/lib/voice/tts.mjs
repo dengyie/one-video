@@ -102,13 +102,25 @@ export function sceneSpeech(scene, config, lexicon) {
 
 // Hash per caption line, as stored in timings. Scene unit: every line of a scene carries the
 // scene audio hash plus its index. Compare the line text as well when checking freshness.
-export function timingHashes(scene, config, lexicon) {
-  const t = ttsConfig(config);
+export function timingHashes(scene, config, lexicon, t = ttsConfig(config)) {
   const { lines, speak } = sceneSpeech(scene, config, lexicon);
   const tag = tempoTag(t) + (t.fallbackVoice ? `~f${sha(t.fallbackVoice)}` : "");
   if (t.unit === "line") return lines.map((l) => lineHash(l.speak, t) + tag);
   const h = lineHash(speak, t) + tag;
   return lines.map((_, i) => `${h}.${i}`);
+}
+
+function stockFallback(t) {
+  return { ...t, model: TTS_DEFAULTS.model, voice: t.fallbackVoice, voiceTag: undefined, refData: undefined };
+}
+
+export function timingVoice(config, voice) {
+  const t = ttsConfig(config);
+  if (!voice?.fallbackFor) return t;
+  if (!t.voiceTag || !t.fallbackVoice) return null;
+  const fallback = stockFallback(t);
+  return voice.model === fallback.model && voice.voice === fallback.voice &&
+    voice.fallbackFor.model === t.model && voice.fallbackFor.voice === t.voice ? fallback : null;
 }
 
 export function timingLinesMatch(have, hashes, lines) {
@@ -207,7 +219,7 @@ export async function runTts(project, script, options = {}) {
     if (!t.voiceTag) throw new UserError(`${error.message}; retry later or choose another TTS model`);
     if (!t.fallbackVoice) throw new UserError(`${error.message}; retry later or explicitly set tts.fallbackVoice to use a stock voice`);
     if (options.only?.length) throw new UserError(`${error.message}; rerun without --only to use tts.fallbackVoice for all narration`);
-    const fallback = { ...t, model: TTS_DEFAULTS.model, voice: t.fallbackVoice, voiceTag: undefined, refData: undefined };
+    const fallback = stockFallback(t);
     warn(`${error.message}; using stock voice "${fallback.voice}" (${fallback.model}) for all narration, not the requested clone`);
     try {
       return await synthesizeNarration(project, script, fallback, { ...options, force: false },
@@ -225,7 +237,7 @@ async function synthesizeNarration(project, script, t, { force = false, only = [
   const jobs = [];
   const scenes = script.scenes.map((scene) => {
     const { lines, speak } = sceneSpeech(scene, config, lexicon);
-    const hashes = timingHashes(scene, config, lexicon);
+    const hashes = timingHashes(scene, config, lexicon, t);
     const lineJobs = lines.map((l, i) => ({ scene: scene.id, text: l.text, speak: l.speak, hash: hashes[i], pause: l.pause }));
     // One synthesis unit per scene, or per line.
     const units = !lines.length ? [] : t.unit === "line"

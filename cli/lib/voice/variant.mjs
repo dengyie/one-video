@@ -7,7 +7,7 @@ import { existsSync } from "node:fs";
 import { relative } from "node:path";
 import { log, readJson, writeJson } from "../core/project.mjs";
 import { normalizeForMatch, spokenLength } from "../core/text.mjs";
-import { runTts, sceneSpeech, timingHashes, timingLinesMatch, ttsConfig } from "./tts.mjs";
+import { runTts, sceneSpeech, timingHashes, timingLinesMatch, timingVoice } from "./tts.mjs";
 
 const round = (x) => Math.round(x * 1000) / 1000;
 const audioHash = (hashes) => (hashes[0] ?? "").split(".")[0];
@@ -49,19 +49,21 @@ export function respan(main, variant) {
 // variant (line unit with a different cut, or explicit lines spoken differently) or the main
 // timings miss a scene: then only a real tts run can time it.
 export function variantTimings(script, mainTimings, mainConfig, config) {
-  const t = ttsConfig(config);
+  const t = timingVoice(config, mainTimings.voice);
+  const mainVoice = timingVoice(mainConfig, mainTimings.voice);
+  if (!t || !mainVoice) return null;
   const lexicon = { ...(config.lexicon ?? {}), ...(script.lexicon ?? {}) };
   const mainLex = { ...(mainConfig.lexicon ?? {}), ...(script.lexicon ?? {}) };
   const out = { ...mainTimings, scenes: {}, derivedFrom: "plan/timings.json" };
   for (const scene of script.scenes) {
     const main = mainTimings.scenes?.[scene.id];
-    const hashes = timingHashes(scene, config, lexicon);
+    const hashes = timingHashes(scene, config, lexicon, t);
     if (!hashes.length) { out.scenes[scene.id] = main ?? { file: null, duration: 0, lines: [] }; continue; }
     if (!main?.lines?.length) return null;
     const { lines } = sceneSpeech(scene, config, lexicon);
     const have = main.lines.map((l) => l.hash);
     if (timingLinesMatch(main.lines, hashes, lines)) { out.scenes[scene.id] = main; continue; }
-    if (t.unit !== "scene" || audioHash(have) !== audioHash(timingHashes(scene, mainConfig, mainLex)) || audioHash(hashes) !== audioHash(have)) return null;
+    if (t.unit !== "scene" || audioHash(have) !== audioHash(timingHashes(scene, mainConfig, mainLex, mainVoice)) || audioHash(hashes) !== audioHash(have)) return null;
     const spans = respan(main.lines, lines);
     if (!spans) return null;
     out.scenes[scene.id] = { ...main, lines: lines.map((l, i) => ({ text: l.text, speak: l.speak, hash: hashes[i], start: spans[i][0], end: spans[i][1] })) };
@@ -71,9 +73,10 @@ export function variantTimings(script, mainTimings, mainConfig, config) {
 
 // Timings that match the script line for line under this config (what the timings gate checks).
 export function timingsFresh(script, timings, config) {
+  const t = timingVoice(config, timings?.voice);
   const lexicon = { ...(config.lexicon ?? {}), ...(script.lexicon ?? {}) };
-  return script.scenes.every((s) => timingLinesMatch(timings?.scenes?.[s.id]?.lines ?? [],
-    timingHashes(s, config, lexicon), sceneSpeech(s, config, lexicon).lines));
+  return Boolean(t) && script.scenes.every((s) => timingLinesMatch(timings?.scenes?.[s.id]?.lines ?? [],
+    timingHashes(s, config, lexicon, t), sceneSpeech(s, config, lexicon).lines));
 }
 
 // A variant project's (timeline/aspect.mjs withAspect) caption timings, kept fresh: placed on the
@@ -84,14 +87,16 @@ export async function ensureVariantTimings(project) {
   const script = readJson(project.paths.script);
   const have = existsSync(project.paths.timings) ? readJson(project.paths.timings) : null;
   const fresh = Boolean(have) && timingsFresh(script, have, project.config);
-  if (fresh && !have.derivedFrom) return have;
+  if (fresh && !have.derivedFrom && !have.voice?.fallbackFor) return have;
   const to = relative(project.root, project.paths.timings);
   // Derived timings are replaced by measured ones once the voice audio is cached.
   const cached = await runTts(project, script, { cachedOnly: true });
   if (cached) { log(`caption timings for ${project.aspect} → ${to}`); writeJson(project.paths.timings, cached); return cached; }
-  if (fresh) return have;
+  if (fresh && !have.voice?.fallbackFor) return have;
   const main = project.main && existsSync(project.main.timings) ? readJson(project.main.timings) : null;
-  const derived = main && timingsFresh(script, main, project.main.config) ? variantTimings(script, main, project.main.config, project.config) : null;
+  const mainFresh = main && timingsFresh(script, main, project.main.config);
+  if (fresh && (!mainFresh || main.voice?.fallbackFor)) return have;
+  const derived = mainFresh ? variantTimings(script, main, project.main.config, project.config) : null;
   if (derived) { log(`caption timings for ${project.aspect} from ${relative(project.root, project.main.timings)} (voice audio not cached) → ${to}`); writeJson(project.paths.timings, derived); return derived; }
   log(`caption timings for ${project.aspect} → ${to}`);
   const made = await runTts(project, script);

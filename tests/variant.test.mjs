@@ -1,15 +1,44 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { sceneSpeech, timingHashes } from "../cli/lib/voice/tts.mjs";
+import { sceneSpeech, timingHashes, timingVoice } from "../cli/lib/voice/tts.mjs";
 import { ensureVariantTimings, respan, timingsFresh, variantTimings } from "../cli/lib/voice/variant.mjs";
 
 const scene = { id: "a", narration: "SpaceX这次上市计划募资超过七百五十亿美元，将成为有史以来规模最大的一次首次公开募股。它凭什么值这么多钱？" };
 const silent = { id: "b" };
 const script = { scenes: [scene, silent] };
 const main = { aspect: "16:9" }, tall = { aspect: "9:16" };
+
+test("ensureVariantTimings replaces stock fallback after main narration restores the clone", async (ctx) => {
+  const root = mkdtempSync(join(tmpdir(), "ov-variant-restored-clone-"));
+  ctx.after(() => rmSync(root, { recursive: true, force: true }));
+  const paths = { script: join(root, "script.json"), timings: join(root, "timings.9x16.json"), linesDir: join(root, "lines") };
+  const tts = { ref: "voice.wav", fallbackVoice: "白桦" };
+  const mainProject = { config: { ...main, tts }, timings: join(root, "timings.json") };
+  const config = { ...tall, tts };
+  const project = { root, aspect: "9:16", config, paths, main: mainProject };
+  const scene = { id: "a", narration: "甲乙丙丁。" };
+  const script = { scenes: [scene] };
+  const clone = { model: "mimo-v2.5-tts-voiceclone", voice: "ref:voice.wav" };
+  const fallback = { model: "mimo-v2.5-tts", voice: "白桦", fallbackFor: clone };
+  const make = (voice, file, config) => {
+    const hashes = timingHashes(scene, config, {}, timingVoice(config, voice));
+    const lines = sceneSpeech(scene, config, {}).lines.map((l, i) => ({ ...l, hash: hashes[i], start: 0, end: 1 }));
+    return { voice, scenes: { a: { file, duration: 1, lines } } };
+  };
+  const stock = make(fallback, "audio/9x16/a.wav", config);
+  writeFileSync(paths.script, JSON.stringify(script));
+  writeFileSync(paths.timings, JSON.stringify(stock));
+  assert.deepEqual(await ensureVariantTimings(project), stock);
+  writeFileSync(mainProject.timings, JSON.stringify(make(clone, "audio/a.wav", mainProject.config)));
+  const out = await ensureVariantTimings(project);
+  assert.deepEqual(out.voice, clone);
+  assert.equal(out.scenes.a.file, "audio/a.wav");
+  assert.notEqual(out.scenes.a.lines[0].hash, stock.scenes.a.lines[0].hash);
+  assert.equal(timingsFresh(script, out, config), true);
+});
 
 // The main timings as tts writes them: one scene audio, three lines on its pauses.
 function mainTimings(spans = [[0, 3.1], [3.4, 6.6], [7, 8.5]]) {

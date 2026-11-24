@@ -4,10 +4,10 @@ import { createServer } from "node:http";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { alignLines, lineHash, runTts, sceneSpeech, timingHashes, ttsConfig } from "../cli/lib/voice/tts.mjs";
+import { alignLines, lineHash, runTts, sceneSpeech, timingHashes, timingVoice, ttsConfig } from "../cli/lib/voice/tts.mjs";
 import { findPauses, readWav, toMono, writeWav } from "../cli/lib/audio/wav.mjs";
 import { captionAt, captionWindows } from "../shared/caption-timing.mjs";
-import { rateGate } from "../cli/lib/review/gates.mjs";
+import { rateGate, timingsGate } from "../cli/lib/review/gates.mjs";
 
 test("a clone outage retries, then uses the opted-in stock voice for the entire take", async (ctx) => {
   const root = mkdtempSync(join(tmpdir(), "ov-voice-fallback-"));
@@ -43,7 +43,10 @@ test("a clone outage retries, then uses the opted-in stock voice for the entire 
   assert.equal(result.voice.voice, "白桦");
   assert.equal(result.voice.fallbackFor.model, t.model);
   assert.equal(result.scenes.a.duration, 1.5, "the cached clone for scene a was not mixed into this take");
-  assert.deepEqual(result.scenes.a.lines.map((l) => l.hash), timingHashes(script.scenes[0], config, {}));
+  const hashes = result.scenes.a.lines.map((l) => l.hash);
+  assert.deepEqual(hashes, timingHashes(script.scenes[0], config, {}, timingVoice(config, result.voice)));
+  assert.notDeepEqual(hashes, timingHashes(script.scenes[0], config, {}));
+  assert.deepEqual(timingsGate(script, result, config), []);
   assert.equal(await runTts({ root, config, paths }, script, { cachedOnly: true }), null, "fallback is not a clone cache hit");
 });
 
