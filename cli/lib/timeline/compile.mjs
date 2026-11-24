@@ -247,7 +247,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       if (icon) icons[name] = icon; else errors.push(`scene "${sb.id}" uses unknown icon "${name}" (Lucide name or flag:<iso2>)`);
     }
     if (sb.type === "unit-grid" && !icons[props.icon ?? "user-round"]) { const icon = resolveIcon(props.icon ?? "user-round"); if (icon) icons[props.icon ?? "user-round"] = icon; }
-    const visual = compileSceneVisuals(sb, props, overlays, { assetById, usedAssets, root, errors, warnings });
+    const visual = compileSceneVisuals(sb, props, overlays, { assetById, usedAssets, root, errors, warnings, shots });
 
     for (const l of lines) {
       narration.push([r3(start + l.start), r3(start + l.end)]);

@@ -5,6 +5,9 @@ import { countFrames, depthPath, framesDir, lumaPath } from "./media.mjs";
 
 const OPAQUE_TYPES = new Set(["media", "focus", "split", "footage", "parallax", "match-cut"]);
 
+const canExposeTableauEdge = (shot) => shot.zoom < 1 || shot.rotate !== 0
+  || (shot.zoom === 1 && (shot.x !== 0.5 || shot.y !== 0.5));
+
 export function collectAssetRefs(v, out = new Set()) {
   if (Array.isArray(v)) v.forEach((x) => collectAssetRefs(x, out));
   else if (v && typeof v === "object") {
@@ -21,7 +24,7 @@ export function credit(a) {
   return [a.title, a.author, a.license].filter(Boolean).join(" · ");
 }
 
-export function compileSceneVisuals(scene, props, overlays, { assetById, usedAssets, root, errors, warnings }) {
+export function compileSceneVisuals(scene, props, overlays, { assetById, usedAssets, root, errors, warnings, shots = [] }) {
   const refs = collectAssetRefs([props, overlays]);
   if (scene.backdrop) refs.add(scene.backdrop.asset);
   for (const id of refs) {
@@ -46,7 +49,7 @@ export function compileSceneVisuals(scene, props, overlays, { assetById, usedAss
     }
   }
   return {
-    opaque: Boolean(scene.backdrop) || OPAQUE_TYPES.has(scene.type),
+    opaque: Boolean(scene.backdrop) || OPAQUE_TYPES.has(scene.type) || (scene.type === "tableau" && !shots.some(canExposeTableauEdge)),
     header: scene.header ?? null,
     background: scene.background ?? null,
     backdrop: scene.backdrop ? { dim: 0.62, blur: 0, motion: "in", startFrom: 0, ...scene.backdrop } : null,

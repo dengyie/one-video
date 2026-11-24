@@ -152,7 +152,7 @@
           {
             "id": "price",
             "type": "stat",
-            "x": 960,
+            "x": 480,
             "y": 560,
             "value": 135,
             "format": {
@@ -254,8 +254,10 @@
           },
           {
             "cue": "pop",
-            "focus": "pop",
-            "zoom": 1.4,
+            "focus": [
+              "raise",
+              "pop"
+            ],
             "fly": 0.8
           },
           {

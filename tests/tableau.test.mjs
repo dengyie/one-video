@@ -463,6 +463,36 @@ for (const name of ["keeper", "postman"]) {
   });
 }
 
+test("Tableau dissolves keep the outgoing scene opaque under the incoming sky", async () => {
+  const dir = join(ROOT, "examples", "keeper"), j = (p) => JSON.parse(readFileSync(join(dir, p), "utf8"));
+  const script = j("plan/script.json"), storyboard = j("plan/storyboard.json");
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...j("onevideo.json"), aspect };
+    const { timeline, errors } = compileTimeline({ script, storyboard, timings: await estimatedTimings(script, config), config, root: dir });
+    assert.deepEqual(errors, []);
+    const [hook, keeper] = timeline.scenes;
+    assert.equal(keeper.transitionIn.type, "fade");
+    assert.equal(keeper.opaque, true);
+    assert.equal(hook.transitionOut.nextOpaque, true);
+  }
+});
+
+test("Tableau dissolves fade the outgoing layer when an incoming shot exposes the frame edges", async () => {
+  const dir = join(ROOT, "examples", "keeper"), j = (p) => JSON.parse(readFileSync(join(dir, p), "utf8"));
+  const script = j("plan/script.json"), storyboard = j("plan/storyboard.json");
+  storyboard.scenes[1].shots = [{ at: 0, zoom: 0.7 }];
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...j("onevideo.json"), aspect };
+    const { timeline, errors } = compileTimeline({ script, storyboard, timings: await estimatedTimings(script, config), config, root: dir });
+    assert.deepEqual(errors, []);
+    const [hook, keeper] = timeline.scenes;
+    assert.equal(keeper.transitionIn.type, "fade");
+    assert.equal(keeper.shots[0].zoom, 0.7);
+    assert.equal(keeper.opaque, false);
+    assert.equal(hook.transitionOut.nextOpaque, false);
+  }
+});
+
 test("Keeper's dawn dip opens on the returning boat in both aspects", async () => {
   const dir = join(ROOT, "examples", "keeper"), j = (p) => JSON.parse(readFileSync(join(dir, p), "utf8"));
   const script = j("plan/script.json"), storyboard = j("plan/storyboard.json");
