@@ -123,7 +123,6 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
   let look: Look = { style: {} };
   let active: Transition | null = null;
   let dip: number | undefined;
-  let closing: number | undefined;
   let out = false;
   if (tin && tin.frames > 0 && frame < tin.frames) {
     active = tin.type;
@@ -134,8 +133,7 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
     out = true;
     const local = frame - (length - tout.frames);
     if (tout.type === "dip") dip = dipOpacity("out", local, tout.frames, tout.frames - tout.tail);
-    else if (tout.type === "fade" && scene === tl.scenes.at(-1)) closing = closingFade(local, tout.frames);
-    else look = presentation(tout.type, "out", easeInOut(local / tout.frames), tout.direction, width, height, tout.nextOpaque);
+    else if (tout.type !== "fade" || scene !== tl.scenes.at(-1)) look = presentation(tout.type, "out", easeInOut(local / tout.frames), tout.direction, width, height, tout.nextOpaque);
   }
   const solid = !scene.opaque && active !== null && SOLID.includes(active);
   const t = (frame - (tin?.lead ?? 0)) / fps;
@@ -158,11 +156,10 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
   // Text over a photo gets a soft shadow (inherited by every label in the scene).
   const shadow: React.CSSProperties = scene.backdrop ? { textShadow: "0 2px 14px rgba(0,0,0,0.6)" } : {};
   const [dx, dy] = DIR[(out ? tout : tin)?.direction ?? "left"] ?? DIR.left;
-  const opacity = closing === undefined ? dip : 1 - closing;
   return (
     <>
-      {((dip !== undefined && out) || closing !== undefined) && <AbsoluteFill style={{ backgroundColor: "#000" }} />}
-      <AbsoluteFill style={{ ...style, opacity: opacity ?? style.opacity, ...shadow }}>
+      {dip !== undefined && out && <AbsoluteFill style={{ backgroundColor: "#000" }} />}
+      <AbsoluteFill style={{ ...style, ...(dip !== undefined ? { opacity: dip } : {}), ...shadow }}>
         {look.whip ? (
           <svg width={0} height={0} style={{ position: "absolute" }}>
             <filter id={filterId} x="-10%" y="-10%" width="120%" height="120%">
@@ -185,7 +182,7 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
   );
 };
 
-export const SceneVisual: React.FC<{ scene: Scene; theme: Theme }> = ({ scene, theme }) => {
+const SceneVisual: React.FC<{ scene: Scene; theme: Theme }> = ({ scene, theme }) => {
   const Comp = Object.hasOwn(SCENES, scene.type) ? SCENES[scene.type] : undefined;
   if (!Comp) throw new Error(`unknown scene type "${scene.type}" in scene "${scene.id}"`);
   const lead = scene.transitionIn?.lead ?? 0;
@@ -206,5 +203,23 @@ export const SceneVisual: React.FC<{ scene: Scene; theme: Theme }> = ({ scene, t
         </SceneFrame>
       </SceneContext.Provider>
     </Sequence>
+  );
+};
+
+export const VisualTrack: React.FC = () => {
+  const { scenes, theme, totalFrames } = useTimeline();
+  const frame = useCurrentFrame();
+  const last = scenes.at(-1);
+  const frames = last?.transitionOut?.type === "fade" ? Math.min(last.transitionOut.frames, last.durationInFrames) : 0;
+  const local = frame - (totalFrames - frames);
+  const opacity = frames > 0 && local >= 0 ? 1 - closingFade(local, frames) : undefined;
+  return (
+    <>
+      {opacity !== undefined && <AbsoluteFill style={{ backgroundColor: "#000" }} />}
+      <AbsoluteFill style={{ opacity }}>
+        <Backdrop variant={theme.background} />
+        {scenes.map((scene) => <SceneVisual key={scene.id} scene={scene} theme={theme} />)}
+      </AbsoluteFill>
+    </>
   );
 };

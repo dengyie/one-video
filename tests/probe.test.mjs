@@ -17,10 +17,11 @@ const tl = () => ({
 const shot = (overlays, texts) => [{ frame: 0, file: "x.jpg", scenes: [{ scene: "s", t: 2, overlays, texts }] }];
 const title = { text: "募资", box: [0.2, 0.45, 0.8, 0.48] };
 
-test("stills probe reports a clipped title before the closing fade but not on the black last frame", { skip: !existsSync(REMOTION_BIN) && "needs template dependencies" }, async () => {
+test("closing fade dims the default backdrop and hides clipped text from the stills probe", { skip: !existsSync(REMOTION_BIN) && "needs template dependencies" }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "ov-closing-probe-"));
   try {
     const theme = JSON.parse(readFileSync(new URL("../styles/midnight-data.json", import.meta.url), "utf8"));
+    theme.background = "plain";
     const timeline = {
       width: 640, height: 360, fps: 30, duration: 2, totalFrames: 60, theme,
       captions: { enabled: false, items: [] }, sfx: [], narration: [], watermark: null,
@@ -31,13 +32,17 @@ test("stills probe reports a clipped title before the closing fade but not on th
       }],
     };
     const props = join(dir, "props.json"), job = join(dir, "job.json"), out = join(dir, "probe.json");
-    const frames = [41, 46, 59].map((frame) => ({ frame, file: join(dir, `${frame}.jpg`) }));
+    const frames = [41, 42, 46, 50, 59].map((frame) => ({ frame, file: join(dir, `${frame}.jpg`) }));
     writeFileSync(props, JSON.stringify(timeline));
     writeFileSync(job, JSON.stringify({ entry: "src/index.ts", props, out, probe: true, publicDir: join(TEMPLATE_DIR, "public"), frames }));
     await run(process.execPath, [join(TEMPLATE_DIR, "stills.mjs"), job]);
-    const [visible, fading, black] = JSON.parse(readFileSync(out, "utf8"));
+    const [visible, start, fading, middle, black] = JSON.parse(readFileSync(out, "utf8"));
     assert.match(probeIssues([visible], timeline)[0]?.msg ?? "", /runs off the right edge/);
     assert.ok(fading.scenes[0]?.texts.some(({ text, a }) => text.startsWith("WWW") && a > 0.8 && a < 1));
+    const backdropBlue = async ({ file }) => (await frameRgb(file, { width: 64 })).rgb[2];
+    const [beforeBlue, startBlue, middleBlue] = await Promise.all([visible, start, middle].map(backdropBlue));
+    assert.equal(startBlue, beforeBlue, "the backdrop is unchanged on the first fade frame");
+    assert.ok(middleBlue > 0 && middleBlue < beforeBlue, "the backdrop has partly dimmed mid-fade");
     const { rgb } = await frameRgb(black.file, { width: 64 });
     assert.ok(rgb.every((channel) => channel === 0), "last still is black");
     assert.equal(black.scenes[0]?.scene, "credits");
