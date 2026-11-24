@@ -462,3 +462,22 @@ for (const name of ["keeper", "postman"]) {
     assert.deepEqual(framingGate(r.timeline, config).map((i) => i.msg), []);
   });
 }
+
+test("Keeper's dawn dip opens on the returning boat in both aspects", async () => {
+  const dir = join(ROOT, "examples", "keeper"), j = (p) => JSON.parse(readFileSync(join(dir, p), "utf8"));
+  const script = j("plan/script.json"), storyboard = j("plan/storyboard.json");
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...j("onevideo.json"), aspect };
+    const { timeline, errors } = compileTimeline({ script, storyboard, timings: await estimatedTimings(script, config), config, root: dir });
+    assert.deepEqual(errors, []);
+    const home = timeline.scenes.find((s) => s.id === "home");
+    assert.equal(home.transitionIn.type, "dip");
+    const t = (home.transitionIn.frames - home.transitionIn.lead) / timeline.fps;
+    const frame = { W: timeline.width, H: timeline.height, horizon: horizonAt(home.props.elements, t) };
+    const boat = home.props.elements.find((e) => e.id === "boat");
+    const g = elementGeometry(stateAt(boat, home.props.elements, t), frame);
+    const camera = cameraAt(home.props.camera, t);
+    const kx = Math.max(1, STAGE_ASPECT / (frame.W / frame.H));
+    assert.ok(insideShare(boxOnScreen(camera, g.depth, g.box, kx)) > 0.95, `${aspect}: returning boat is cropped`);
+  }
+});
