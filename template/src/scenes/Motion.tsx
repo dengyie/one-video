@@ -2,7 +2,7 @@ import React from "react";
 import { Img, staticFile } from "remotion";
 import { Highlight, Underline } from "@remotion/rough-notation";
 import { colorAt, cueOr, fitFont, textEms, useLayout, useRevealAt, useScene, useTheme, useTime, useTimeline } from "../engine/context";
-import { seenSpan } from "../engine/camera";
+import { rightShotInset, seenSpan } from "../engine/camera";
 import { fmt, fmtCount } from "../engine/format";
 import { clamp01, easeInOut, easeOut, easeOutBack, lerp } from "../engine/motion";
 import type { Format } from "../engine/types";
@@ -227,6 +227,7 @@ type ScaleItem = { label: string; value: number; format?: Format; color?: string
 export const ScaleCompareScene: React.FC<{ title?: string; items: ScaleItem[]; shape?: "circle" | "square" }> = ({ title, items, shape = "circle" }) => {
   const theme = useTheme();
   const { u, width, height, portrait, narrow, pad } = useLayout();
+  const scene = useScene();
   const at = useRevealAt();
   const t = useTime();
   const sorted = [...items].sort((a, b) => a.value - b.value);
@@ -249,6 +250,8 @@ export const ScaleCompareScene: React.FC<{ title?: string; items: ScaleItem[]; s
   }
   const z = Math.exp(logZ);
   const baseY = height * (portrait ? 0.62 : 0.74);
+  const ratioAt = starts[sorted.length - 1] + 0.8;
+  const ratioInset = sorted.length > 1 ? rightShotInset(scene.shots, ratioAt, scene.duration, width, 96 * u) : 0;
   return (
     <div style={{ position: "absolute", inset: 0 }}>
       <Stage><Title text={title} /></Stage>
@@ -284,7 +287,7 @@ export const ScaleCompareScene: React.FC<{ title?: string; items: ScaleItem[]; s
       <div style={{ position: "absolute", left: 0, right: 0, top: baseY, height: 2 * u, background: theme.colors.border }} />
       {/* No ratio against a zero: it would read ×Infinity. */}
       {sorted.length > 1 && sorted[0].value > 0 && (
-        <div style={{ position: "absolute", right: 96 * u, top: baseY + 24 * u, fontSize: 30 * u, color: theme.colors.muted, fontFamily: theme.fonts.number, opacity: easeOut((t - starts[sorted.length - 1] - 0.8) / 0.5) }}>
+        <div style={{ position: "absolute", right: ratioInset, top: baseY + 24 * u, fontSize: 30 * u, color: theme.colors.muted, fontFamily: theme.fonts.number, opacity: easeOut((t - ratioAt) / 0.5) }}>
           ×{fmt(sorted[sorted.length - 1].value / sorted[0].value, { compact: "zh" })}
         </div>
       )}

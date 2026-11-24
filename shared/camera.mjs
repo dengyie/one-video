@@ -59,6 +59,14 @@ export function seenSpan(shots, a, b) {
   return [l, r];
 }
 
+/** Right-edge inset in layer pixels, including the shot's crop while the label is visible.
+ * @param {ShotLike[] | undefined} shots @param {number} a @param {number} b
+ * @param {number} width @param {number} margin */
+export function rightShotInset(shots, a, b, width, margin) {
+  const [, right] = seenSpan(shots, a, b);
+  return (1 - right) * width + margin;
+}
+
 /** The part of the layer on screen through all of [a, b], as [x0, y0, x1, y1] fractions (a push-in crops its edges).
  * @param {ShotLike[] | undefined} shots @param {number} a @param {number} b @param {number} [step] @returns {[number, number, number, number]} */
 export function seenBox(shots, a, b, step = 0.25) {

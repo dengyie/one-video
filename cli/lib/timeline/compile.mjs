@@ -345,7 +345,8 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     }
   }
   sfx.sort((a, b) => a.at - b.at);
-  const music = compileMusic(config.music, { root, offset, grid, scenes, warnings });
+  const duration = r3(totalFrames / fps);
+  const music = compileMusic(config.music, { root, offset, grid, scenes, script, duration, warnings });
   const usedSfx = [...new Set(sfx.map((s) => s.sound))];
   if (root) for (const name of usedSfx) if (!existsSync(join(root, "public", sfxFile(name)))) errors.push(`sfx "${name}" missing: public/${sfxFile(name)}; run: onevideo music`);
   // Library sounds run up to 8 s; the player keeps each one mounted for its real length.
@@ -366,7 +367,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     height,
     aspect: config.aspect ?? "16:9",
     totalFrames,
-    duration: r3(totalFrames / fps),
+    duration,
     theme,
     watermark,
     captions,
