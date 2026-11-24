@@ -76,7 +76,7 @@
     {
       "id": "lights", "type": "tableau", "enter": "cut",
       "intent": "高潮：镇子的窗一扇扇亮起来，亮成一片，雪小了；镜头从镇子拉开，越过山谷找到山梁上那一点马灯",
-      "cues": { "people": "镇上的人", "all": "所有的灯都点亮了", "valley": "亮成一片", "see": "看见了" },
+      "cues": { "people": "镇上的人", "all": "所有的灯都点亮了", "wide": "整座镇子", "valley": "亮成一片", "see": "看见了" },
       "props": {
         "inherit": true,
         "elements": [
@@ -88,7 +88,7 @@
         "camera": [
           { "at": 0, "zoom": 1.7, "sway": 0.3, "on": "town" },
           { "cue": "people", "zoom": 2, "dur": 2, "sway": 0.3, "on": "town" },
-          { "cue": "valley", "x": 0.5, "y": 0.58, "zoom": 1.05, "dur": 3.4, "sway": 0.3 },
+          { "cue": "wide", "x": 0.5, "y": 0.58, "zoom": 1.05, "dur": 3.4, "sway": 0.3 },
           { "cue": "see", "zoom": 2, "dur": 2.2, "on": "postman" }
         ]
       },

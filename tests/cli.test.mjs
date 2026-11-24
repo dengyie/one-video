@@ -37,6 +37,21 @@ test("Promo Demo keeps its URL readable after the short CTA narration", async ()
   assert.ok(fadeStart - cta.lines[0].end >= 1, "leave the URL readable after the spoken CTA");
 });
 
+test("Graphics Demo keeps its final light-travel comparison compact in portrait", async () => {
+  const dir = join(ROOT, "examples", "graphics-demo");
+  const config = { ...json(join(dir, "onevideo.json")), aspect: "9:16" };
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
+  assert.deepEqual(errors, []);
+  const { props } = timeline.scenes.find((scene) => scene.id === "travel");
+  const { focus } = props.path.at(-1);
+  assert.deepEqual(focus, ["moon", "sun", "bar-moon", "bar-sun"]);
+  const widths = props.items.filter(({ id }) => focus.includes(id)).map(({ x, w = 520 }) => [x - w / 2, x + w / 2]);
+  const span = Math.max(...widths.map(([, right]) => right)) - Math.min(...widths.map(([left]) => left));
+  assert.ok(span <= 1350, "the portrait pullback should not shrink the comparison across a wide gap");
+});
+
 test("SpaceX Motion clears the opening title before the ticker lands", () => {
   const dir = join(ROOT, "examples", "spacex-motion");
   const read = (p) => json(join(dir, p));
@@ -375,6 +390,22 @@ test("postman example: an inland world compiles clean, the walker keeps to the n
   assert.deepEqual(tl.scenes.map((s) => [s.id, s.transitionIn.type]), [
     ["hook", "cut"], ["walk", "cut"], ["snow", "dip"], ["lights", "cut"], ["dawn", "dip"], ["credits", "dip"],
   ]);
+});
+
+test("Postman pulls back to the valley before cutting attention back to the lantern", async () => {
+  const dir = join(ROOT, "examples", "postman");
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...json(join(dir, "onevideo.json")), aspect };
+    const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
+    assert.deepEqual(errors, []);
+    const lights = timeline.scenes.find((scene) => scene.id === "lights");
+    const wide = lights.props.camera.find(({ zoom }) => zoom === 1.05);
+    const lantern = lights.props.camera.at(-1);
+    assert.ok(wide.t < lights.cues.valley, `${aspect}: pull back as the narrator introduces the whole town`);
+    assert.ok(wide.t + wide.dur < lantern.t, `${aspect}: let the valley shot settle before moving to the lantern`);
+  }
 });
 
 test("init --pipeline graphics carries the drawn defaults", () => {
