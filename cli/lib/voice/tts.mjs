@@ -236,34 +236,40 @@ export async function runTts(project, script, { force = false, only = [], dry = 
   if (uncached.length) throw new UserError(`${uncached.length} ${t.unit}(s) outside --only are not synthesized yet (first: scene "${uncached[0].scene}"); run: onevideo tts`);
 
   const out = { sampleRate: t.sampleRate, voice: { model: t.model, voice: t.voice, protocol: t.protocol, unit: t.unit, ...(t.design && { design: t.design }) }, scenes: {} };
-  const clipsById = {};
+  const prepared = {};
+  const maxTempo = t.tempo === "auto" ? AUTO_TEMPO[1] : Math.max(1, t.tempo ?? 1);
+  const minSpan = Math.ceil(1000 / (config.fps ?? 30)) / 1000 * maxTempo;
   for (const s of scenes) if (s.lines.length) {
-    clipsById[s.id] = s.units.map((u) => trimSilence(toMono(readWav(u.file), t.sampleRate), t.sampleRate));
+    const raw = s.units.map((u) => trimSilence(toMono(readWav(u.file), t.sampleRate), t.sampleRate));
+    if (t.unit === "line") {
+      prepared[s.id] = { clips: raw.map((clip) => shortenPauses(clip, t.sampleRate).samples) };
+    } else {
+      const spans = sceneLineSpans(s, raw[0], t.sampleRate);
+      const { samples, timeAt } = shortenPauses(raw[0], t.sampleRate, { preserve: spans, minSpan });
+      prepared[s.id] = { clips: [samples], spans: spans.map(([a, b]) => [timeAt(a), timeAt(b)]) };
+    }
   }
-  const tempo = t.tempo === "auto" ? autoTempo(sceneRates(scenes, clipsById, t), config.gates?.syllablesPerSec) : t.tempo ?? 1;
+  const tempo = t.tempo === "auto" ? autoTempo(sceneRates(scenes, prepared, t.sampleRate), config.gates?.syllablesPerSec) : t.tempo ?? 1;
   if (tempo !== 1) {
-    for (const id of Object.keys(clipsById)) clipsById[id] = clipsById[id].map((c) => timeStretch(c, t.sampleRate, tempo));
     log(`  tempo ×${tempo}${t.tempo === "auto" ? " (auto: the voice's own pace is outside the rate band)" : ""}`);
+    out.voice.tempo = tempo;
   }
-  if (tempo !== 1) out.voice.tempo = tempo;
   const joinedById = {};
   const spansById = {};
-  const minSpan = Math.ceil(1000 / (config.fps ?? 30)) / 1000;
   for (const s of scenes) {
     if (!s.lines.length) continue;
     const lead = new Float32Array(Math.round(t.leadIn * t.sampleRate));
-    const clips = clipsById[s.id];
+    const { clips, spans } = prepared[s.id];
+    const paced = tempo === 1 ? clips : clips.map((clip) => timeStretch(clip, t.sampleRate, tempo));
     if (t.unit === "line") {
       const gaps = s.lines.map((l, i) => (i === s.lines.length - 1 ? t.tail : t.pause[l.pause] ?? t.pause.sentence));
-      const joined = concatWithGaps([lead, ...clips.map((clip) => shortenPauses(clip, t.sampleRate).samples)], [0, ...gaps], t.sampleRate);
+      const joined = concatWithGaps([lead, ...paced], [0, ...gaps], t.sampleRate);
       joinedById[s.id] = joined;
       spansById[s.id] = joined.spans.slice(1);
     } else {
-      const clip = clips[0];
-      const spans = sceneLineSpans(s, clip, t.sampleRate);
-      const { samples, timeAt } = shortenPauses(clip, t.sampleRate, { preserve: spans, minSpan });
-      joinedById[s.id] = concatWithGaps([lead, samples], [0, t.tail], t.sampleRate);
-      spansById[s.id] = spans.map(([a, b]) => [t.leadIn + timeAt(a), t.leadIn + timeAt(b)]);
+      const scale = clips[0].length ? paced[0].length / clips[0].length : 1;
+      joinedById[s.id] = concatWithGaps([lead, paced[0]], [0, t.tail], t.sampleRate);
+      spansById[s.id] = spans.map(([a, b]) => [t.leadIn + a * scale, t.leadIn + b * scale]);
     }
   }
   // One shared gain keeps the voice level consistent between scenes.
@@ -303,18 +309,13 @@ function sceneLineSpans(scene, clip, sampleRate) {
 
 // Each scene's syllables per second as the rate gate counts them (caption text over the speech
 // each line spans): line unit times each clip, scene unit places the lines on the scene's pauses.
-function sceneRates(scenes, clipsById, t) {
+function sceneRates(scenes, prepared, sampleRate) {
   const rates = [];
   for (const s of scenes) {
-    const clips = clipsById[s.id];
-    if (!clips) continue;
+    if (!s.lines.length) continue;
+    const { clips, spans } = prepared[s.id];
     const chars = s.lines.reduce((n, l) => n + spokenLength(l.text), 0);
-    let speech;
-    if (t.unit === "line") speech = clips.reduce((n, c) => n + c.length / t.sampleRate, 0);
-    else {
-      const spans = sceneLineSpans(s, clips[0], t.sampleRate);
-      speech = spans.reduce((n, [a, b]) => n + (b - a), 0);
-    }
+    const speech = spans ? spans.reduce((n, [a, b]) => n + (b - a), 0) : clips.reduce((n, c) => n + c.length / sampleRate, 0);
     if (speech > 0) rates.push(chars / speech);
   }
   return rates;

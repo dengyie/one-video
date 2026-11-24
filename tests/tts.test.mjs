@@ -4,8 +4,42 @@ import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { alignLines, lineHash, runTts, sceneSpeech, timingHashes, ttsConfig } from "../cli/lib/voice/tts.mjs";
-import { findPauses, readWav, timeStretch, toMono, writeWav } from "../cli/lib/audio/wav.mjs";
+import { findPauses, readWav, toMono, writeWav } from "../cli/lib/audio/wav.mjs";
 import { captionAt, captionWindows } from "../shared/caption-timing.mjs";
+import { rateGate } from "../cli/lib/review/gates.mjs";
+
+async function cachedSceneWithPause({ duration, pause, tempo }) {
+  const root = mkdtempSync(join(tmpdir(), "ov-pause-tempo-"));
+  try {
+    const paths = { linesDir: join(root, "lines"), audioDir: join(root, "audio") };
+    const script = { scenes: [{ id: "speech", lines: [{ text: "甲乙丙丁戊己。" }] }] };
+    const config = { tts: { loudness: false, tempo } };
+    const t = ttsConfig(config);
+    const samples = Int16Array.from({ length: t.sampleRate * duration }, (_, i) => Math.round(8000 * Math.sin(i * 2 * Math.PI * 440 / t.sampleRate)));
+    samples.fill(0, t.sampleRate * pause[0], t.sampleRate * pause[1]);
+    const cache = join(paths.linesDir, `${lineHash(sceneSpeech(script.scenes[0], config, {}).speak, t)}.wav`);
+    writeWav(cache, { samples, sampleRate: t.sampleRate, channels: 1 });
+    const timings = await runTts({ root, config, paths }, script, { cachedOnly: true });
+    return { timings, config, script };
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test("auto tempo measures the narration after the same silence edit used in the final clip", async () => {
+  const { timings, config, script } = await cachedSceneWithPause({ duration: 2.15, pause: [0.3, 1.9], tempo: "auto" });
+  assert.equal(timings.scenes.speech.duration, 1.55);
+  assert.equal(timings.voice.tempo ?? 1, 1);
+  assert.deepEqual(rateGate(script, timings, config), []);
+});
+
+test("an explicit tempo cannot prevent trimming a pause that qualifies at the base rate", async () => {
+  const base = { duration: 1.85, pause: [0.4, 1.35] };
+  const normal = await cachedSceneWithPause(base);
+  const faster = await cachedSceneWithPause({ ...base, tempo: 1.4 });
+  assert.equal(normal.timings.scenes.speech.duration, 1.9);
+  assert.equal(faster.timings.scenes.speech.duration, 1.5);
+});
 
 test("cached TTS shortens dead air before measuring narration and aligning captions", async () => {
   const root = mkdtempSync(join(tmpdir(), "ov-pause-"));
@@ -48,11 +82,8 @@ test("shortening a sentence break does not move the caption boundary to the next
     assert.equal(duration, 5.4);
     assert.deepEqual([lines[0].end, lines[1].start], [1.15, 1.65]);
     const faster = await runTts({ root, config: { tts: { ...config.tts, tempo: 1.25 } }, paths }, { scenes: [scene] }, { cachedOnly: true });
-    const paced = timeStretch(Float32Array.from(samples), t.sampleRate, 1.25);
-    const [originalBreak] = findPauses(paced, t.sampleRate);
     const [first, next] = faster.scenes.speech.lines;
-    assert.equal(Math.round(first.end * 1000), Math.round((0.15 + originalBreak[0]) * 1000));
-    assert.equal(Math.round((next.start - first.end) * 1000), 500);
+    assert.deepEqual([first.end, next.start], [0.95, 1.35]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
