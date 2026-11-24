@@ -237,10 +237,19 @@ export async function runTts(project, script, { force = false, only = [], dry = 
 
   const out = { sampleRate: t.sampleRate, voice: { model: t.model, voice: t.voice, protocol: t.protocol, unit: t.unit, ...(t.design && { design: t.design }) }, scenes: {} };
   const clipsById = {};
+  const remapped = {};
   for (const s of scenes) if (s.lines.length) {
-    clipsById[s.id] = s.units.map((u) => shortenPauses(trimSilence(toMono(readWav(u.file), t.sampleRate), t.sampleRate), t.sampleRate));
+    clipsById[s.id] = s.units.map((u) => {
+      const raw = trimSilence(toMono(readWav(u.file), t.sampleRate), t.sampleRate);
+      const { samples, timeAt } = shortenPauses(raw, t.sampleRate);
+      if (timeAt && t.unit !== "line") remapped[s.id] = {
+        samples: samples.length,
+        spans: sceneLineSpans(s, raw, t.sampleRate).map(([a, b]) => [timeAt(a), timeAt(b)]),
+      };
+      return samples;
+    });
   }
-  const tempo = t.tempo === "auto" ? autoTempo(sceneRates(scenes, clipsById, t), config.gates?.syllablesPerSec) : t.tempo ?? 1;
+  const tempo = t.tempo === "auto" ? autoTempo(sceneRates(scenes, clipsById, remapped, t), config.gates?.syllablesPerSec) : t.tempo ?? 1;
   if (tempo !== 1) {
     for (const id of Object.keys(clipsById)) clipsById[id] = clipsById[id].map((c) => timeStretch(c, t.sampleRate, tempo));
     log(`  tempo ×${tempo}${t.tempo === "auto" ? " (auto: the voice's own pace is outside the rate band)" : ""}`);
@@ -259,8 +268,10 @@ export async function runTts(project, script, { force = false, only = [], dry = 
       spansById[s.id] = joined.spans.slice(1);
     } else {
       const clip = clips[0];
-      const dur = clip.length / t.sampleRate;
-      const spans = alignLines(s.lines.map((l) => Math.max(1, spokenLength(l.speak))), dur, findPauses(clip, t.sampleRate), s.lines.map((l) => l.pause));
+      const mapped = remapped[s.id];
+      const spans = mapped
+        ? mapped.spans.map(([a, b]) => [a * clip.length / mapped.samples, b * clip.length / mapped.samples])
+        : sceneLineSpans(s, clip, t.sampleRate);
       joinedById[s.id] = concatWithGaps([lead, clip], [0, t.tail], t.sampleRate);
       spansById[s.id] = spans.map(([a, b]) => [t.leadIn + a, t.leadIn + b]);
     }
@@ -295,9 +306,14 @@ export async function runTts(project, script, { force = false, only = [], dry = 
 
 const round = (x) => Math.round(x * 1000) / 1000;
 
+function sceneLineSpans(scene, clip, sampleRate) {
+  return alignLines(scene.lines.map((l) => Math.max(1, spokenLength(l.speak))), clip.length / sampleRate,
+    findPauses(clip, sampleRate), scene.lines.map((l) => l.pause));
+}
+
 // Each scene's syllables per second as the rate gate counts them (caption text over the speech
 // each line spans): line unit times each clip, scene unit places the lines on the scene's pauses.
-function sceneRates(scenes, clipsById, t) {
+function sceneRates(scenes, clipsById, remapped, t) {
   const rates = [];
   for (const s of scenes) {
     const clips = clipsById[s.id];
@@ -306,8 +322,7 @@ function sceneRates(scenes, clipsById, t) {
     let speech;
     if (t.unit === "line") speech = clips.reduce((n, c) => n + c.length / t.sampleRate, 0);
     else {
-      const dur = clips[0].length / t.sampleRate;
-      const spans = alignLines(s.lines.map((l) => Math.max(1, spokenLength(l.speak))), dur, findPauses(clips[0], t.sampleRate), s.lines.map((l) => l.pause));
+      const spans = remapped[s.id]?.spans ?? sceneLineSpans(s, clips[0], t.sampleRate);
       speech = spans.reduce((n, [a, b]) => n + (b - a), 0);
     }
     if (speech > 0) rates.push(chars / speech);

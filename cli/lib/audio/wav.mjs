@@ -128,7 +128,7 @@ export function shortenPauses(mono, sampleRate) {
     const from = lo + Math.floor(keep / 2);
     return [from, hi - (keep - (from - lo))];
   });
-  if (!cuts.length) return mono;
+  if (!cuts.length) return { samples: mono };
   const out = new Float32Array(mono.length - cuts.reduce((n, [from, to]) => n + to - from, 0));
   let pos = 0, written = 0;
   for (const [from, to] of cuts) {
@@ -137,7 +137,9 @@ export function shortenPauses(mono, sampleRate) {
     pos = to;
   }
   out.set(mono.subarray(pos), written);
-  return out;
+  const timeAt = (t) => t - cuts.reduce((removed, [from, to]) =>
+    removed + Math.max(0, Math.min(t, to / sampleRate) - from / sampleRate), 0);
+  return { samples: out, timeAt };
 }
 
 // Change the pace of speech without changing its pitch (WSOLA): 30 ms Hann frames laid down at a

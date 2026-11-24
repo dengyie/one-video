@@ -30,6 +30,27 @@ test("cached TTS shortens dead air before measuring narration and aligning capti
   }
 });
 
+test("shortening a sentence break does not move the caption boundary to the next sentence's internal pause", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ov-sentence-break-"));
+  try {
+    const paths = { linesDir: join(root, "lines"), audioDir: join(root, "audio") };
+    const config = { tts: { loudness: false } };
+    const t = ttsConfig(config);
+    const scene = { id: "speech", lines: [{ text: "甲乙丙丁。" }, { text: "一二三四五。" }] };
+    const samples = Int16Array.from({ length: t.sampleRate * 6 }, (_, i) => Math.round(8000 * Math.sin(i * 2 * Math.PI * 440 / t.sampleRate)));
+    samples.fill(0, t.sampleRate, t.sampleRate * 2.6);
+    samples.fill(0, t.sampleRate * 3.4, t.sampleRate * 3.62);
+    const cache = join(paths.linesDir, `${lineHash(sceneSpeech(scene, config, {}).speak, t)}.wav`);
+    writeWav(cache, { samples, sampleRate: t.sampleRate, channels: 1 });
+    const result = await runTts({ root, config, paths }, { scenes: [scene] }, { cachedOnly: true });
+    const { duration, lines } = result.scenes.speech;
+    assert.equal(duration, 5.4);
+    assert.deepEqual([lines[0].end, lines[1].start], [1.15, 1.65]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("alignLines snaps line boundaries to the pauses nearest their syllable share", () => {
   // Three equal lines over 9 s; pauses near 3 s and 6 s, plus a distracting short one at 4.5 s.
   const spans = alignLines([10, 10, 10], 9, [[2.8, 3.2], [4.5, 4.6], [6.1, 6.5]], ["clause", "sentence", "sentence"]);
