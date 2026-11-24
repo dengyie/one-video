@@ -98,7 +98,7 @@ test("probe counts a sticker's hits only when it is drawn in front of the captio
   assert.equal(hitsCaption([sticker, overlay, ink, caption, background], overlay, caption), true);
 });
 
-test("the SpaceX Motion proceeds card stays below the header on the first-day camera flight", { skip: !existsSync(REMOTION_BIN) && "needs template dependencies" }, async () => {
+test("the SpaceX Motion first-day flight keeps the proceeds below the header and the offering price offscreen", { skip: !existsSync(REMOTION_BIN) && "needs template dependencies" }, async () => {
   const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
   const example = (path) => read(`../examples/spacex-motion/${path}`);
   const script = example("plan/script.json");
@@ -132,6 +132,8 @@ test("the SpaceX Motion proceeds card stays below the header on the first-day ca
         const proceeds = texts.find(({ text }) => text === "857亿美元");
         assert.ok(source && label && proceeds && label.box[1] > source.box[3] + 0.01 && proceeds.box[1] > source.box[3] + 0.01,
           `${aspect} frame ${frame}: the proceeds stat and label must both be visible below the header`);
+        assert.ok(!texts.some(({ text }) => text === "发行价" || text === "$135"),
+          `${aspect} frame ${frame}: the earlier offering-price card must stay offscreen`);
       }
     }
   } finally {

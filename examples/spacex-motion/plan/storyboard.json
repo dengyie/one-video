@@ -152,7 +152,7 @@
           {
             "id": "price",
             "type": "stat",
-            "x": 960,
+            "x": 480,
             "y": 560,
             "value": 135,
             "format": {
