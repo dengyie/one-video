@@ -76,7 +76,9 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
   const narration = [];
   const sfx = [];
   const chapters = [];
+  const boundaries = [];
   let frame = 0;
+  let consecutiveFades = 0;
 
   const sfxCfg = { transition: null, volume: 0.5, ...(config.sfx ?? {}) };
   const grid = loadMusicGrid(root, config.music);
@@ -110,6 +112,11 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     duration = durationInFrames / fps;
     const from = frame;
     const start = from / fps;
+    const chapter = sb.chapter ?? sc.chapter;
+    const prev = scenes.at(-1);
+    const boundary = prev && boundaryTransition(prev, { ...sb, durationInFrames }, theme, fps, { chapterTurn: Boolean(chapter), consecutiveFades });
+    boundaries.push(boundary);
+    consecutiveFades = boundary?.type === "fade" ? consecutiveFades + 1 : 0;
 
     const cues = {};
     for (const [name, at] of Object.entries(sb.cues ?? {})) {
@@ -167,6 +174,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
 
     const props = structuredClone(sb.props ?? {});
     const ctx = { cues, lines, duration, start, beats, downbeats, snap };
+    let inheritedCamera = false;
     // A canvas scene with `inherit` continues the previous canvas: same world, camera picks up
     // where it left off (cut into it for a seamless join).
     if (sb.type === "canvas" && props.inherit) {
@@ -192,14 +200,20 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
         const before = new Map(lastTableau.elements.map((el) => [el.id, el]));
         const carried = (el) => (el.type === undefined && before.has(el.id) ? { ...settledElement(before.get(el.id)), ...el, t: 0, settled: true, to: el.to ?? [] } : el);
         props.elements = [...lastTableau.elements.filter((el) => !own.has(el.id)).map(settledElement), ...(props.elements ?? []).map(carried)];
-        props.camera = [{ ...lastTableau.cameraEnd, at: 0, cut: true }, ...(props.camera ?? [])];
+        const authoredCamera = Boolean(props.camera?.length);
+        inheritedCamera = (prev?.type === "tableau" && boundary.type === "fade")
+          || (lastTableau.cameraMoved && (boundary?.type !== "cut" || !authoredCamera));
+        if (inheritedCamera) props.camera = [{ ...lastTableau.cameraEnd, at: 0, cut: true }, ...(props.camera ?? [])];
       }
     }
     for (const [i, el] of (props.elements ?? []).entries()) if (sb.type === "tableau" && !el.type) errors.push(`scene "${sb.id}" element ${el.id ?? i}: no type (only an inheriting scene may continue an element by id)`);
     resolvePropTimes(sb.type, props, ctx, errors, `scene "${sb.id}"`);
     if (sb.type === "tableau") {
-      resolveTableauRefs(props, { width, height, duration, inheritedCamera: Boolean(props.inherit && lastTableau) }, errors, `scene "${sb.id}"`);
-      lastTableau = { elements: props.elements ?? [], cameraEnd: cameraPoseAt(props.camera, duration) };
+      resolveTableauRefs(props, { width, height, duration, inheritedCamera }, errors, `scene "${sb.id}"`);
+      const cameraEnd = cameraPoseAt(props.camera, duration);
+      const cameraStart = cameraPoseAt(props.camera, 0);
+      const cameraMoved = Object.keys(cameraEnd).some((key) => Math.abs(cameraEnd[key] - cameraStart[key]) > 1e-6);
+      lastTableau = { elements: props.elements ?? [], cameraEnd, cameraMoved };
     }
     if (sb.type === "device") resolveDeviceRects(props, assetById, errors, `scene "${sb.id}"`);
     if (sb.type === "canvas") lastCanvas = { items: props.items ?? [], path: props.path ?? [] };
@@ -229,7 +243,6 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     for (const l of lines) {
       narration.push([r3(start + l.start), r3(start + l.end)]);
     }
-    const chapter = sb.chapter ?? sc.chapter;
     if (chapter) chapters.push({ title: chapter, start: r3(start) });
     const captions = sceneCaptions(sb, lines);
 
@@ -260,13 +273,10 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
   const totalFrames = frame;
   // Opening fades up from the background, closing fades out; inner boundaries overlap.
   const edge = (type, d) => ({ type: type === "cut" ? "cut" : "fade", frames: type === "cut" ? 0 : Math.round(d * fps), lead: 0, direction: "left" });
-  const chapterStarts = new Set(chapters.map((chapter) => chapter.start));
-  let consecutiveFades = 0;
   scenes.forEach((sc, i) => {
     const prev = scenes[i - 1];
     if (!prev) { sc.transitionIn = edge(normTransition(sc.enter)?.type ?? "fade", 0.45); return; }
-    const b = boundaryTransition(prev, sc, theme, fps, { chapterTurn: chapterStarts.has(sc.start), consecutiveFades });
-    consecutiveFades = b.type === "fade" ? consecutiveFades + 1 : 0;
+    const b = boundaries[i];
     sc.transitionIn = { type: b.type, frames: b.frames, lead: b.lead, direction: b.direction };
     prev.transitionOut = { type: b.type, frames: b.frames, tail: b.frames - b.lead, direction: b.direction, nextOpaque: sc.opaque };
     // Through dives at the outgoing subject: an authored [x, y] on screen, else the depth map's.

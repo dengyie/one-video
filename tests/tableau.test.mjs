@@ -161,6 +161,25 @@ test("inherited tableau begins at the outgoing rendered camera pose in both aspe
   }
 });
 
+test("an inheriting hard cut starts at its authored tableau framing", () => {
+  const ex = example();
+  const sb = structuredClone(ex.storyboard);
+  sb.scenes[0] = { ...sb.scenes[0], type: "tableau", exit: "cut", backdrop: undefined, shots: undefined, overlays: [], props: {
+    elements: [{ id: "tower", type: "lighthouse", x: 0.2 }],
+  } };
+  sb.scenes[1] = { ...sb.scenes[1], type: "tableau", enter: undefined, backdrop: undefined, shots: undefined, overlays: [], props: {
+    inherit: true, camera: [{ at: 0, x: 0.2, y: 0.5, zoom: 2 }],
+  } };
+  for (const camera of [undefined, [{ x: 0.7 }, { at: 1, x: 0.6 }]]) {
+    sb.scenes[0].props.camera = camera;
+    const { timeline, errors } = compileTimeline({ ...ex, storyboard: sb, assets: ex.fetchedAssets });
+    assert.deepEqual(errors, []);
+    const b = timeline.scenes[1];
+    assert.equal(b.transitionIn.type, "cut");
+    assert.deepEqual(cameraPoseAt(b.props.camera, 0), { x: 0.2, y: 0.5, zoom: 2, sway: 0 });
+  }
+});
+
 test("tableau geometry: anchors, cameraFor inverts the parallax, zoomToFit fills the frame", () => {
   const frame = { W: 1920, H: 1080 };
   const lh = elementGeometry(elementAt({ type: "lighthouse", x: 0.3 }, 0), frame);
