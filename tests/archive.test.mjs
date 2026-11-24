@@ -103,6 +103,30 @@ test("archiveProject uploads, verifies by read-back, skips unchanged, prunes old
   assert.equal(readFileSync(join(fresh, "public/assets/a.jpg"), "utf8"), "photo");
 });
 
+test("restore brings back the exact generated scores referenced by the main and aspect timelines", async () => {
+  const p = project();
+  const main = "music/story-0123456789abcdef.wav";
+  const portrait = "music/story-fedcba9876543210.wav";
+  p.w("plan/timeline.json", JSON.stringify({ music: { src: main } }));
+  p.w("plan/timeline.9x16.json", JSON.stringify({ music: { src: portrait } }));
+  p.w("plan/timeline.4x5.json", JSON.stringify({ music: { src: "music/bed.mp3" } }));
+  p.w(`public/${main}`, "main mix source");
+  p.w(`public/${portrait}`, "portrait mix source");
+  p.w("public/music/story-aaaaaaaaaaaaaaaa.wav", "unused");
+  p.w("public/music/bgm.wav", "base");
+  const d = fakeDrive();
+  await archiveProject(p, { drive: d });
+  const fresh = mkdtempSync(join(tmpdir(), "ov-story-restore-"));
+  await restoreProject({ root: fresh, name: "demo", drive: d });
+  for (const [file, expected] of [["timeline.json", "main mix source"], ["timeline.9x16.json", "portrait mix source"]]) {
+    const { music } = JSON.parse(readFileSync(join(fresh, "plan", file), "utf8"));
+    assert.equal(readFileSync(join(fresh, "public", music.src), "utf8"), expected);
+  }
+  for (const file of ["bed.mp3", "bgm.wav", "story-aaaaaaaaaaaaaaaa.wav"]) {
+    assert.equal(existsSync(join(fresh, "public", "music", file)), false);
+  }
+});
+
 test("a read-back that differs is not recorded", async () => {
   const p = project();
   const d = fakeDrive({ corrupt: new Set(["/onevideo/demo/onevideo.json"]) });
