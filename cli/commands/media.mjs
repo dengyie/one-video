@@ -1,12 +1,12 @@
 // tts / music / timeline / assets / decide
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { download, pool } from "../lib/core/http.mjs";
+import { pool } from "../lib/core/http.mjs";
 import { UserError, loadProject, readJson, writeJson, log, warn, ONEVIDEO_ROOT } from "../lib/core/project.mjs";
 import { runTts, ttsConfig } from "../lib/voice/tts.mjs";
 import { sceneLines } from "../lib/captions/index.mjs";
-import { writeMusic, synthSfx, SFX, MUSIC_PRESETS } from "../lib/audio/synth.mjs";
-import { STORY_BPM, storyArc, writeStory } from "../lib/audio/story.mjs";
+import { synthSfx, SFX } from "../lib/audio/synth.mjs";
+import { prepareMusic } from "../lib/audio/music.mjs";
 import { writeWav } from "../lib/audio/wav.mjs";
 import { checkProject, printIssues } from "../lib/review/check.mjs";
 import { search, fetchAsset, scoreCandidate, sceneQueries, sceneCandidates, candidateItems, generatedItem, assetFileExists, depthPath, depthStep, lumaPath, framesDir, countFrames } from "../lib/assets/index.mjs";
@@ -15,7 +15,6 @@ import { ask } from "../lib/llm/client.mjs";
 import { AUTO_TRANSITION_SFX, DIMENSIONS, MOTION_SFX, overlaySound, sfxFile, sfxVariants } from "../lib/timeline/index.mjs";
 import { categories, entryPath, loadCatalog, resolveSfx } from "../lib/library/catalog.mjs";
 import { spokenLength } from "../lib/core/text.mjs";
-import { beatsFile, ensureBeats, everyFourth, gridBeats } from "../lib/audio/beats.mjs";
 import { captureUi, parseRects } from "../lib/vision/capture.mjs";
 import { findScreen, frameRgb } from "../lib/vision/screen.mjs";
 
@@ -95,7 +94,7 @@ const SYNTH_NEAREST = [[/whoosh|swish|whip|page/, "whoosh"], [/impact|boom|rocke
 
 export async function music(args) {
   const project = loadProject();
-  const { config, paths } = project;
+  const { config } = project;
   const pre = checkProject(project);
   const sfxNames = new Set(list(args.sfx));
   const tr = config.sfx?.transition;
@@ -131,44 +130,7 @@ export async function music(args) {
   }
   if (used.length) log(`sfx: ${used.join(", ")} → public/sfx/`);
 
-  if (config.music?.enabled === false) return log("music disabled in onevideo.json");
-  if (config.music?.file) {
-    const file = join(project.p("public"), config.music.file);
-    if (!existsSync(file) || args.force) {
-      if (!config.music.url) throw new UserError(`music.file public/${config.music.file} is missing; put the track there or set music.url`);
-      mkdirSync(dirname(file), { recursive: true });
-      writeFileSync(file, await download(config.music.url));
-      log(`music: downloaded ${config.music.url} → public/${config.music.file}`);
-    }
-    if (args.force) rmSync(beatsFile(file), { force: true });
-    const b = await ensureBeats(project.root, { src: config.music.file });
-    log(`using provided music file ${config.music.file}${config.music.credit ? ` (${config.music.credit})` : ""}${b ? `, ~${b.bpm} BPM, ${b.beats.length} beats` : ""}`);
-    return;
-  }
-  const preset = args.preset ?? config.music?.preset ?? "ambient";
-  if (!MUSIC_PRESETS[preset] && preset !== "story") throw new UserError(`unknown preset "${preset}" (${[...Object.keys(MUSIC_PRESETS), "story"].join(", ")})`);
-  const duration = args.duration ? Number(args.duration) : pre.timeline ? pre.timeline.duration + 2 : null;
-  if (!duration) throw new UserError("need timings to size the music; run: onevideo tts (or pass --duration <sec>)");
-  mkdirSync(paths.musicDir, { recursive: true });
-  const bgm = join(paths.musicDir, "bgm.wav");
-  if (preset === "story") {
-    // Scored to this cut: sections start on the scenes whose script beat opens them.
-    const beatOf = new Map((pre.plan.script?.scenes ?? []).map((s) => [s.id, s.beat]));
-    const scenes = (pre.timeline?.scenes ?? []).map((s) => ({ id: s.id, start: s.start, beat: beatOf.get(s.id) }));
-    let sections;
-    try { sections = storyArc(scenes, duration, config.music?.arc); } catch (e) { throw new UserError(e.message); }
-    writeStory(bgm, duration, { seed: config.music?.seed ?? 7, sections });
-    const grid = gridBeats(STORY_BPM, duration);
-    const cut = Object.fromEntries(scenes.map((s) => [s.id, s.start]));
-    writeFileSync(beatsFile(bgm), JSON.stringify({ bpm: STORY_BPM, beats: grid, downbeats: everyFourth(grid), source: "synth:story", scored: true, sections, cut }));
-    log(`music: story, ${duration.toFixed(1)}s — ${sections.map((s) => `${s.mood} ${s.start.toFixed(1)}s`).join(" → ")} → public/music/bgm.wav`);
-    return;
-  }
-  writeMusic(bgm, duration, { preset, seed: config.music?.seed ?? 7 });
-  // The synth knows its own tempo: the beat grid is exact, no detection needed.
-  const grid = gridBeats(MUSIC_PRESETS[preset].bpm, duration);
-  writeFileSync(beatsFile(bgm), JSON.stringify({ bpm: MUSIC_PRESETS[preset].bpm, beats: grid, downbeats: everyFourth(grid), source: `synth:${preset}` }));
-  log(`music: ${preset}, ${duration.toFixed(1)}s → public/music/bgm.wav`);
+  await prepareMusic(project, args, pre);
 }
 
 export async function timeline(args) {

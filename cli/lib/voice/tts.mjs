@@ -7,12 +7,15 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { request, requireApiKey, pool } from "../core/http.mjs";
-import { parseWav, readWav, toMono, trimSilence, concatWithGaps, findPauses, timeStretch, writeWav } from "../audio/wav.mjs";
+import { requireApiKey, pool } from "../core/http.mjs";
+import { readWav, toMono, trimSilence, concatWithGaps, findPauses, timeStretch, writeWav } from "../audio/wav.mjs";
 import { speakable, spokenLength } from "../core/text.mjs";
 import { sceneLines } from "../captions/lines.mjs";
 import { log, UserError } from "../core/project.mjs";
 import { integratedLoudness, normalizeLoudness } from "../audio/loudness.mjs";
+import { synthesize } from "./providers.mjs";
+
+export { chatRequest } from "./providers.mjs";
 
 export const TTS_DEFAULTS = {
   baseUrl: "https://api.mangoqwq.com/v1",
@@ -126,37 +129,6 @@ export async function voiceRef(t, { root, linesDir }, key) {
   const wav = readFileSync(file);
   if (wav.subarray(0, 4).toString() !== "RIFF") throw new UserError(`voice reference ${file} is not a WAV file`);
   return `data:audio/wav;base64,${wav.toString("base64")}`;
-}
-
-// The chat request for one synthesis: the style (or, for voicedesign, the speaker description) is
-// the user turn, the text the assistant turn; the voice is a preset name, or the reference clip.
-export function chatRequest(speak, t) {
-  const messages = [{ role: "assistant", content: speak }];
-  if (t.style ?? t.instructions) messages.unshift({ role: "user", content: t.style ?? t.instructions });
-  // `design: true` marks the voicedesign call itself, which takes no voice.
-  const audio = t.design === true ? { format: "wav" } : { format: "wav", voice: t.refData ?? t.voice };
-  return { model: t.model, messages, audio, stream: false };
-}
-
-async function synthesize(speak, t, key) {
-  const base = t.baseUrl.replace(/\/$/, "");
-  let wav;
-  if (t.protocol === "chat") {
-    const json = chatRequest(speak, t);
-    const res = await request(`${base}/chat/completions`, { method: "POST", json, key, timeoutSec: 240, retries: 3 });
-    let data;
-    try { data = JSON.parse(res.body.toString()).choices?.[0]?.message?.audio?.data; } catch { /* reported below */ }
-    if (!data) throw new Error(`TTS chat response has no audio: ${res.body.subarray(0, 200).toString()}`);
-    wav = Buffer.from(data, "base64");
-  } else {
-    const json = { model: t.model, input: speak, voice: t.voice, response_format: "wav" };
-    if (t.speed) json.speed = t.speed;
-    if (t.instructions ?? t.style) json.instructions = t.instructions ?? t.style;
-    wav = (await request(`${base}/audio/speech`, { method: "POST", json, key, timeoutSec: 240, retries: 3 })).body;
-  }
-  if (wav.subarray(0, 4).toString() !== "RIFF") throw new Error(`TTS returned non-WAV data: ${wav.subarray(0, 200).toString()}`);
-  parseWav(wav, { strict: true }); // fail fast on a truncated file
-  return wav;
 }
 
 // Place n caption lines on one scene clip. Each line boundary is estimated from the share of

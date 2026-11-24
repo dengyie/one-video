@@ -22,7 +22,7 @@ import * as media from "./media.mjs";
 import { assetFileExists, clipFrames, countFrames, framesDir } from "../lib/assets/index.mjs";
 import { IMAGE_DEFAULTS, VIDEO_DEFAULTS } from "../lib/generate/index.mjs";
 import { llmConfig } from "../lib/llm/client.mjs";
-import { ensureBeats } from "../lib/audio/beats.mjs";
+import { ensureMusicBeats } from "../lib/audio/music.mjs";
 import { writeImageSheets } from "../lib/vision/sheet.mjs";
 import { workerHosts } from "../lib/core/worker.mjs";
 import { adoptLegacy, frameRange, localStamp, publishedVersion, readRenders, recordRender, resolveVideo, sameFile, timelineHash, versionFile } from "../lib/publish/renders.mjs";
@@ -50,10 +50,8 @@ async function ensureClipFrames(project) {
 }
 
 // Beat grid for shot snapping; synthesized music writes its own, a provided track is analysed once.
-async function ensureMusicBeats(project) {
-  const m = project.config.music;
-  if (m?.enabled === false) return;
-  const b = await ensureBeats(project.root, { src: m?.file ?? "music/bgm.wav" });
+async function prepareRenderBeats(project) {
+  const b = await ensureMusicBeats(project.root, project.config.music);
   if (b) log(`beats: ~${b.bpm} BPM (${b.source})`);
 }
 
@@ -74,7 +72,7 @@ export async function render(args) {
   requireRemotion();
   const project = withAspect(loadProject(), args.aspect);
   await ensureClipFrames(project);
-  await ensureMusicBeats(project);
+  await prepareRenderBeats(project);
   await ensureVariantTimings(project);
   const tl = freshTimeline(project, { force: Boolean(args.force) });
   mkdirSync(join(project.paths.out, "versions"), { recursive: true });
@@ -174,7 +172,7 @@ export async function stills(args) {
   requireRemotion();
   const project = withAspect(loadProject(), args.aspect);
   await ensureClipFrames(project);
-  await ensureMusicBeats(project);
+  await prepareRenderBeats(project);
   await ensureVariantTimings(project);
   const tl = freshTimeline(project, { force: Boolean(args.force) });
   const dir = join(project.paths.out, "stills", ...(project.aspect ? [aspectTag(project.aspect)] : []));
@@ -190,7 +188,7 @@ export async function preview(args) {
   requireRemotion();
   const project = loadProject();
   await ensureClipFrames(project);
-  await ensureMusicBeats(project);
+  await prepareRenderBeats(project);
   const tl = freshTimeline(project, { force: Boolean(args.force) });
   const dir = join(project.paths.out, "preview");
   rmSync(dir, { recursive: true, force: true });
@@ -215,7 +213,7 @@ export async function studio(args) {
   requireRemotion();
   const project = loadProject();
   await ensureClipFrames(project);
-  await ensureMusicBeats(project);
+  await prepareRenderBeats(project);
   freshTimeline(project, { force: true });
   await run(REMOTION_BIN, ["studio", ENTRY, ...commonFlags(project), ...(args.port ? [`--port=${args.port}`] : [])], { cwd: TEMPLATE_DIR, stdio: "inherit" });
 }
