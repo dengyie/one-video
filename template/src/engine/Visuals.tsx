@@ -12,7 +12,6 @@ import { Header } from "../components/Header";
 import { Overlays } from "../components/Overlay";
 import { SCENES } from "../scenes";
 import { canvasBackdrop } from "../scenes/Canvas";
-import { canvasViewport } from "../../../shared/safe-layout.mjs";
 import { closingFade, dipOpacity, whipBlur, zoomScale } from "../../../shared/transition.mjs";
 
 // Unit vector the incoming scene travels along: "left" means it enters from the right.
@@ -157,13 +156,6 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
   // Text over a photo gets a soft shadow (inherited by every label in the scene).
   const shadow: React.CSSProperties = scene.backdrop ? { textShadow: "0 2px 14px rgba(0,0,0,0.6)" } : {};
   const [dx, dy] = DIR[(out ? tout : tin)?.direction ?? "left"] ?? DIR.left;
-  const viewport = canvasViewport(scene, width, height);
-  const foreground = (
-    <MotionBlur id={scene.id} vx={vel.vx} vy={vel.vy} radial={vel.radial} style={{ transform: viewTransform(view, width, height) }}>
-      <AbsoluteFill style={{ transform: cam || undefined }}>{content}</AbsoluteFill>
-      <Overlays />
-    </MotionBlur>
-  );
   return (
     <>
       {dip !== undefined && out && <AbsoluteFill style={{ backgroundColor: "#000" }} />}
@@ -179,13 +171,10 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
         {shots ? <AbsoluteFill style={{ transform: viewTransform(farther(view, 0.55), width, height) }}>{children}</AbsoluteFill>
           : scene.type === "canvas" && scene.backdrop ? <AbsoluteFill style={{ transform: canvasBackdrop(scene.props, t, width, height, u) }}>{children}</AbsoluteFill>
           : children}
-        {viewport ? (
-          <AbsoluteFill data-canvas-viewport="" style={{ top: viewport.top, overflow: "hidden" }}>
-            <AbsoluteFill style={{ height, bottom: "auto", transform: `scale(${viewport.scale})`, transformOrigin: "top center" }}>
-              {foreground}
-            </AbsoluteFill>
-          </AbsoluteFill>
-        ) : foreground}
+        <MotionBlur id={scene.id} vx={vel.vx} vy={vel.vy} radial={vel.radial} style={{ transform: viewTransform(view, width, height) }}>
+          <AbsoluteFill style={{ transform: cam || undefined }}>{content}</AbsoluteFill>
+          <Overlays />
+        </MotionBlur>
         {/* The header is frame chrome: it rides the transition but not the camera, so a push-in cannot crop it. */}
         {header}
       </AbsoluteFill>

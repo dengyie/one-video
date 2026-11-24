@@ -273,19 +273,6 @@ test("layoutGate does not reserve a device caption slot for a scene with caption
   assert.deepEqual(layoutGate(timeline, {}), []);
 });
 
-test("headed canvas layout checks words against the caption band after fitting", () => {
-  const word = { type: "word", text: "IPO", x: 0.5, y: 0.837, size: 30, t: 0, end: 4 };
-  const canvas = { id: "a", type: "canvas", header: { title: "Scene header" }, start: 0, duration: 4, overlays: [word] };
-  const timeline = {
-    width: 1080, height: 1920, scenes: [canvas],
-    captions: { enabled: true, style: "line", items: [{ scene: "a", text: "Narration", start: 1, end: 3 }] },
-  };
-  assert.deepEqual(layoutGate(timeline, {}), []);
-  assert.deepEqual(fitOverlays(timeline, {}), []);
-  word.y = 0.78;
-  assert.match(layoutGate(timeline, {})[0]?.msg ?? "", /sits in the caption band/);
-});
-
 test("layoutGate: overlays over spoken captions, off-frame, tiny or stacked stickers, text pushed out by a shot", () => {
   const base = { width: 1920, height: 1080, captions: { enabled: true, style: "line", items: [{ scene: "a", text: "说话中", start: 1, end: 3 }] } };
   const scene = (over) => ({ id: "a", type: "media", start: 0, duration: 6, shots: [{ t: 0, zoom: 1, x: 0.5, y: 0.5 }], overlays: [], ...over });

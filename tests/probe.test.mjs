@@ -97,67 +97,6 @@ test("probe counts a sticker's hits only when it is drawn in front of the captio
   assert.equal(hitsCaption([sticker, overlay, ink, caption, background], overlay, caption), true);
 });
 
-async function canvasStills(width, height, scene, check) {
-  const dir = mkdtempSync(join(tmpdir(), "ov-headed-canvas-"));
-  try {
-    const theme = JSON.parse(readFileSync(new URL("../styles/vector-flow.json", import.meta.url), "utf8"));
-    const timeline = {
-      width, height, fps: 30, duration: 3, totalFrames: 90, theme,
-      captions: { enabled: false, items: [] }, sfx: [], narration: [], watermark: null,
-      scenes: [{
-        id: "canvas", type: "canvas", from: 0, start: 0, duration: 3, durationInFrames: 90,
-        camera: { move: "static" }, header: { title: "Scene header" }, props: {}, ...scene,
-      }],
-    };
-    const props = join(dir, "props.json"), job = join(dir, "job.json"), out = join(dir, "probe.json");
-    const frames = [20, 35, 50].map((frame) => ({ frame, file: join(dir, `${frame}.jpg`) }));
-    writeFileSync(props, JSON.stringify(timeline));
-    writeFileSync(job, JSON.stringify({ entry: "src/index.ts", props, out, probe: true, publicDir: join(TEMPLATE_DIR, "public"), frames }));
-    await run(process.execPath, [join(TEMPLATE_DIR, "stills.mjs"), job]);
-    for (const { scenes: [frame] } of JSON.parse(readFileSync(out, "utf8"))) check(frame);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
-
-test("near-top canvas words share the header-safe viewport", { skip: !existsSync(REMOTION_BIN) && "needs template dependencies" }, async () => {
-  for (const [width, height] of [[640, 360], [360, 640]]) {
-    await canvasStills(width, height, {
-      overlays: [{ type: "word", text: "Near top", t: 0, end: 3, x: 0.5, y: 0.055, size: 36 }],
-    }, ({ overlays, texts }) => {
-      const word = overlays.find(({ i }) => i === 0);
-      const header = texts.find(({ text }) => text === "Scene header");
-      assert.ok(word && header && word.box[1] > header.box[3], "the overlay is visible below the header");
-    });
-  }
-});
-
-test("a headed canvas shot preserves bottom text within the fitted frame", { skip: !existsSync(REMOTION_BIN) && "needs template dependencies" }, async () => {
-  for (const [width, height] of [[640, 360], [360, 640]]) {
-    const u = Math.min(width, height) / 1080;
-    await canvasStills(width, height, {
-      shots: [{ t: 0, zoom: 0.7, y: 0.23 }, { t: 0.5, zoom: 0.7, y: 0.16, ease: 0.7 }],
-      props: { items: [{ id: "bottom", type: "text", text: "Bottom edge", x: width / u / 2, y: height / u * 0.853, w: 480, h: 50, size: 24, settled: true }] },
-    }, ({ texts }) => {
-      const bottom = texts.find(({ text }) => text === "Bottom edge");
-      assert.ok(bottom && !bottom.cut && !bottom.v && bottom.box[3] > 0.94 && bottom.box[3] < 1, "the shot keeps the whole line visible near the bottom");
-    });
-  }
-});
-
-test("a canvas marker stays visible when its card pans into the fitted side margin", { skip: !existsSync(REMOTION_BIN) && "needs template dependencies" }, async () => {
-  await canvasStills(640, 360, {
-    props: {
-      path: [{ focus: { x: 925, y: 540 } }, { t: 0.2, focus: { x: 960, y: 540 }, fly: 0.4 }],
-      items: [{ id: "side", type: "text", text: "Side", x: -100, y: 540, w: 85, h: 50, size: 38, settled: true }],
-    },
-    overlays: [{ type: "word", on: "side", text: "Marker", size: 40, t: 0, end: 3 }],
-  }, ({ texts, overlays }) => {
-    assert.ok(texts.some(({ text, box }) => text === "Side" && box[0] > 0 && box[2] < 0.1), "the anchor is visibly in the side margin");
-    assert.ok(overlays.some(({ i }) => i === 0), "the pinned overlay must not disappear");
-  });
-});
-
 test("devices reserve caption space and portrait cards cap wide column counts", () => {
   assert.equal(deviceViewportHeight(1080, 1, false), 860);
   assert.equal(deviceViewportHeight(1920, 1, true), 1530);
@@ -175,16 +114,6 @@ test("probeIssues flags a sticker hiding a line and finds a clear height", () =>
   assert.deepEqual(out[0].at, { scene: "s", from: 11, to: 15, field: "overlays[0]" });
   const y = Number(out[0].msg.match(/y (0\.\d+)/)[1]);
   assert.ok(y <= 0.47 || y >= 0.54, `y ${y} still meets the line`);
-});
-
-test("canvas probe fixes translate authored moves through the fitted viewport", () => {
-  const timeline = { ...tl(), width: 1920, height: 1080 };
-  const [scene] = timeline.scenes;
-  Object.assign(scene, { type: "canvas", header: { title: "Scene header" } });
-  const rec = shot([{ i: 0, box: [0.45, 0.52, 0.55, 0.56], covers: [{ t: 0, area: 0.004 }] }], [{ text: "Card", box: [0.25, 0.51, 0.75, 0.57] }]);
-  const [finding] = probeIssues(rec, timeline);
-  const { y } = finding.fix.set;
-  assert.ok(y <= 0.43 || y >= 0.57, "the move in authored coordinates must clear the measured line after the fit");
 });
 
 test("overlay probes sample between preview stills and never leave the scene", () => {

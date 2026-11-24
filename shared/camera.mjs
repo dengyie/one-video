@@ -67,46 +67,15 @@ export function rightShotInset(shots, a, b, width, margin) {
   return (1 - right) * width + margin;
 }
 
-/** Fit the whole camera frame below fixed chrome, preserving its aspect ratio.
- * @param {number} height @param {number} headerBottom */
-export function cameraViewport(height, headerBottom) {
-  const top = Math.max(0, Math.min(height, headerBottom));
-  return { top, scale: (height - top) / height };
-}
-
-/** @typedef {{width:number, height:number, top:number, scale:number}} Viewport */
-/** The bounding box in authored coordinates of a screen rectangle under the fitted shot.
- * @param {number[]} box @param {View} view @param {Viewport} viewport @returns {[number, number, number, number]} */
-function unfittedBox([x0, y0, x1, y1], view, { width, height, top, scale }) {
-  const r = view.rotate * Math.PI / 180, cos = Math.cos(r), sin = Math.sin(r);
-  const points = [x0, x1].flatMap((x) => [y0, y1].map((y) => {
-    // CSS films around the centre and rotates before translating to the shot focus.
-    const a = (x - 0.5) / (scale * view.zoom) + view.x - 0.5;
-    const b = ((y - top / height) / scale - 0.5) / view.zoom + view.y - 0.5;
-    return [0.5 + a * cos + b * sin * height / width, 0.5 + b * cos - a * sin * width / height];
-  }));
-  const xs = points.map(([x]) => x), ys = points.map(([, y]) => y);
-  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
-}
-
-/** Screen displacement of a move specified in authored frame fractions.
- * @param {number} dx @param {number} dy @param {View} view @param {Viewport} viewport */
-export function fittedDelta(dx, dy, view, {width, height, scale}) {
-  const r = view.rotate * Math.PI / 180, cos = Math.cos(r), sin = Math.sin(r), k = scale * view.zoom;
-  return [k * (dx * cos - dy * sin * height / width), k * (dy * cos + dx * sin * width / height)];
-}
-
 /** The part of the layer on screen through all of [a, b], as [x0, y0, x1, y1] fractions (a push-in crops its edges).
- * @param {ShotLike[] | undefined} shots @param {number} a @param {number} b @param {number} [step] @param {Viewport | null} [viewport] @returns {[number, number, number, number]} */
-export function seenBox(shots, a, b, step = 0.25, viewport = null) {
+ * @param {ShotLike[] | undefined} shots @param {number} a @param {number} b @param {number} [step] @returns {[number, number, number, number]} */
+export function seenBox(shots, a, b, step = 0.25) {
   /** @type {[number, number, number, number]} */
-  const vis = viewport ? [-Infinity, -Infinity, Infinity, Infinity] : [0, 0, 1, 1];
+  const vis = [0, 0, 1, 1];
   for (let t = a; t < b; t += step) {
     const v = viewAt(shots, t), r = 0.5 / v.zoom;
-    const [x0, y0, x1, y1] = viewport ? unfittedBox([0, viewport.top / viewport.height, 1, 1], v, viewport) : [v.x - r, v.y - r, v.x + r, v.y + r];
-    vis.splice(0, 4, Math.max(vis[0], x0), Math.max(vis[1], y0), Math.min(vis[2], x1), Math.min(vis[3], y1));
+    vis.splice(0, 4, Math.max(vis[0], v.x - r), Math.max(vis[1], v.y - r), Math.min(vis[2], v.x + r), Math.min(vis[3], v.y + r));
   }
-  if (viewport && a >= b) return unfittedBox([0, viewport.top / viewport.height, 1, 1], viewAt(shots, a), viewport);
   return vis;
 }
 
@@ -138,14 +107,13 @@ export const cutBetween = (shots, a, b) => Boolean(shots?.some((s) => s.cut && s
 
 /** The caption band (screen) in the scene's own frame coordinates under the shot framing at t.
  * @param {ShotLike[] | undefined} shots @param {number} t @param {boolean} [portrait]
- * @param {{top:number, bottom:number, width:number, height:number}} [slot] @param {Viewport | null} [viewport] @returns {[number, number, number, number]} */
-export function captionBand(shots, t, portrait = false, slot, viewport = null) {
+ * @param {{top:number, bottom:number, width:number, height:number}} [slot] @returns {[number, number, number, number]} */
+export function captionBand(shots, t, portrait = false, slot) {
   const sh = viewAt(shots, t);
   /** @param {number} v @param {number} c */
   const back = (v, c) => c + (v - 0.5) / sh.zoom;
   const [y0, y1] = slot ? [slot.top / slot.height, 1 - slot.bottom / slot.height]
     : portrait ? [0.74, 0.86] : [0.84, 0.96];
   const [x0, x1] = slot ? [(1 - slot.width) / 2, (1 + slot.width) / 2] : [0.2, 0.8];
-  if (viewport) return unfittedBox([x0, y0, x1, y1], sh, viewport);
   return [back(x0, sh.x), back(y0, sh.y), back(x1, sh.x), back(y1, sh.y)];
 }

@@ -17,12 +17,12 @@ import { logProbe, probeBoxes } from "../engine/probe";
 // fades out when that element leaves the frame.
 const FADE = 0.3;
 
-type Box = { x: number; y: number; w: number; h: number; visible?: number };
+type Box = { x: number; y: number; w: number; h: number };
 const Anchors = createContext<Record<string, Box>>({});
 
 const sameBoxes = (a: Record<string, Box>, b: Record<string, Box>) => {
   const ka = Object.keys(a), kb = Object.keys(b);
-  return ka.length === kb.length && ka.every((k) => b[k] && a[k].x === b[k].x && a[k].y === b[k].y && a[k].w === b[k].w && a[k].h === b[k].h && a[k].visible === b[k].visible);
+  return ka.length === kb.length && ka.every((k) => b[k] && a[k].x === b[k].x && a[k].y === b[k].y && a[k].w === b[k].w && a[k].h === b[k].h);
 };
 
 export const Overlays: React.FC = () => {
@@ -38,8 +38,6 @@ export const Overlays: React.FC = () => {
     const me = ref.current, root = me?.parentElement;
     if (!me || !root || !names.length) return;
     const c = me.getBoundingClientRect();
-    const viewport = me.closest("[data-canvas-viewport]")?.getBoundingClientRect();
-    const frame = viewport && me.closest("[data-probe=frame]")?.getBoundingClientRect();
     const k = c.width / width || 1;
     const r = (v: number) => Math.round(v * 10) / 10;
     const next: Record<string, Box> = {};
@@ -47,11 +45,7 @@ export const Overlays: React.FC = () => {
       const el = root.querySelector(`[data-anchor~="${CSS.escape(n)}"]`);
       if (!el) continue;
       const b = el.getBoundingClientRect();
-      const visible = viewport ? clamp01(2
-        * Math.max(0, Math.min(b.right, viewport.right, frame?.right ?? Infinity) - Math.max(b.left, viewport.left, frame?.left ?? -Infinity))
-        * Math.max(0, Math.min(b.bottom, viewport.bottom, frame?.bottom ?? Infinity) - Math.max(b.top, viewport.top, frame?.top ?? -Infinity))
-        / Math.max(1, b.width * b.height)) : undefined;
-      next[n] = { x: r((b.left - c.left) / k), y: r((b.top - c.top) / k), w: r(b.width / k), h: r(b.height / k), visible };
+      next[n] = { x: r((b.left - c.left) / k), y: r((b.top - c.top) / k), w: r(b.width / k), h: r(b.height / k) };
     }
     setBoxes((prev) => (sameBoxes(prev, next) ? prev : next));
   });
@@ -83,7 +77,6 @@ export const Overlays: React.FC = () => {
     if (!o.on) return 1;
     const b = boxes[o.on];
     if (!b) return o.x !== undefined || o.y !== undefined || o.rect ? 1 : 0;
-    if (b.visible !== undefined) return b.visible;
     const iw = Math.min(b.x + b.w, width) - Math.max(b.x, 0), ih = Math.min(b.y + b.h, height) - Math.max(b.y, 0);
     return iw <= 0 || ih <= 0 ? 0 : clamp01(((iw * ih) / Math.max(1, b.w * b.h)) * 2);
   };
