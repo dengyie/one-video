@@ -19,13 +19,13 @@
     {
       "id": "detail",
       "kind": "image",
-      "title": "放映页详情（手机，点开第二张卡片后）",
+      "title": "放映页详情（手机，点开展示的卡片后）",
       "license": "own",
       "capture": {
         "url": "https://vedio.mangoqwq.com/",
         "device": "phone",
         "wait": 2500,
-        "click": [".card:nth-child(2)"],
+        "click": [".card"],
         "selectors": {
           "player": ".player",
           "summary": ".summary",

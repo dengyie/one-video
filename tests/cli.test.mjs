@@ -8,7 +8,7 @@ import { ROOT, estimatedTimings, example } from "./helpers.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { CUE_LEAD, phraseTime } from "../cli/lib/timeline/cues.mjs";
 import { racePeriods } from "../cli/lib/timeline/events.mjs";
-import { elementAt, ridgeTop, stateAt } from "../shared/tableau.mjs";
+import { boxOnScreen, cameraAt, elementAt, elementGeometry, ridgeTop, stageOf, stateAt } from "../shared/tableau.mjs";
 import { resolveApiKey, viaApiBase, requireApiKey } from "../cli/lib/core/http.mjs";
 import { reviewSubject } from "../cli/lib/core/state.mjs";
 import { fixPlan } from "../cli/lib/review/fixes.mjs";
@@ -37,6 +37,41 @@ test("Promo Demo keeps its URL readable after the short CTA narration", async ()
   assert.equal(cta.lines[0].text, "打开链接就能看");
   const fadeStart = cta.duration - cta.transitionOut.frames / timeline.fps;
   assert.ok(fadeStart - cta.lines[0].end >= 1, "leave the URL readable after the spoken CTA");
+});
+
+test("Promo Demo captures the detail page for the same card the storyboard taps", () => {
+  const plan = join(ROOT, "examples", "promo-demo", "plan");
+  const { props } = json(join(plan, "storyboard.json")).scenes.find((scene) => scene.id === "open");
+  const { items } = json(join(plan, "assets.json"));
+  const capture = (id) => items.find((item) => item.id === props.screens.find((screen) => screen.id === id).asset).capture;
+  const tap = props.steps.find((step) => step.tap);
+  const detail = props.steps.find((step) => step.screen);
+  const tappedSelector = capture(props.screens[0].id).selectors[tap.tap];
+  assert.ok(tappedSelector);
+  assert.deepEqual(capture(detail.screen).click, [tappedSelector]);
+});
+
+test("Keeper has the new lighthouse lamp framed when the narration reveals it", async () => {
+  const dir = join(ROOT, "examples", "keeper");
+  const base = json(join(dir, "onevideo.json"));
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...base, aspect };
+    const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
+    assert.deepEqual(errors, []);
+    const frame = { W: timeline.width, H: timeline.height };
+    const { lines, cues, props } = timeline.scenes.find((scene) => scene.id === "home");
+    const reveal = phraseTime(lines, "多了一盏灯");
+    assert.ok(reveal !== null);
+    const lamp = props.elements.find((el) => el.id === "lamp2");
+    assert.equal(lamp.t, cues.more);
+    for (const t of [reveal, reveal + 0.45]) {
+      const { depth, box } = elementGeometry(stateAt(lamp, props.elements, t), frame);
+      const [left, top, right, bottom] = boxOnScreen(cameraAt(props.camera, t), depth, box, stageOf(frame.W, frame.H).kx);
+      assert.ok(left >= 0.15 && right <= 0.85 && top >= 0.1 && bottom <= 0.5, `${aspect} at ${t}: keep the lamp near the center, got ${[left, top, right, bottom]}`);
+    }
+  }
 });
 
 test("SpaceX IPO lands chart details on their narration in both aspects", async () => {
