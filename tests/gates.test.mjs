@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { schemaGate, numbersGate, captionGate, storyboardGate, rateGate, assetsGate, budgetGate, timingsGate, normalizeLicense, summarize, questionGate, echoGate, layoutGate, fitOverlays, densityGate, drawnGate } from "../cli/lib/review/gates.mjs";
-import { rhythmGate, screenEvents } from "../cli/lib/review/gates.mjs";
+import { revealGate, rhythmGate, screenEvents } from "../cli/lib/review/gates.mjs";
 import { checkNotes, checkTone, matchGates, meanLuma, mergePasses, median, noteKind, storyboardSpot, toneOf } from "../cli/lib/review/look-check.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { example } from "./helpers.mjs";
@@ -367,6 +367,24 @@ test("screenEvents: every on-screen change in timeline time, barely-moving shots
   const race = { id: "r", type: "bar-race", start: 10, duration: 9, cues: { b: 6 }, props: { periods: ["1990", "2000", "2026"], periodCues: [null, null, "b"], series: [{ values: [1, 2, 3] }, { values: [2, 1, 3] }, { values: [3, 3, 1] }] } };
   assert.deepEqual(screenEvents({ scenes: [race] }).filter((e) => e.what === "prop").map((e) => +e.t.toFixed(2)), [11.15, 13.3, 16],
     "the bars' grow-in and each swap into the next period count");
+});
+
+test("rhythm does not mistake a title build and a timed overlay exit for a still hook", () => {
+  const hook = { id: "hook", type: "title", start: 0, duration: 12.3, props: { title: "Hook" }, overlays: [{ type: "word", t: 5.64, end: 7.11 }, { type: "word", t: 7.11, end: 10.61 }] };
+  const timeline = { duration: hook.duration, scenes: [hook] };
+  assert.deepEqual(screenEvents(timeline).filter((e) => ["prop", "overlay-exit"].includes(e.what)).map((e) => e.t), [1.6, 7.11, 10.61]);
+  assert.deepEqual(rhythmGate(timeline, {}), []);
+  hook.overlays[1].end = hook.duration;
+  assert.match(rhythmGate(timeline, {})[0].msg, /5\.2s with nothing new/);
+});
+
+test("revealGate suggests syncing a card note even when no rhythm gap exists", () => {
+  const sc = { id: "card", type: "stat-cards", start: 0, duration: 4, cues: { raise: 0.4 }, props: { cards: [{ value: 100, cue: "raise", note: "史上最大 IPO" }] }, lines: [{ start: 2, end: 3.5, text: "是史上规模最大的IPO" }] };
+  const tl = { duration: 4, scenes: [sc] };
+  assert.deepEqual(rhythmGate(tl, {}), []);
+  const [warning] = revealGate(tl);
+  assert.equal(warning.gate, "reveal");
+  assert.deepEqual(warning.fix, { scene: "card", path: ["cues"], set: { n1: "史上" }, add: true, with: [{ path: ["props", "cards", 0, "noteCue"], value: "n1" }] });
 });
 
 test("checkNotes: still/late notes the timeline contradicts are marked doubtful, others kept as they are", () => {

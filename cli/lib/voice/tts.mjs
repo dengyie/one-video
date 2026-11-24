@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { requireApiKey, pool } from "../core/http.mjs";
-import { readWav, toMono, trimSilence, concatWithGaps, findPauses, timeStretch, writeWav } from "../audio/wav.mjs";
+import { readWav, toMono, trimSilence, shortenPauses, concatWithGaps, findPauses, timeStretch, writeWav } from "../audio/wav.mjs";
 import { speakable, spokenLength } from "../core/text.mjs";
 import { sceneLines } from "../captions/lines.mjs";
 import { log, UserError } from "../core/project.mjs";
@@ -237,7 +237,9 @@ export async function runTts(project, script, { force = false, only = [], dry = 
 
   const out = { sampleRate: t.sampleRate, voice: { model: t.model, voice: t.voice, protocol: t.protocol, unit: t.unit, ...(t.design && { design: t.design }) }, scenes: {} };
   const clipsById = {};
-  for (const s of scenes) if (s.lines.length) clipsById[s.id] = s.units.map((u) => trimSilence(toMono(readWav(u.file), t.sampleRate), t.sampleRate));
+  for (const s of scenes) if (s.lines.length) {
+    clipsById[s.id] = s.units.map((u) => shortenPauses(trimSilence(toMono(readWav(u.file), t.sampleRate), t.sampleRate), t.sampleRate));
+  }
   const tempo = t.tempo === "auto" ? autoTempo(sceneRates(scenes, clipsById, t), config.gates?.syllablesPerSec) : t.tempo ?? 1;
   if (tempo !== 1) {
     for (const id of Object.keys(clipsById)) clipsById[id] = clipsById[id].map((c) => timeStretch(c, t.sampleRate, tempo));

@@ -9,6 +9,7 @@ import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { elementAt, ridgeTop, stateAt } from "../shared/tableau.mjs";
 import { resolveApiKey, viaApiBase, requireApiKey } from "../cli/lib/core/http.mjs";
 import { reviewSubject } from "../cli/lib/core/state.mjs";
+import { fixPlan } from "../cli/lib/review/fixes.mjs";
 
 const CLI = join(ROOT, "cli", "onevideo.mjs");
 const ov = (cwd, ...args) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: "utf8", env: { ...process.env, HOME: cwd, ONEVIDEO_WORKERS: "" } });
@@ -38,8 +39,9 @@ test("Promo Demo keeps its URL readable after the short CTA narration", async ()
 
 test("SpaceX IPO reveals total revenue and the loss explanation on their narration cues", () => {
   const ex = example();
-  const { timeline, errors } = compileTimeline({ ...ex, assets: ex.fetchedAssets });
+  const { check: { timeline, errors }, applied } = fixPlan({ config: ex.config, root: ex.root }, { ...ex, assets: ex.fetchedAssets });
   assert.deepEqual(errors, []);
+  for (const scene of ["ipo", "revenue", "profit"]) assert.ok(applied.some((fix) => fix.scene === scene && fix.path[0] === "cues"));
   const revenue = timeline.scenes.find((s) => s.id === "revenue");
   const totalCue = revenue.cues[revenue.props.total?.cue];
   const totalLine = revenue.lines.find((line) => line.text.includes("187亿"));
@@ -50,6 +52,7 @@ test("SpaceX IPO reveals total revenue and the loss explanation on their narrati
   const dragLine = profit.lines.find((line) => line.text.includes("主要拖累"));
   assert.ok(dragCue > profit.cues[profit.props.right.cue]);
   assert.ok(dragCue >= dragLine.start - 0.21 && dragCue < dragLine.end);
+  assert.ok(timeline.scenes.find((s) => s.id === "ipo").props.cards[1].noteCue);
 });
 
 test("approve script blocks an unsourced number even before a storyboard exists", () => {

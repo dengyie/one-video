@@ -120,6 +120,26 @@ export function findPauses(mono, sampleRate, { minMs = 90, relative = 0.04, floo
   return out;
 }
 
+export function shortenPauses(mono, sampleRate) {
+  const pauses = findPauses(mono, sampleRate, { minMs: 850, relative: 0.01, floor: 120 });
+  const keep = Math.round(sampleRate * 0.5);
+  const cuts = pauses.map(([a, b]) => {
+    const lo = Math.round(a * sampleRate), hi = Math.round(b * sampleRate);
+    const from = lo + Math.floor(keep / 2);
+    return [from, hi - (keep - (from - lo))];
+  });
+  if (!cuts.length) return mono;
+  const out = new Float32Array(mono.length - cuts.reduce((n, [from, to]) => n + to - from, 0));
+  let pos = 0, written = 0;
+  for (const [from, to] of cuts) {
+    out.set(mono.subarray(pos, from), written);
+    written += from - pos;
+    pos = to;
+  }
+  out.set(mono.subarray(pos), written);
+  return out;
+}
+
 // Change the pace of speech without changing its pitch (WSOLA): 30 ms Hann frames laid down at a
 // fixed hop, each read from where the faster (or slower) clock says it should start, nudged up to
 // ±10 ms to the offset that best continues the frame before it, so the waveform stays in phase.

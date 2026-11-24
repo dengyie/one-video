@@ -58,6 +58,20 @@ function stillGaps(timeline, maxStill) {
     .filter((x) => x.len > maxStill && x.from.scene !== "credits" && timeline.scenes.find((s) => s.id === x.from.scene)?.type !== "sources");
 }
 
+export function revealGate(timeline) {
+  return timeline.scenes.flatMap((sc) => {
+    const reveal = numberReveals(sc);
+    if (!reveal) return [];
+    const phrases = Object.values(reveal.cues);
+    const span = reveal.times.length
+      ? { from: sc.start + Math.min(...reveal.times), to: sc.start + Math.max(...reveal.times) }
+      : { from: sc.start, to: sc.start + sc.duration };
+    return [issue("warn", "reveal", `scene "${sc.id}" has uncued reveals that the narration names${phrases.length ? ` (${phrases.map((p) => `"${p}"`).join(", ")})` : ""} — sync them with onevideo fix`, { scene: sc.id, ...span, field: "cues" }, {
+      scene: sc.id, path: ["cues"], set: reveal.cues, add: true, with: reveal.refs,
+    })];
+  });
+}
+
 // A cue that fires after the stretch [x.from, x.to] although its line starts inside it: moved to the
 // line's opening words it fires as the line begins. Only offered when that leaves no stretch too long
 // between the stretch's start and the cue's old time.

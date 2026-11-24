@@ -443,7 +443,6 @@
         "subtitle": "来源：S-1 招股书"
       },
       "cues": {
-        "total": "收入约",
         "conn": "星链为主",
         "launch": "占比",
         "ai": "占比"
@@ -453,10 +452,6 @@
         "format": {
           "compact": "zh",
           "suffix": "美元"
-        },
-        "total": {
-          "label": "总收入",
-          "cue": "total"
         },
         "segments": [
           {
@@ -488,8 +483,7 @@
       "type": "compare",
       "cues": {
         "left": 0.4,
-        "right": "整个集团",
-        "drag": "AI业务"
+        "right": "整个集团"
       },
       "props": {
         "title": "2025 年盈亏",
@@ -517,8 +511,7 @@
           "color": "#F87171",
           "items": [
             "AI 业务是主要拖累"
-          ],
-          "itemCues": ["drag"]
+          ]
         }
       },
       "backdrop": {

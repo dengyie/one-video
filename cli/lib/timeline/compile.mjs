@@ -233,7 +233,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     const captions = sceneCaptions(sb, lines);
     if (shots && sb.type !== "sources" && sb.type !== "canvas" && sb.type !== "tableau" && !laidOut(sb.type)) {
       const seen = { id: sb.id, type: sb.type, start: 0, duration, cues, props, overlays, lines, captions };
-      shots = stillShots(shots, screenEvents({ scenes: [seen] }).map((e) => e.t), duration, config.gates?.maxStill ?? MAX_STILL);
+      shots = stillShots(shots, screenEvents({ scenes: [seen], theme }).map((e) => e.t), duration, config.gates?.maxStill ?? MAX_STILL);
     }
 
     scenes.push({

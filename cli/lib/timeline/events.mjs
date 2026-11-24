@@ -2,6 +2,7 @@
 // (the rhythm gate and look's note checks read it; the compiler fills long still stretches from it).
 import { weakMove } from "./shots.mjs";
 import { linePointTimes, lineSegmentStart } from "../../../shared/line-reveal.mjs";
+import { paceOf, TITLE_DETAIL } from "../../../shared/reveal.mjs";
 
 // Longest stretch with nothing new on screen before it reads as a stall (gates.maxStill).
 export const MAX_STILL = 4.5;
@@ -55,6 +56,7 @@ export function screenEvents(timeline) {
   for (const sc of timeline?.scenes ?? []) {
     const at = (t, what, weak = false) => { if (t >= 0 && t <= sc.duration) events.push({ t: sc.start + t, scene: sc.id, what, ...(weak && { weak }) }); };
     at(0, "scene");
+    if (sc.type === "title" && sc.props?.title) at(TITLE_DETAIL[0] + TITLE_DETAIL[1] * paceOf(timeline.theme?.motion?.pace), "prop");
     const used = named([sc.props, sc.overlays, sc.shots]);
     for (const [name, t] of Object.entries(sc.cues ?? {})) if (used.has(name)) at(t, "cue");
     let prev = null;
@@ -63,7 +65,10 @@ export function screenEvents(timeline) {
       at(sh.t, "shot", weak);
       prev = sh;
     }
-    for (const o of sc.overlays ?? []) at(o.t, "overlay");
+    for (const o of sc.overlays ?? []) {
+      at(o.t, "overlay");
+      if (!OVERLAY_EFFECTS.has(o.type) && o.end > o.t && o.end < sc.duration) at(o.end, "overlay-exit");
+    }
     propTimes(sc.props, (t) => at(t, "prop"));
     // A quote read aloud lights up line by line as it is spoken (its caption is dropped for that).
     if (sc.type === "quote" && sc.captions === false) for (const l of sc.lines ?? []) at(l.start, "prop");

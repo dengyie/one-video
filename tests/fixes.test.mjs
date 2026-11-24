@@ -26,8 +26,6 @@ test("fixPlan: stickers dropped on the captions move clear of them and of each o
   valuation.props.annotations[0].cue = "xai";
   valuation.cues.xai = "合并xAI";
   const profit = storyboard.scenes.find((s) => s.id === "profit");
-  delete profit.cues[profit.props.right.itemCues[0]];
-  delete profit.props.right.itemCues;
   delete profit.props.left.cue;
   delete profit.props.right.cue;
   storyboard.scenes[1] = { ...storyboard.scenes[1], overlays: [
