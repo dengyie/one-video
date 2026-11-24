@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { readJson } from "../core/project.mjs";
 import { countFrames, depthPath, framesDir, lumaPath } from "./media.mjs";
 
-const OPAQUE_TYPES = new Set(["media", "focus", "split", "footage", "parallax", "match-cut"]);
+const OPAQUE_TYPES = new Set(["media", "focus", "split", "footage", "parallax", "match-cut", "tableau"]);
 
 export function collectAssetRefs(v, out = new Set()) {
   if (Array.isArray(v)) v.forEach((x) => collectAssetRefs(x, out));
