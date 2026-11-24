@@ -1,9 +1,71 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { compileTimeline, phraseTime, resolveAt, mergeTheme, researchSources, sourceList, credit, CUE_LEAD, boundaryTransition, transitionSfx } from "../cli/lib/timeline/index.mjs";
 import { example } from "./helpers.mjs";
 import { mutedBackdrop, placeCaptions } from "../cli/lib/captions/layout.mjs";
 import { linePointTimes, lineProgress, lineSegmentStart } from "../shared/line-reveal.mjs";
+import { prepareCutMusic, loadMusicGrid, compileMusic } from "../cli/lib/audio/music.mjs";
+import { beatsFile, gridBeats } from "../cli/lib/audio/beats.mjs";
+import { readWav } from "../cli/lib/audio/wav.mjs";
+
+test("a re-timed cut gets its own story arrangement long enough to play without looping", () => {
+  const { root } = example({ media: ["music/bgm.wav"] });
+  const base = join(root, "public", "music", "bgm.wav");
+  writeFileSync(base, "original score");
+  writeFileSync(beatsFile(base), JSON.stringify({
+    source: "synth:story", scored: true, cut: { open: 0, finish: 3 },
+    sections: [{ mood: "intro", start: 0, end: 3 }, { mood: "resolve", start: 3, end: 5 }],
+  }));
+  const config = { preset: "story", arc: [{ at: "open", mood: "intro" }, { at: "finish", mood: "resolve" }] };
+  const script = { scenes: [{ id: "open" }, { id: "finish" }] };
+  const grid = loadMusicGrid(root, config);
+  const compile = (duration, start, warnings = []) => {
+    const scenes = [{ id: "open", start: 0 }, { id: "finish", start }];
+    return { music: compileMusic(config, { root, offset: 0, grid, scenes, script, duration, warnings }), scenes, duration };
+  };
+  const original = compile(4, 3);
+  const longer = compile(7, 6);
+  assert.equal(prepareCutMusic(root, config, original, script), false);
+  assert.equal(longer.music.src, "music/bgm.wav");
+  assert.equal(prepareCutMusic(root, config, longer, script), true);
+  const warnings = [];
+  const updated = compile(7, 6, warnings);
+  assert.match(updated.music.src, /^music\/story-[a-f0-9]+\.wav$/);
+  assert.equal(readWav(join(root, "public", updated.music.src)).duration, 9);
+  assert.deepEqual(warnings, []);
+  assert.equal(prepareCutMusic(root, config, updated, script), false);
+  assert.equal(compile(4, 3).music.src, "music/bgm.wav");
+  assert.equal(readFileSync(base, "utf8"), "original score");
+});
+
+test("an extended story score resolves late beat cues before the audio is generated", () => {
+  const { root } = example({ media: ["music/bgm.wav"] });
+  const beats = gridBeats(80, 5);
+  writeFileSync(beatsFile(join(root, "public", "music", "bgm.wav")), JSON.stringify({
+    source: "synth:story", scored: true, beats, downbeats: [0, 3], cut: { open: 0, finish: 3 },
+    sections: [{ mood: "intro", start: 0, end: 3 }, { mood: "resolve", start: 3, end: 5 }],
+  }));
+  const config = { music: { preset: "story", arc: [{ at: "open", mood: "intro" }, { at: "finish", mood: "resolve" }] } };
+  const script = { scenes: [{ id: "open" }, { id: "finish" }] };
+  const storyboard = { scenes: [
+    { id: "open", type: "title", duration: 6, props: { title: "Open" } },
+    { id: "finish", type: "title", duration: 3, props: { title: "Finish" }, shots: [
+      { at: 0 }, { at: { beat: 1 }, zoom: 1.1 }, { at: 1.54, zoom: 1.05 },
+    ] },
+  ] };
+  const compile = () => compileTimeline({ root, config, script, storyboard });
+  const first = compile();
+  assert.deepEqual(first.errors, []);
+  assert.equal(prepareCutMusic(root, config.music, first.timeline, script), true);
+  const { timeline, errors } = compile();
+  assert.deepEqual(errors, []);
+  assert.match(timeline.music.src, /^music\/story-[a-f0-9]+\.wav$/);
+  assert.equal(readWav(join(root, "public", timeline.music.src)).duration, 11);
+  assert.deepEqual(timeline.scenes[1].shots.filter((s) => s.k !== undefined).map((s) => s.t), [0, 0.75, 1.5]);
+  assert.ok(timeline.beats.includes(8.25));
+});
 
 test("line draws to cued points without shifting or previewing their values", () => {
   const times = linePointTimes({ duration: 12, cues: { start: 2, next: 2.2, last: 9 } }, 4, ["start", "next", null, "last"], 0.5);

@@ -1,7 +1,7 @@
 // Archive domain: a project's lasting files go to MangoDrive, each one read back and checked against
 // its sha256 before it counts; plan/archive.json records what is up there. Old renders can then be
 // dropped here (--prune) and brought back with restore.
-import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, renameSync, rmSync, statSync, createWriteStream } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, createWriteStream } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import { hostname } from "node:os";
 import { UserError, readJson, writeJson } from "../core/project.mjs";
@@ -13,7 +13,7 @@ export const ARCHIVE = "plan/archive.json";
 // What goes up: renders and their log, the publish kit, the plan, the recorded voice, source media
 // and the config. What stays: anything derived again in minutes (frame sequences, stills, QC
 // sheets, previews) and the sound library's files (public/sfx, public/music: licensed copies or
-// synthesized), which are never uploaded anywhere.
+// synthesized), except the exact generated story scores referenced by compiled cuts.
 const DIRS = ["out/versions", "out/publish", "plan", "public/assets", "public/audio"];
 const FILES = ["onevideo.json", "state.json", "out/renders.json"];
 
@@ -36,6 +36,17 @@ export function archiveFiles(root, { name, library = process.env.ONEVIDEO_LIBRAR
   };
   for (const d of DIRS) if (existsSync(join(root, d))) walk(d);
   for (const f of FILES) if (existsSync(join(root, f))) add(f);
+  const scores = new Set();
+  for (const path of out) {
+    if (!/^plan\/timeline(?:\.\d+x\d+)?\.json$/.test(path)) continue;
+    let src;
+    try { src = JSON.parse(readFileSync(join(root, path), "utf8"))?.music?.src; }
+    catch (e) { if (e.code === "ENOENT" || e instanceof SyntaxError) continue; throw e; }
+    if (typeof src === "string" && /^music\/story-[a-f0-9]{16}\.wav$/.test(src)) scores.add(`public/${src}`);
+  }
+  for (const score of scores) {
+    if (lstatSync(join(root, score), { throwIfNoEntry: false })?.isFile()) add(score);
+  }
   // Other frame sizes of the cut (out/<name>.9x16.mp4); the main out/<name>.mp4 is a link to its version.
   if (name && existsSync(join(root, "out"))) for (const f of readdirSync(join(root, "out"))) if (f.startsWith(`${name}.`) && /\.\d+x\d+\.mp4$/.test(f)) add(join("out", f));
   return out.sort();

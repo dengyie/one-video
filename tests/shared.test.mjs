@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { captionAt, captionWindows } from "../shared/caption-timing.mjs";
 import { closingFade } from "../shared/transition.mjs";
 import { musicVolumeProps } from "../shared/music-envelope.mjs";
+import { rightShotInset } from "../shared/camera.mjs";
 import {
   area, cameraMoving, captionBand, clampView, clearOf, cueOr, easeOut, inFrame, labelWidth, LABEL_H, mapViewAt,
   meets, overlap, paceOf, placePinLabels, revealAt, seenBox, seenSpan, textEms, viewAt, visibleOnGlobe, WIDE,
@@ -90,6 +91,21 @@ test("camera: the caption band maps back through a push-in", () => {
   assert.deepEqual(captionBand(undefined, 0, true), [0.2, 0.74, 0.8, 0.86]);
   const [x0, y0, x1, y1] = captionBand([{ t: 0, zoom: 2, cut: true }], 0);
   near(x0, 0.35); near(x1, 0.65); near(y0, 0.67); near(y1, 0.73);
+});
+
+test("the scale comparison ratio keeps its right margin through a late push-in", () => {
+  const shots = [{ t: 0, zoom: 1 }, { t: 4.15, zoom: 1.1, ease: 1.6 }];
+  for (const width of [1920, 1080]) {
+    const margin = 96;
+    assert.equal(rightShotInset(undefined, 5, 7.7, width, margin), margin);
+    const inset = rightShotInset(shots, 5, 7.7, width, margin);
+    assert.ok(inset > margin);
+    for (const t of [5, 5.5, 6, 7.7]) {
+      const { zoom, x } = viewAt(shots, t);
+      const edge = width / 2 + zoom * (width - inset - x * width);
+      assert.ok(edge <= width - margin);
+    }
+  }
 });
 
 test("labels: text width counts CJK as 1em, the rest as 0.6em", () => {

@@ -24,7 +24,7 @@ import * as media from "./media.mjs";
 import { assetFileExists, clipFrames, countFrames, framesDir } from "../lib/assets/index.mjs";
 import { IMAGE_DEFAULTS, VIDEO_DEFAULTS } from "../lib/generate/index.mjs";
 import { llmConfig } from "../lib/llm/client.mjs";
-import { ensureMusicBeats } from "../lib/audio/music.mjs";
+import { ensureMusicBeats, prepareCutMusic } from "../lib/audio/music.mjs";
 import { writeImageSheets } from "../lib/vision/sheet.mjs";
 import { workerHosts } from "../lib/core/worker.mjs";
 import { adoptLegacy, frameRange, localStamp, publishedVersion, readRenders, recordRender, resolveVideo, sameFile, timelineHash, versionFile } from "../lib/publish/renders.mjs";
@@ -59,7 +59,10 @@ async function prepareRenderBeats(project) {
 
 // Compile + gate the timeline; renders never start from a stale or failing plan.
 function freshTimeline(project, { force = false } = {}) {
-  const res = checkProject(project, { needTimings: true });
+  let res = checkProject(project, { needTimings: true });
+  if ((!res.errors.length || force) && prepareCutMusic(project.root, project.config.music, res.timeline, res.plan.script)) {
+    res = checkProject(project, { needTimings: true, plan: res.plan });
+  }
   printIssues(res.issues);
   if (res.errors.length && !force) throw new UserError(`${res.errors.length} pre-compose error(s); fix them before rendering (or --force)`);
   writeJson(project.paths.timeline, res.timeline);

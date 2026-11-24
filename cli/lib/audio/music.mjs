@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { download } from "../core/http.mjs";
 import { UserError, log, readJson } from "../core/project.mjs";
@@ -74,17 +75,62 @@ export function loadMusicGrid(root, config) {
   return config?.enabled !== false && file && existsSync(file) ? readJson(file) : {};
 }
 
-export function compileMusic(config, { root, offset, grid, scenes, warnings }) {
-  const musicSrc = sourcePath(config);
+export function cutStory(config, { offset, grid, scenes, script, duration }) {
+  if (config?.file || offset || grid.source !== "synth:story" || !Array.isArray(grid.sections) || !duration) return null;
+  const beats = new Map(script.scenes.map((s) => [s.id, s.beat]));
+  let sections;
+  try {
+    sections = storyArc(scenes.map(({ id, start }) => ({ id, start, beat: beats.get(id) })), duration + 2, config?.arc);
+  } catch {
+    return null;
+  }
+  const sameArc = sections.length === grid.sections.length && sections.every(
+    (s, i) => s.mood === grid.sections[i].mood && s.start === grid.sections[i].start,
+  );
+  if (sameArc && grid.sections.at(-1)?.end >= duration) return null;
+  const spec = { duration: duration + 2, sections, seed: config?.seed ?? 7 };
+  const tag = createHash("sha256").update(JSON.stringify(spec)).digest("hex").slice(0, 16);
+  return { ...spec, src: `music/story-${tag}.wav` };
+}
+
+export function storyBeatGrid(duration) {
+  const beats = gridBeats(STORY_BPM, duration);
+  return { beats, downbeats: everyFourth(beats) };
+}
+
+export function prepareCutMusic(root, config, timeline, script) {
+  if (!timeline?.music || timeline.music.src !== DEFAULT_MUSIC_SRC) return false;
+  const { duration, scenes, music: { offset } } = timeline;
+  const score = cutStory(config, { offset, grid: loadMusicGrid(root, config), scenes, script, duration });
+  if (!score) return false;
+  const file = join(root, "public", score.src);
+  if (existsSync(file)) return false;
+  const staging = `${file}.${randomUUID()}.tmp`;
+  try {
+    writeStory(staging, score.duration, score);
+    renameSync(staging, file);
+  } finally {
+    rmSync(staging, { force: true });
+  }
+  log(`music: scored this cut → public/${score.src}`);
+  return true;
+}
+
+export function compileMusic(config, { root, offset, grid, scenes, script, duration, warnings, score = cutStory(config, { offset, grid, scenes, script, duration }) }) {
+  const useScore = score && root && existsSync(join(root, "public", score.src));
+  const musicSrc = useScore ? score.src : sourcePath(config);
   const music = config?.enabled === false ? null : root && existsSync(join(root, "public", musicSrc))
     ? { src: musicSrc, offset, volume: config?.volume ?? 0.22, duckTo: config?.duckTo ?? 0.07, fade: 1.2, credit: musicProvider(config).credit(config) }
     : null;
   if (config?.enabled !== false && !music) warnings.push(`no background music (public/${musicSrc})${config?.file ? "" : "; run: onevideo music"}`);
   // The story score turns where its scenes started when it was written; a re-timed cut drifts off it.
-  if (music && grid.scored && grid.cut) {
+  if (music && !useScore && grid.scored && grid.cut) {
     const moved = scenes.filter((s) => grid.cut[s.id] !== undefined && Math.abs(grid.cut[s.id] - s.start) > 0.75).map((s) => s.id);
     const changed = scenes.length !== Object.keys(grid.cut).length || scenes.some((s) => grid.cut[s.id] === undefined);
-    if (moved.length || changed) warnings.push(`music was scored for an earlier cut (${moved.length ? `scenes ${moved.join(", ")} moved` : "scenes changed"}); run: onevideo music`);
+    if (moved.length || changed || score) {
+      const why = moved.length ? `scenes ${moved.join(", ")} moved` : changed ? "scenes changed" : "score duration or arrangement changed";
+      warnings.push(`music was scored for an earlier cut (${why}); run: onevideo music`);
+    }
   }
   if (config?.file && !config?.credit) warnings.push("music.file has no music.credit; add the track title/author/license for the publish credits");
   return music;

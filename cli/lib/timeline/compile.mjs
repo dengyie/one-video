@@ -9,7 +9,7 @@ import { resolveCountry } from "../library/geo.mjs";
 import { entryPath, isMonoDark, loadCatalog, resolveEntry, tintLottie } from "../library/catalog.mjs";
 import { parseWav } from "../audio/wav.mjs";
 import { collectAssetRefs, compileSceneVisuals } from "../assets/compile.mjs";
-import { compileMusic, loadMusicGrid } from "../audio/music.mjs";
+import { compileMusic, cutStory, loadMusicGrid, storyBeatGrid } from "../audio/music.mjs";
 import { boxMean, depthAt, dodgeX, hexLuminance, lumaAt, scrimFor, subjectFocus, wordBox } from "../vision/subject.mjs";
 import { compileCaptions, sceneCaptions } from "../captions/compile.mjs";
 import { resolveAt } from "./cues.mjs";
@@ -77,7 +77,6 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
   const sfx = [];
   const chapters = [];
   const boundaries = [];
-  let frame = 0;
   let consecutiveFades = 0;
 
   const sfxCfg = { transition: null, volume: 0.5, ...(config.sfx ?? {}) };
@@ -90,13 +89,8 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     const dry = compileTimeline({ config: { ...config, music: { ...config.music, offset: 0 }, beats: { ...config.beats, snap: false } }, script, storyboard, timings, assets, research, root });
     if (dry.timeline) offset = bestOffset(hardCuts(dry.timeline), grid.downbeats);
   }
-  const shift = (list) => (list ?? []).map((b) => r3(b - offset)).filter((b) => b >= 0);
-  const beats = shift(grid.beats);
-  const downbeats = shift(grid.downbeats);
-  const snap = config.beats?.snap !== false;
-  let lastCanvas = null;
-  let lastTableau = null;
-
+  let totalFrames = 0;
+  const cut = [];
   for (const sb of storyboard.scenes) {
     const sc = scriptById.get(sb.id);
     if (!sc) { errors.push(`storyboard scene "${sb.id}" has no script entry`); continue; }
@@ -110,7 +104,22 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     if (sb.minDuration) duration = Math.max(duration, sb.minDuration);
     const durationInFrames = Math.ceil(duration * fps);
     duration = durationInFrames / fps;
-    const from = frame;
+    const from = totalFrames;
+    const start = from / fps;
+    cut.push({ sb, sc, tm, lines, duration, durationInFrames, from, start: r3(start), id: sb.id });
+    totalFrames += durationInFrames;
+  }
+  const cutDuration = r3(totalFrames / fps);
+  const score = cutStory(config.music, { offset, grid, scenes: cut, script, duration: cutDuration });
+  const beatGrid = score ? storyBeatGrid(score.duration) : grid;
+  const shift = (list) => (list ?? []).map((b) => r3(b - offset)).filter((b) => b >= 0);
+  const beats = shift(beatGrid.beats);
+  const downbeats = shift(beatGrid.downbeats);
+  const snap = config.beats?.snap !== false;
+  let lastCanvas = null;
+  let lastTableau = null;
+
+  for (const { sb, sc, tm, lines, duration, durationInFrames, from } of cut) {
     const start = from / fps;
     const chapter = sb.chapter ?? sc.chapter;
     const prev = scenes.at(-1);
@@ -267,10 +276,8 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       ...(overlays.length ? { overlays } : {}),
       ...(shots ? { shots } : {}),
     });
-    frame += durationInFrames;
   }
 
-  const totalFrames = frame;
   // Opening fades up from the background, closing fades out; inner boundaries overlap.
   const edge = (type, d) => ({ type: type === "cut" ? "cut" : "fade", frames: type === "cut" ? 0 : Math.round(d * fps), lead: 0, direction: "left" });
   scenes.forEach((sc, i) => {
@@ -345,7 +352,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     }
   }
   sfx.sort((a, b) => a.at - b.at);
-  const music = compileMusic(config.music, { root, offset, grid, scenes, warnings });
+  const music = compileMusic(config.music, { root, offset, grid, scenes, score, warnings });
   const usedSfx = [...new Set(sfx.map((s) => s.sound))];
   if (root) for (const name of usedSfx) if (!existsSync(join(root, "public", sfxFile(name)))) errors.push(`sfx "${name}" missing: public/${sfxFile(name)}; run: onevideo music`);
   // Library sounds run up to 8 s; the player keeps each one mounted for its real length.
@@ -366,7 +373,7 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
     height,
     aspect: config.aspect ?? "16:9",
     totalFrames,
-    duration: r3(totalFrames / fps),
+    duration: cutDuration,
     theme,
     watermark,
     captions,
