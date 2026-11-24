@@ -158,10 +158,11 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
   // Text over a photo gets a soft shadow (inherited by every label in the scene).
   const shadow: React.CSSProperties = scene.backdrop ? { textShadow: "0 2px 14px rgba(0,0,0,0.6)" } : {};
   const [dx, dy] = DIR[(out ? tout : tin)?.direction ?? "left"] ?? DIR.left;
+  const opacity = closing === undefined ? dip : 1 - closing;
   return (
     <>
-      {dip !== undefined && out && <AbsoluteFill style={{ backgroundColor: "#000" }} />}
-      <AbsoluteFill style={{ ...style, ...(dip !== undefined ? { opacity: dip } : {}), ...shadow }}>
+      {((dip !== undefined && out) || closing !== undefined) && <AbsoluteFill style={{ backgroundColor: "#000" }} />}
+      <AbsoluteFill style={{ ...style, opacity: opacity ?? style.opacity, ...shadow }}>
         {look.whip ? (
           <svg width={0} height={0} style={{ position: "absolute" }}>
             <filter id={filterId} x="-10%" y="-10%" width="120%" height="120%">
@@ -180,7 +181,6 @@ const SceneFrame: React.FC<{ scene: Scene; length: number; children: React.React
         {/* The header is frame chrome: it rides the transition but not the camera, so a push-in cannot crop it. */}
         {header}
       </AbsoluteFill>
-      {closing !== undefined && <AbsoluteFill style={{ backgroundColor: "#000", opacity: closing }} />}
     </>
   );
 };
