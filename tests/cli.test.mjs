@@ -6,6 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ROOT, estimatedTimings, example } from "./helpers.mjs";
 import { compileTimeline } from "../cli/lib/timeline/index.mjs";
+import { CUE_LEAD, phraseTime } from "../cli/lib/timeline/cues.mjs";
+import { racePeriods } from "../cli/lib/timeline/events.mjs";
 import { elementAt, ridgeTop, stateAt } from "../shared/tableau.mjs";
 import { resolveApiKey, viaApiBase, requireApiKey } from "../cli/lib/core/http.mjs";
 import { reviewSubject } from "../cli/lib/core/state.mjs";
@@ -35,6 +37,38 @@ test("Promo Demo keeps its URL readable after the short CTA narration", async ()
   assert.equal(cta.lines[0].text, "打开链接就能看");
   const fadeStart = cta.duration - cta.transitionOut.frames / timeline.fps;
   assert.ok(fadeStart - cta.lines[0].end >= 1, "leave the URL readable after the spoken CTA");
+});
+
+test("SpaceX IPO lands chart details on their narration in both aspects", async () => {
+  const { config: base, script, storyboard, fetchedAssets: assets } = example();
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...base, aspect };
+    const { timeline, errors } = compileTimeline({ config, script, storyboard, assets, timings: await estimatedTimings(script, config) });
+    assert.deepEqual(errors, []);
+    const scene = (id) => timeline.scenes.find((s) => s.id === id);
+    const landsOn = (sc, cue, phrase) => {
+      const said = phraseTime(sc.lines, phrase);
+      const time = sc.cues[cue];
+      assert.ok(said !== null && Math.abs(time - (said - CUE_LEAD)) < 0.05, `${aspect} ${sc.id}: cue ${phrase} with the narration`);
+      return time;
+    };
+    const ipo = scene("ipo");
+    const proceeds = ipo.props.cards.find((c) => c.value === 85.7e9);
+    const record = landsOn(ipo, proceeds.noteCue, "史上");
+    assert.ok(record > ipo.cues[proceeds.cue] + 1, "do not reveal the record with the proceeds");
+    const race = scene("race");
+    const ntt = landsOn(race, race.props.series.find((s) => s.name === "NTT").cue, "1187亿");
+    const spacex = landsOn(race, race.props.series.find((s) => s.name === "SpaceX").cue, "SpaceX");
+    const [, nextPeriod, , lastPeriod] = racePeriods(race);
+    assert.ok(ntt < nextPeriod && spacex > lastPeriod, "highlight each bar while its narrated period is on screen");
+    const revenue = scene("revenue");
+    const total = landsOn(revenue, revenue.props.total?.cue, "187亿");
+    assert.equal(revenue.props.segments.reduce((sum, s) => sum + s.value, 0), 18.7e9);
+    assert.ok(total < revenue.cues[revenue.props.segments[0].cue], "show the total before breaking it down");
+    const profit = scene("profit");
+    const ai = landsOn(profit, profit.props.right.itemCues?.[0], "AI业务是主要拖累");
+    assert.ok(ai > profit.cues[profit.props.right.cue] + 1, "show the reason separately from the loss");
+  }
 });
 
 test("Graphics Demo keeps its final light-travel comparison compact in portrait", async () => {
@@ -87,6 +121,13 @@ test("SpaceX Motion keeps a local scrim on featured words over the launch plume"
 
 test("SpaceX IPO reveals total revenue and the loss explanation on their narration cues", () => {
   const ex = example();
+  const [ipo, revenuePlan, profitPlan] = ["ipo", "revenue", "profit"].map((id) => ex.storyboard.scenes.find((s) => s.id === id));
+  delete ipo.cues[ipo.props.cards[1].noteCue];
+  delete ipo.props.cards[1].noteCue;
+  delete revenuePlan.cues[revenuePlan.props.total.cue];
+  delete revenuePlan.props.total;
+  delete profitPlan.cues[profitPlan.props.right.itemCues[0]];
+  delete profitPlan.props.right.itemCues;
   const { check: { timeline, errors }, applied } = fixPlan({ config: ex.config, root: ex.root }, { ...ex, assets: ex.fetchedAssets });
   assert.deepEqual(errors, []);
   for (const scene of ["ipo", "revenue", "profit"]) assert.ok(applied.some((fix) => fix.scene === scene && fix.path[0] === "cues"));

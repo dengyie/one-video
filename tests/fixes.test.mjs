@@ -25,6 +25,9 @@ test("fixPlan: stickers dropped on the captions move clear of them and of each o
   const ex = example({ media: ["sfx/whoosh.wav", "sfx/pop.wav", "music/inspired.mp3"] });
   const storyboard = structuredClone(ex.storyboard);
   delete storyboard.scenes[0].overlays;
+  const ipoPlan = storyboard.scenes.find((s) => s.id === "ipo");
+  delete ipoPlan.cues[ipoPlan.props.cards[1].noteCue];
+  delete ipoPlan.props.cards[1].noteCue;
   const valuation = storyboard.scenes.find((s) => s.id === "valuation");
   delete valuation.props.pointCues;
   for (const name of ["round1", "round2", "round3", "round4"]) delete valuation.cues[name];
@@ -33,6 +36,8 @@ test("fixPlan: stickers dropped on the captions move clear of them and of each o
   const profit = storyboard.scenes.find((s) => s.id === "profit");
   delete profit.props.left.cue;
   delete profit.props.right.cue;
+  delete profit.cues[profit.props.right.itemCues[0]];
+  delete profit.props.right.itemCues;
   storyboard.scenes[1] = { ...storyboard.scenes[1], overlays: [
     { type: "stamp", text: "调查", at: 0.2, x: 0.5, y: 0.9 }, { type: "stamp", text: "进行中", at: 0.2, x: 0.5, y: 0.92 },
   ] };
