@@ -54,6 +54,24 @@ test("fixPlan: stickers dropped on the captions move clear of them and of each o
   assert.equal(ex.storyboard.scenes[1].overlays, undefined, "the original is untouched");
 });
 
+test("fixPlan: a cropped portrait word is repaired in its authored aspect override", () => {
+  const ex = example();
+  const sc = ex.storyboard.scenes[0];
+  sc.overlays = [{
+    type: "word", text: "星链 > 60%", at: 1, duration: 2, y: 0.4, size: 120,
+    aspects: { "9:16": { x: 0.5, size: 240 }, "16:9": { size: 160 } },
+  }];
+  const project = { root: ex.root, config: { ...ex.config, aspect: "9:16" }, paths: {} };
+  const plan = { script: ex.script, storyboard: ex.storyboard, research: ex.research, timings: ex.timings, assets: ex.fetchedAssets };
+  const { check } = fixPlan(project, plan);
+  const [word] = sc.overlays;
+  assert.equal(word.size, 120);
+  assert.equal(word.aspects["16:9"].size, 160);
+  assert.equal(word.aspects["9:16"].x, 0.5);
+  assert.ok(word.aspects["9:16"].size < 240);
+  assert.ok(!check.issues.some((i) => i.at?.scene === sc.id && /runs off the frame/.test(i.msg)));
+});
+
 test("numberReveals: chart values the narration says get a cue on those words; dates, cued elements and unsaid values do not", () => {
   const lines = [{ start: 0, end: 4, text: "2024年12月约3500亿美元，" }, { start: 4, end: 8, text: "一年后约8000亿，再到1.25万亿。" }];
   const line = numberReveals({ type: "line-chart", lines, cues: { n1: 1 }, props: { series: [{ points: [["2024.12", 3.5e11], ["2025.06", 6e11], ["2025.12", 8e11], ["2026.02", 1.25e12]] }] } });
