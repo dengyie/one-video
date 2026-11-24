@@ -145,6 +145,19 @@ test("a headed canvas shot preserves bottom text within the fitted frame", { ski
   }
 });
 
+test("a canvas marker stays visible when its card pans into the fitted side margin", { skip: !existsSync(REMOTION_BIN) && "needs template dependencies" }, async () => {
+  await canvasStills(640, 360, {
+    props: {
+      path: [{ focus: { x: 925, y: 540 } }, { t: 0.2, focus: { x: 960, y: 540 }, fly: 0.4 }],
+      items: [{ id: "side", type: "text", text: "Side", x: -100, y: 540, w: 85, h: 50, size: 38, settled: true }],
+    },
+    overlays: [{ type: "word", on: "side", text: "Marker", size: 40, t: 0, end: 3 }],
+  }, ({ texts, overlays }) => {
+    assert.ok(texts.some(({ text, box }) => text === "Side" && box[0] > 0 && box[2] < 0.1), "the anchor is visibly in the side margin");
+    assert.ok(overlays.some(({ i }) => i === 0), "the pinned overlay must not disappear");
+  });
+});
+
 test("devices reserve caption space and portrait cards cap wide column counts", () => {
   assert.equal(deviceViewportHeight(1080, 1, false), 860);
   assert.equal(deviceViewportHeight(1920, 1, true), 1530);
