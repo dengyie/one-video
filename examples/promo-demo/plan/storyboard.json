@@ -93,6 +93,7 @@
     {
       "id": "cta",
       "type": "title",
+      "minDuration": 3.5,
       "enter": {
         "type": "zoom",
         "duration": 0.5
