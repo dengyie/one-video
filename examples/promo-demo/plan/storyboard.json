@@ -31,7 +31,7 @@
     {
       "id": "open",
       "type": "device",
-      "intent": "点卡片 → 卡片从原位展开 → 停 ≥1 秒 → 收回，切到详情页",
+      "intent": "点卡片直接打开详情页，停在简介和下载链接上",
       "props": {
         "device": "phone",
         "url": "vedio.mangoqwq.com",
@@ -47,18 +47,15 @@
         ],
         "steps": [
           {
-            "at": 0.4,
-            "tap": "card",
-            "expand": {
-              "rect": "card"
-            }
+            "at": {
+              "phrase": "点开",
+              "offset": -0.25
+            },
+            "snap": false,
+            "tap": "card"
           },
           {
-            "at": 2.6,
-            "collapse": true
-          },
-          {
-            "at": 3.0,
+            "at": "点开",
             "screen": "detail",
             "focus": "summary"
           }
