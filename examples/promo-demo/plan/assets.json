@@ -3,29 +3,29 @@
     {
       "id": "home",
       "kind": "image",
-      "title": "放映页首页（手机）",
+      "title": "放映页（手机，打开演示视频）",
       "license": "own",
       "capture": {
-        "url": "https://vedio.mangoqwq.com/",
+        "url": "https://vedio.mangoqwq.com/w/promo-demo",
         "device": "phone",
         "wait": 2500,
         "selectors": {
           "player": ".player",
           "meta": ".meta",
-          "card": ".card"
+          "card": ".card:not([aria-current])"
         }
       }
     },
     {
       "id": "detail",
       "kind": "image",
-      "title": "放映页详情（手机，点开第二张卡片后）",
+      "title": "放映页详情（手机，点开展示的卡片后）",
       "license": "own",
       "capture": {
-        "url": "https://vedio.mangoqwq.com/",
+        "url": "https://vedio.mangoqwq.com/w/promo-demo",
         "device": "phone",
         "wait": 2500,
-        "click": [".card:nth-child(2)"],
+        "click": [".card:not([aria-current])"],
         "selectors": {
           "player": ".player",
           "summary": ".summary",

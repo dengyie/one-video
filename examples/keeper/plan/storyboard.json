@@ -747,11 +747,11 @@
             "dur": 3.2
           },
           {
-            "cue": "more",
-            "zoom": 1.9,
-            "dur": 2.4,
-            "on": "lh",
-            "anchor": "gallery"
+            "cue": "after",
+            "zoom": 1.55,
+            "dur": 1.05,
+            "on": "lamp2",
+            "place": [0.59, 0.37]
           },
           {
             "cue": "hung",
@@ -759,13 +759,6 @@
             "y": 0.46,
             "zoom": 1,
             "dur": 4.5
-          },
-          {
-            "cue": "after",
-            "x": 0.44,
-            "y": 0.42,
-            "zoom": 1.08,
-            "dur": 3
           }
         ]
       },
