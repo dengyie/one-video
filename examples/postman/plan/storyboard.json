@@ -115,7 +115,7 @@
         ],
         "camera": [
           { "at": 0, "x": 0.42, "y": 0.62, "zoom": 1.3, "cut": true, "snap": false },
-          { "cue": "in", "zoom": 1.4, "dur": 3.2, "on": "town" },
+          { "cue": "in", "x": 0.51, "y": 0.7, "zoom": 1.2, "dur": 2.2 },
           { "cue": "all", "x": 0.5, "y": 0.5, "zoom": 1, "dur": 4 }
         ]
       },
