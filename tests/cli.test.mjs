@@ -78,6 +78,26 @@ test("Keeper has the new lighthouse lamp framed when the narration reveals it", 
   }
 });
 
+test("Keeper lights the coat beside the keeper, not on the far side of the lighthouse", async () => {
+  const dir = join(ROOT, "examples", "keeper");
+  const base = json(join(dir, "onevideo.json"));
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...base, aspect };
+    const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
+    assert.deepEqual(errors, []);
+    const { props, cues } = timeline.scenes.find((scene) => scene.id === "fire");
+    const t = cues.burn + 1.6;
+    const state = (id) => stateAt(props.elements.find((el) => el.id === id), props.elements, t);
+    const keeper = state("keeper"), blaze = state("blaze"), tower = state("lh");
+    assert.equal(blaze.intensity, 1);
+    assert.equal(blaze.y, keeper.y);
+    assert.equal(blaze.depth, keeper.depth);
+    assert.ok(blaze.x > tower.x && Math.abs(blaze.x - keeper.x) < 0.01, `${aspect}: stage the fire next to the keeper`);
+  }
+});
+
 test("SpaceX IPO lands chart details on their narration in both aspects", async () => {
   const { config: base, script, storyboard, fetchedAssets: assets } = example();
   for (const aspect of ["16:9", "9:16"]) {
@@ -100,6 +120,10 @@ test("SpaceX IPO lands chart details on their narration in both aspects", async 
     const spacex = landsOn(race, race.props.series.find((s) => s.name === "SpaceX").cue, "SpaceX");
     const [, nextPeriod, , lastPeriod] = racePeriods(race);
     assert.ok(ntt < nextPeriod && spacex > lastPeriod, "highlight each bar while its narrated period is on screen");
+    landsOn(race, race.props.periodCues.at(-1), "苹果");
+    const appleFirst = phraseTime(race.lines, "排在第一");
+    const lastSwap = Math.max(0.3, Math.min(1.6, (race.duration - lastPeriod) * 0.6));
+    assert.ok(appleFirst !== null && lastPeriod + lastSwap <= appleFirst, `${aspect}: settle on the 2026 ranking before the narrator names Apple as first`);
     const revenue = scene("revenue");
     const total = landsOn(revenue, revenue.props.total?.cue, "187亿");
     assert.equal(revenue.props.segments.reduce((sum, s) => sum + s.value, 0), 18.7e9);

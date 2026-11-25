@@ -540,9 +540,9 @@
                 "r": 0.024
               }
             ],
-            "on": "lh",
-            "anchor": "gallery",
-            "dx": -0.005
+            "on": "keeper",
+            "anchor": "base",
+            "dx": -0.008
           },
           {
             "id": "rain",
