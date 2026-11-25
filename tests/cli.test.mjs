@@ -125,6 +125,21 @@ test("Graphics Demo keeps its final light-travel comparison compact in portrait"
   assert.ok(span <= 1350, "the portrait pullback should not shrink the comparison across a wide gap");
 });
 
+test("Graphics Demo keeps the seconds conversion above the cards during the pullback", async () => {
+  const dir = join(ROOT, "examples", "graphics-demo");
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...json(join(dir, "onevideo.json")), aspect };
+    const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
+    assert.deepEqual(errors, []);
+    const { props, overlays } = timeline.scenes.find((scene) => scene.id === "travel");
+    const conversion = overlays.find(({ text }) => text === "= 8 分 19 秒");
+    assert.equal(conversion.t, props.path.at(-1).t);
+    assert.ok(conversion.y >= 0.1 && conversion.y <= 0.15, aspect + ": keep the conversion in the upper band during the move");
+  }
+});
+
 test("SpaceX Motion clears the opening title before the ticker lands", () => {
   const dir = join(ROOT, "examples", "spacex-motion");
   const read = (p) => json(join(dir, p));
@@ -485,6 +500,26 @@ test("Postman pulls back to the valley before cutting attention back to the lant
     const lantern = lights.props.camera.at(-1);
     assert.ok(wide.t < lights.cues.valley, `${aspect}: pull back as the narrator introduces the whole town`);
     assert.ok(wide.t + wide.dur < lantern.t, `${aspect}: let the valley shot settle before moving to the lantern`);
+  }
+});
+
+test("Postman stays in frame while he delivers the letters at dawn", async () => {
+  const dir = join(ROOT, "examples", "postman");
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...json(join(dir, "onevideo.json")), aspect };
+    const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
+    assert.deepEqual(errors, []);
+    const { cues, duration, props } = timeline.scenes.find((scene) => scene.id === "dawn");
+    const frame = { W: timeline.width, H: timeline.height };
+    const { kx } = stageOf(frame.W, frame.H);
+    const zhou = props.elements.find(({ id }) => id === "zhou");
+    for (let t = cues.in; t < duration; t += 1 / timeline.fps) {
+      const { depth, box } = elementGeometry(stateAt(zhou, props.elements, t), frame);
+      const [left, top, right, bottom] = boxOnScreen(cameraAt(props.camera, t), depth, box, kx);
+      assert.ok(left >= 0.05 && right <= 0.95 && top >= 0.05 && bottom <= 0.95, aspect + " " + t.toFixed(2) + "s: keep Zhou inside the frame");
+    }
   }
 });
 
