@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { compileTimeline, phraseTime, resolveAt, mergeTheme, researchSources, sourceList, credit, CUE_LEAD, boundaryTransition, transitionSfx } from "../cli/lib/timeline/index.mjs";
-import { example } from "./helpers.mjs";
+import { example, ROOT } from "./helpers.mjs";
 import { mutedBackdrop, placeCaptions } from "../cli/lib/captions/layout.mjs";
 import { linePointTimes, lineProgress, lineSegmentStart } from "../shared/line-reveal.mjs";
 import { prepareCutMusic, loadMusicGrid, compileMusic } from "../cli/lib/audio/music.mjs";
@@ -86,6 +86,48 @@ test("compiled defaults break fade chains at chapter turns without overriding an
   const cut = cuts.indexOf("cut") + 1;
   ex.storyboard.scenes[cut].enter = "fade";
   assert.equal(render()[cut].transitionIn.type, "fade");
+});
+
+test("mixed-source scenes dissolve across the visual cut without shifting narration or captions", () => {
+  const read = (file) => JSON.parse(readFileSync(join(ROOT, "examples", "mixed-source", file), "utf8"));
+  const config = read("onevideo.json");
+  const script = read("plan/script.json");
+  const storyboard = read("plan/storyboard.json");
+  const assets = read("plan/assets.json");
+  assets.items = assets.items.map((a) => ({
+    ...a, file: `assets/${a.id}.${a.kind === "video" ? "mp4" : "jpg"}`,
+    ...(a.generate && { license: "generated" }),
+  }));
+  const timings = { scenes: Object.fromEntries(storyboard.scenes.map((s, i) => [s.id, {
+    file: `audio/${s.id}.wav`, duration: 10 - s.hold,
+    lines: [{ text: script.scenes[i].narration, start: 0.15, end: 2 }],
+  }])) };
+  const { errors, timeline } = compileTimeline({ config, script, storyboard, assets, timings });
+  assert.deepEqual(errors, []);
+  const { scenes, narration, captions } = timeline;
+  assert.deepEqual(scenes.map((s) => [
+    s.props.asset, timeline.assets[s.props.asset].kind, timeline.assets[s.props.asset].generated ?? false,
+  ]), [["launch", "video", false], ["bootprint", "image", false], ["horizon", "image", true]]);
+  assert.equal(timeline.assets.horizon.credit, null);
+  assert.equal(timeline.totalFrames, 900);
+  assert.deepEqual(scenes.map((s) => [s.from, s.durationInFrames, s.audio]), [
+    [0, 300, "audio/launch.wav"], [300, 300, "audio/bootprint.wav"], [600, 300, "audio/horizon.wav"],
+  ]);
+  assert.deepEqual(scenes.slice(1).map((s) => s.transitionIn), [
+    { type: "fade", frames: 18, lead: 9, direction: "left" },
+    { type: "fade", frames: 21, lead: 10, direction: "left" },
+  ]);
+  assert.deepEqual(scenes.slice(0, -1).map((s) => s.transitionOut), [
+    { type: "fade", frames: 18, tail: 9, direction: "left", nextOpaque: true },
+    { type: "fade", frames: 21, tail: 11, direction: "left", nextOpaque: true },
+  ]);
+  assert.deepEqual(narration, [[0.15, 2], [10.15, 12], [20.15, 22]]);
+  assert.deepEqual(captions.items.map((line) => [line.start, line.end]), narration);
+
+  delete assets.items.find((a) => a.id === "horizon").file;
+  assert.deepEqual(compileTimeline({ config, script, storyboard, assets, timings }).errors, [
+    'asset "horizon" not fetched yet; run: onevideo assets fetch',
+  ]);
 });
 
 const lines = [{ text: "1990年，全球第一", start: 0.2, end: 2.2 }, { text: "36年后，苹果排第一", start: 2.5, end: 4.5 }];
