@@ -44,7 +44,7 @@
 - 图标：任意 props 里的 `icon` 字段写 Lucide 名（`rocket`、`user-round`）或 `flag:<iso2>`（圆形国旗），编译时只内联用到的 SVG；未知名字会报错。
 - `background`：`default`、`plain`、`grid`、`stars`、`aurora`（流动光带）、`particles`（漂移星座连线）、`waves`（等高波纹）、`media`。后三种是纯代码绘制、逐帧确定的背景，风格 `vector-flow` 默认 `aurora`。
 - **纯代码可用的场景**（`graphics` 流水线 / `drawn: true`）：title、chapter、stat-cards、bar-compare、bar-race、line-chart、share、timeline、compare、quote（不带 `asset`）、bullets、sources、kinetic、headline、unit-grid、scale-compare、price-chart、map、canvas（不含 image 元素）。media、focus、split、photo-stack、footage、parallax、device、match-cut 需要素材，drawn 门控会报错。
-- **逐场混剪**：在同一个非纯绘制项目里，每个场景独立选画面。不必换场景类型：三个 `footage` 场景的 `props.asset` 可以依次指向 `plan/assets.json` 中的实拍视频（`kind: "video"`）、实拍照片（`kind: "image"`）和 AI 插画（`generate`，取回后仍是图片，许可记为 `generated`）。也可以接一个不引用素材的 `canvas` 或 `tableau` 场景。下一场的 `enter: { "type": "fade", "duration": 0.6 }` 会让画面在接缝两侧重叠，旁白和字幕仍按原时间轴播放。实拍片段取回时去掉原声；静帧可通过 `shots` 推拉。完整示例见 [月面留下的脚印](../examples/mixed-source/README.md)。
+- **逐场混剪**：在同一个非纯绘制项目里，每个场景独立选画面。`footage` 和 `media` 的 `props.asset` 都可以指向 `plan/assets.json` 中的实拍视频（`kind: "video"`）、实拍照片（`kind: "image"`）和 AI 插画（`generate`，取回后仍是图片，许可记为 `generated`）。也可以接一个不引用素材的 `canvas` 或 `tableau` 场景。下一场的 `enter: { "type": "fade", "duration": 0.6 }` 会让画面在接缝两侧重叠，旁白和字幕仍按原时间轴播放。实拍片段取回时去掉原声；静帧可通过 `shots` 推拉，使用 `media` 的 `fit: "contain"` 避免画幅裁掉主体。完整示例见 [月面留下的脚印](../examples/mixed-source/README.md)。
 - `hold`：旁白结束后停留的时间（默认 0.5s）；`duration` / `minDuration` 给无旁白或需要更长停留的场景。
 - `sfx: [{sound, at}]`：`at` 同 cue 语法。
 - `intent`：一句话写明这个画面要让观众记住什么，方便审稿。

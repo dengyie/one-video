@@ -25,11 +25,11 @@
     },
     {
       "id": "horizon",
-      "type": "footage",
+      "type": "media",
       "intent": "想象中的月面插画：从脚印的尺度拉开到寂静的地平线。",
       "enter": { "type": "fade", "duration": 0.7 },
       "camera": "static",
-      "props": { "asset": "horizon", "dim": 0 },
+      "props": { "asset": "horizon", "fit": "contain", "motion": "none", "dim": 0 },
       "shots": [{ "at": 0, "x": 0.5, "y": 0.474, "zoom": 1.06 }, { "at": 8.2, "x": 0.5, "y": 0.5, "zoom": 1 }],
       "hold": 0.65
     }

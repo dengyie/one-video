@@ -124,6 +124,18 @@ test("mixed-source scenes dissolve across the visual cut without shifting narrat
   assert.deepEqual(narration, [[0.15, 2], [10.15, 12], [20.15, 22]]);
   assert.deepEqual(captions.items.map((line) => [line.start, line.end]), narration);
 
+  const portrait = compileTimeline({
+    config: { ...config, aspect: "9:16", width: undefined, height: undefined }, script, storyboard, assets, timings,
+  });
+  assert.deepEqual(portrait.errors, []);
+  assert.deepEqual([portrait.timeline.width, portrait.timeline.height], [1080, 1920]);
+  assert.deepEqual(portrait.timeline.scenes.slice(1).map((s) => [s.type, s.props.fit]), [
+    ["media", "contain"], ["media", "contain"],
+  ]);
+  assert.deepEqual(portrait.timeline.scenes.map((s) => s.transitionIn), scenes.map((s) => s.transitionIn));
+  assert.deepEqual(portrait.timeline.narration, narration);
+  assert.deepEqual(portrait.timeline.captions, captions);
+
   delete assets.items.find((a) => a.id === "horizon").file;
   assert.deepEqual(compileTimeline({ config, script, storyboard, assets, timings }).errors, [
     'asset "horizon" not fetched yet; run: onevideo assets fetch',
