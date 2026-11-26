@@ -254,6 +254,17 @@ test("fitOverlays moves overlays placed for 16:9 out of a 9:16 caption band and 
   assert.deepEqual(fitOverlays(tl, {}), [], "nothing left to move");
 });
 
+test("fitOverlays moves a stranded word down below an authored top-edge caption", () => {
+  const word = { type: "word", text: "脚印", x: 0.5, y: 0.05, size: 60, t: 0, end: 3 };
+  const timeline = { width: 1080, height: 1920,
+    captions: { items: [{ scene: "a", text: "到了月面", start: 0, end: 3, y: 0.02 }] },
+    scenes: [{ id: "a", type: "media", start: 0, duration: 3, overlays: [word] }],
+  };
+  assert.match(layoutGate(timeline, {})[0]?.msg, /move it down/);
+  assert.deepEqual(fitOverlays(timeline, {}), [{ scene: "a", i: 0, set: { y: 0.09 } }]);
+  assert.deepEqual(layoutGate(timeline, {}), []);
+});
+
 test("the layout gate checks the authored caption height instead of the default band", () => {
   const isCollision = (y, { text = "旁白", x = 0.5 } = {}) => layoutGate({
     width: 1080, height: 1920,

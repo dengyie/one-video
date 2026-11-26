@@ -72,7 +72,7 @@ export function layoutGate(timeline, config) {
       const vis = seenBox(sc.shots, o.t, Math.min(o.end, sc.duration));
       const mapped = [];
       if (sc.type === "map") for (let t = o.t; t < o.end; t += 0.25) mapped.push(...mapBoxes(sc, t, width, height, pace));
-      // Where to move it: pulled inside the frame on screen (0.02 margin), then up to the first place that
+      // Where to move it: pulled inside the frame on screen (0.02 margin), then up or down to the first place that
       // stays out of the caption band through every shot move and clear of every sticker up at the same
       // time and of the map's pins and labels. Heights are tried in hundredths, so the suggestion is a value to type in.
       const others = boxes.filter((b, k) => b && k !== i && sc.overlays[k].t < o.end && o.t < sc.overlays[k].end);
@@ -87,16 +87,20 @@ export function layoutGate(timeline, config) {
         }
         const fit = size === undefined ? box : overlayBox({ ...o, size }, width, height);
         const dx = fit[0] < vis[0] + 0.02 ? vis[0] + 0.02 - fit[0] : fit[2] > vis[2] - 0.02 ? vis[2] - 0.02 - fit[2] : 0;
-        const dy0 = fit[1] < vis[1] + 0.02 ? vis[1] + 0.02 - fit[1] : fit[3] > vis[3] - 0.02 ? vis[3] - 0.02 - fit[3] : 0;
         const y0 = o.y ?? 0.5;
-        for (let y = Math.floor((y0 + dy0) * 100 + 1e-6) / 100; fit[1] + y - y0 >= vis[1] + 0.02 - 1e-9; y = r2(y - 0.01)) {
-          const dy = y - y0;
-          const bx = [fit[0] + dx, fit[1] + dy, fit[2] + dx, fit[3] + dy];
-          if (bandHit(bx) || others.some((b) => meets(b, bx)) || mapped.some((m) => meets(m.box, bx))) continue;
-          const set = { ...(dx && { x: r2((o.x ?? 0.5) + dx) }), y: r2(y), ...(size !== undefined && { size }) };
-          const move = dx ? `move it to x ${set.x}, y ${set.y}` : `move it ${dy < 0 ? "up " : ""}to y ${set.y}`;
-          const text = size === undefined ? move : `reduce its size to ${size}${dx || dy ? ` and ${move}` : ""}`;
-          return { text, fix: { scene: sc.id, path: ["overlays", i], set } };
+        const lo = Math.ceil((y0 + vis[1] + 0.02 - fit[1]) * 100 - 1e-6);
+        const hi = Math.floor((y0 + vis[3] - 0.02 - fit[3]) * 100 + 1e-6);
+        const start = Math.min(hi, Math.max(lo, y0 * 100));
+        for (const [first, step] of [[Math.floor(start + 1e-6), -1], [Math.ceil(start + 1e-6), 1]]) {
+          for (let row = first; row >= lo && row <= hi; row += step) {
+            const y = row / 100, dy = y - y0;
+            const bx = [fit[0] + dx, fit[1] + dy, fit[2] + dx, fit[3] + dy];
+            if (bandHit(bx) || others.some((b) => meets(b, bx)) || mapped.some((m) => meets(m.box, bx))) continue;
+            const set = { ...(dx && { x: r2((o.x ?? 0.5) + dx) }), y, ...(size !== undefined && { size }) };
+            const move = dx ? `move it to x ${set.x}, y ${set.y}` : `move it ${dy < 0 ? "up " : dy > 0 ? "down " : ""}to y ${set.y}`;
+            const text = size === undefined ? move : `reduce its size to ${size}${dx || dy ? ` and ${move}` : ""}`;
+            return { text, fix: { scene: sc.id, path: ["overlays", i], set } };
+          }
         }
         return null;
       };
@@ -105,7 +109,7 @@ export function layoutGate(timeline, config) {
       if (cropped) out.push(issue("warn", "layout", `${name} runs off the frame at x ${o.x ?? 0.5}, y ${o.y ?? 0.5}${box[0] < -0.01 || box[1] < -0.01 || box[2] > 1.01 || box[3] > 1.01 ? "" : " once the shot pushes in"} — ${moved?.text ?? "move it inward"}`, at, moved?.fix));
       if (o.type === "image" && (o.size ?? 160) < g.minSticker) out.push(issue("warn", "layout", `${name}: size ${o.size ?? 160} reads as a thumbnail — use ${g.minSticker}+ or make it a backdrop / photo-stack (gates.minSticker)`, at));
       const hit = bandHit(box);
-      if (hit) out.push(issue("error", "layout", `${name} sits in the caption band while "${hit.text}" is spoken — ${moved?.text ?? `move it above y ${portrait ? 0.7 : 0.8}`} or to a side`, at, moved?.fix));
+      if (hit) out.push(issue("error", "layout", `${name} sits in the caption band while "${hit.text}" is spoken — ${moved?.text ?? (hit.box ? "move it clear vertically" : `move it above y ${portrait ? 0.7 : 0.8}`)} or to a side`, at, moved?.fix));
       for (const p of placed) if (p.o.t < o.end && o.t < p.o.end && meets(p.box, box)) out.push(issue("warn", "layout", `${name} overlaps overlay ${p.i} (${p.o.type}) — space them out or stagger their times`, at));
       if (sc.type === "map") {
         const hits = new Set(mapped.filter((m) => meets(m.box, box)).map((m) => m.what));
