@@ -23,6 +23,15 @@ test("footage upscale warnings account for the cover crop and the shot at render
   assert.deepEqual(footageUpscaleGate(portrait, { items: [{ id: "clip", kind: "video" }] }), []);
 });
 
+test("portrait footage with a blurred backdrop checks the sharp inset, not the cover copy", () => {
+  const scene = { id: "hook", type: "footage", props: { asset: "clip", portraitBackdropBlur: 34 }, start: 0, durationInFrames: 1 };
+  const assets = { items: [{ id: "clip", kind: "video", width: 1280, height: 720 }] };
+  const portrait = { aspect: "9:16", fps: 30, width: 1080, height: 1920, scenes: [scene] };
+  assert.deepEqual(footageUpscaleGate(portrait, assets), []);
+  assert.match(footageUpscaleGate({ ...portrait, aspect: "16:9", width: 3840, height: 2160 }, assets)[0].msg, /3\.00× by cover crop/);
+  assert.match(footageUpscaleGate(portrait, { items: [{ ...assets.items[0], width: 540 }] })[0].msg, /2\.00× by contain fit/);
+});
+
 test("the SpaceX example passes every pre-compose gate", () => {
   const ex = example();
   const issues = [

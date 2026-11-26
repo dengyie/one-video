@@ -1,0 +1,9 @@
+{
+  "title": "月面留下的脚印",
+  "summary": "从土星五号的尾焰，到月尘里的靴印，再到想象中寂静的月面。",
+  "scenes": [
+    { "id": "launch", "beat": "hook", "question": "登月之旅是怎么开始的？", "narration": "土星五号托着阿波罗十一号升空。火焰和白烟里，这趟登月之旅开始了。", "claims": ["launch"] },
+    { "id": "bootprint", "beat": "turn", "question": "宇航员在月面留下了什么？", "narration": "到了月面，镜头里只剩一枚靴印。浅浅的鞋纹，留在一层灰色的月尘里。", "claims": ["bootprint"] },
+    { "id": "horizon", "beat": "landing", "question": "从靴印前抬头，会是怎样一片景象？", "narration": "想象一下，把视线从脚印抬向远方。没有风，只有光照着这片安静的月面。", "claims": ["wind"] }
+  ]
+}

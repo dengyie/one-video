@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { REMOTION_BIN, TEMPLATE_DIR, run } from "../cli/lib/core/ffmpeg.mjs";
@@ -60,6 +60,57 @@ test("layout probe flags captions in a protected viewport without generating an 
   assert.match(issue.msg, /caption "Chapter two" covers a protected subject at 12.0s/);
   assert.equal(issue.at.field, "captions");
   assert.equal(issue.fix, undefined);
+});
+
+test("portrait footage aligns occlusion with the sharp inset, not the full-frame blur", { skip: !existsSync(REMOTION_BIN) && "needs template dependencies" }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ov-footage-inset-"));
+  try {
+    const publicDir = join(dir, "public");
+    mkdirSync(publicDir);
+    const svg = (background, subject) => `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="${background}"/><rect x="100" y="68" width="120" height="44" fill="${subject}"/></svg>`;
+    writeFileSync(join(publicDir, "subject.svg"), svg("#0033aa", "#e02020"));
+    writeFileSync(join(publicDir, "mask.svg"), svg("black", "white"));
+    writeFileSync(join(publicDir, "insert.svg"), svg("#20f020", "#20f020"));
+    const props = join(dir, "props.json"), job = join(dir, "job.json");
+    const matte = { mode: "near", threshold: 0.5, soft: 0.01 };
+    const screen = { asset: "insert", corners: [[0.08, 0.1], [0.92, 0.1], [0.92, 0.9], [0.08, 0.9]], t: 0, blend: "normal" };
+    const effects = [
+      { title: { text: "T", t: 0, y: 0.1, size: 40, behind: true, matte } },
+      { screen: { ...screen, occlude: { asset: "mask" } } },
+      { screen: { ...screen, occlude: { matte } } },
+      { windows: { asset: "insert", count: 1, t: 0, gap: 0, matte } },
+    ];
+    const theme = JSON.parse(readFileSync(new URL("../styles/midnight-data.json", import.meta.url), "utf8"));
+    writeFileSync(props, JSON.stringify({
+      width: 360, height: 640, aspect: "9:16", fps: 30, duration: 4, totalFrames: 120, theme,
+      captions: { enabled: false, items: [] }, sfx: [], narration: [], watermark: null,
+      assets: {
+        subject: { src: "subject.svg", kind: "image", depth: "mask.svg" },
+        mask: { src: "mask.svg", kind: "image" },
+        insert: { src: "insert.svg", kind: "image" },
+      },
+      scenes: effects.map((effect, i) => ({
+        id: `shot-${i}`, type: "footage", from: i * 30, start: i, duration: 1, durationInFrames: 30,
+        camera: { move: "static" }, props: { asset: "subject", portraitBackdropBlur: 30, dim: 0, ...effect },
+      })),
+    }));
+    const frames = effects.map((_, i) => ({ frame: 24 + i * 30, file: join(dir, `${i}.jpg`) }));
+    writeFileSync(job, JSON.stringify({ entry: "src/index.ts", props, publicDir, scale: 0.5, frames }));
+    await run(process.execPath, [join(TEMPLATE_DIR, "stills.mjs"), job]);
+    for (const [i, { file }] of frames.entries()) {
+      const { rgb, w } = await frameRgb(file, { width: 180 });
+      const pixel = (x, y) => rgb.subarray((y * w + x) * 3, (y * w + x) * 3 + 3);
+      const [r, g, b] = pixel(90, 160);
+      assert.ok(r > Math.max(g, b) + 50, `effect ${i}: the sharp red subject stays in front`);
+      const [leftR, leftG, leftB] = pixel(33, 160);
+      assert.ok(i === 0 ? leftB > leftR + 50 : leftG > Math.max(leftR, leftB) + 50,
+        `effect ${i}: the subject must not extend beyond its fitted width`);
+      const [topR, topG, topB] = pixel(90, 83);
+      assert.ok(topB > Math.max(topR, topG), `effect ${i}: the upper backdrop must remain untouched`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("kinetic number and unit fit the portrait shot through the count-up and hold", { skip: !existsSync(REMOTION_BIN) && "needs template dependencies" }, async () => {

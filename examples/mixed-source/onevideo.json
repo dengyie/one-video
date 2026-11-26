@@ -1,0 +1,13 @@
+{
+  "name": "mixed-source",
+  "title": "月面留下的脚印",
+  "pipeline": "documentary",
+  "style": "paper-documentary",
+  "language": "zh-CN",
+  "aspect": "16:9",
+  "width": 1280,
+  "height": 720,
+  "targetSeconds": 28,
+  "music": { "preset": "documentary", "volume": 0.17, "duckTo": 0.07 },
+  "tts": { "voice": "白桦", "tempo": "auto", "style": "平静、清晰的纪录片旁白，像在给朋友讲一个故事。" }
+}

@@ -1,5 +1,5 @@
-import React from "react";
-import { AbsoluteFill, Img, staticFile, useVideoConfig } from "remotion";
+import React, { useLayoutEffect, useState } from "react";
+import { AbsoluteFill, cancelRender, continueRender, delayRender, Img, staticFile, useVideoConfig } from "remotion";
 import { textEms, useLayout, useScene, useTheme, useTime, useTimeline } from "../engine/context";
 import { clamp01, easeInOut, easeOut, lerp } from "../engine/motion";
 import { seenSpan } from "../engine/camera";
@@ -80,31 +80,73 @@ function screenState(screen: ScreenInsert, t: number) {
 // Background revealed through vertical windows that open behind the subject (depth matte).
 type Windows = { asset: string; count?: number; t?: number; stagger?: number; gap?: number; matte?: Matte };
 
-export const FootageScene: React.FC<{ asset: string; startFrom?: number; ramp?: Ramp; dim?: number; title?: Title; tint?: string; screen?: ScreenInsert; windows?: Windows }> = ({
-  asset, startFrom = 0, ramp, dim = 0.12, title, tint, screen, windows,
+function useFootageSize(src: string | null, video: boolean) {
+  const [size, setSize] = useState<{ src: string; width: number; height: number; done: () => void }>();
+  useLayoutEffect(() => {
+    if (!src) return;
+    const handle = delayRender(`footage size: ${src}`);
+    let pending = true;
+    const done = () => { if (pending) { pending = false; continueRender(handle); } };
+    const media = document.createElement(video ? "video" : "img");
+    const ready = (width: number, height: number) => setSize({ src, width, height, done });
+    if (media instanceof HTMLVideoElement) {
+      media.preload = "metadata";
+      media.onloadedmetadata = () => ready(media.videoWidth, media.videoHeight);
+    } else {
+      media.onload = () => ready(media.naturalWidth, media.naturalHeight);
+    }
+    media.onerror = () => cancelRender(new Error(`could not read footage size from ${src}`));
+    media.src = src;
+    return () => {
+      media.onload = media.onerror = null;
+      if (media instanceof HTMLVideoElement) media.onloadedmetadata = null;
+      done();
+    };
+  }, [src, video]);
+  useLayoutEffect(() => { size?.done(); }, [size]);
+  return size?.src === src ? size : undefined;
+}
+
+export const FootageScene: React.FC<{ asset: string; startFrom?: number; ramp?: Ramp; portraitBackdropBlur?: number; dim?: number; title?: Title; tint?: string; screen?: ScreenInsert; windows?: Windows }> = ({
+  asset, startFrom = 0, ramp, portraitBackdropBlur, dim = 0.12, title, tint, screen, windows,
 }) => {
   const tl = useTimeline();
   const { width, height } = useVideoConfig();
+  const { u } = useLayout();
   const t = useTime();
   const a = tl.assets[asset];
   if (!a) throw new Error(`asset "${asset}" not in timeline.assets`);
   const s = startFrom + rampTime(Math.max(0, t), ramp, tl.fps);
+  const blur = tl.aspect === "9:16" ? portraitBackdropBlur : undefined;
+  const needsSharpBounds = Boolean(blur && (screen || windows || title?.behind));
+  const size = useFootageSize(needsSharpBounds ? (a.seq ? seqSrc(a, 0) : staticFile(a.src)) : null, a.kind === "video" && !a.seq);
+  const scale = size ? Math.min(width / size.width, height / size.height) : 1;
+  const sharpWidth = size ? size.width * scale : width;
+  const sharpHeight = size ? size.height * scale : height;
+  const inSharpFrame = (child: React.ReactNode) => size
+    ? <div style={{ position: "absolute", overflow: "hidden", left: (width - sharpWidth) / 2, top: (height - sharpHeight) / 2, width: sharpWidth, height: sharpHeight }}>{child}</div>
+    : child;
   const style: React.CSSProperties = { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" };
   const photo = a.kind === "video" ? (a.seq ? seqSrc(a, s) : null) : staticFile(a.src);
   const depth = depthSrc(a, s);
   const local = t - (title?.t ?? 0.2);
   const cut = title?.behind && photo && depth && local >= 0 && (title.duration === undefined || local < title.duration + 0.3);
   const base = (extra: React.CSSProperties = {}) => (a.kind === "video" ? <ClipVideo a={a} style={{ ...style, ...extra }} time={s} /> : <Img src={staticFile(a.src)} style={{ ...style, ...extra }} />);
+  const sharpBase = (extra?: React.CSSProperties) => base({ objectFit: blur ? "contain" : "cover", ...extra });
   const ins = screen && tl.assets[screen.asset];
   const insOn = screen ? easeOut((t - (screen.t ?? 0)) / 0.3) : 0;
   const mask = screen?.occlude?.asset ? tl.assets[screen.occlude.asset] : undefined;
   const win = windows && tl.assets[windows.asset];
   const n = windows?.count ?? 4, gap = windows?.gap ?? 0.02;
-  return (
-    <AbsoluteFill style={{ backgroundColor: "#000", overflow: "hidden" }}>
-      {base()}
+  const foreground = (matte?: Matte) => photo && depth && (
+    <ForegroundCut photo={photo} depth={depth} width={Math.round(sharpWidth)} height={Math.round(sharpHeight)} matte={matte} />
+  );
+  const sharpReady = !needsSharpBounds || size !== undefined;
+  const sharpLayers = (
+    <>
+      {sharpBase()}
       {ins && insOn > 0 && (
-        <div style={{ position: "absolute", left: 0, top: 0, width, height, transformOrigin: "0 0", transform: quadMatrix(screen.corners.map(([x, y]) => [x * width, y * height]), width, height), mixBlendMode: (screen.blend ?? "screen") === "screen" ? "screen" : "normal", opacity: (screen.opacity ?? 1) * insOn }}>
+        <div style={{ position: "absolute", left: 0, top: 0, width: sharpWidth, height: sharpHeight, transformOrigin: "0 0", transform: quadMatrix(screen.corners.map(([x, y]) => [x * sharpWidth, y * sharpHeight]), sharpWidth, sharpHeight), mixBlendMode: (screen.blend ?? "screen") === "screen" ? "screen" : "normal", opacity: (screen.opacity ?? 1) * insOn }}>
           {(() => {
             const ss = screenState(screen, t);
             const page = (id: string, scroll: number) => {
@@ -124,8 +166,8 @@ export const FootageScene: React.FC<{ asset: string; startFrom?: number; ramp?: 
           })()}
         </div>
       )}
-      {ins && insOn > 0 && mask && base({ maskImage: `url(${staticFile(mask.src)})`, WebkitMaskImage: `url(${staticFile(mask.src)})`, maskMode: "luminance", maskSize: "100% 100%", WebkitMaskSize: "100% 100%" } as React.CSSProperties)}
-      {ins && insOn > 0 && !mask && screen.occlude?.matte && photo && depth && <ForegroundCut photo={photo} depth={depth} width={width} height={height} matte={screen.occlude.matte} />}
+      {ins && insOn > 0 && mask && sharpBase({ maskImage: `url(${staticFile(mask.src)})`, WebkitMaskImage: `url(${staticFile(mask.src)})`, maskMode: "luminance", maskSize: "100% 100%", WebkitMaskSize: "100% 100%" } as React.CSSProperties)}
+      {ins && insOn > 0 && !mask && screen.occlude?.matte && foreground(screen.occlude.matte)}
       {win && Array.from({ length: n }, (_, i) => {
         const o = easeInOut((t - (windows.t ?? 0.4) - i * (windows.stagger ?? 0.12)) / 0.6);
         if (o <= 0) return null;
@@ -136,11 +178,17 @@ export const FootageScene: React.FC<{ asset: string; startFrom?: number; ramp?: 
           </AbsoluteFill>
         );
       })}
-      {win && photo && depth && t > (windows.t ?? 0.4) && <ForegroundCut photo={photo} depth={depth} width={width} height={height} matte={windows.matte ?? { mode: "near" }} />}
+      {win && t > (windows.t ?? 0.4) && foreground(windows.matte ?? { mode: "near" })}
+    </>
+  );
+  return (
+    <AbsoluteFill style={{ backgroundColor: "#000", overflow: "hidden" }}>
+      {blur && base({ filter: `blur(${blur * u}px) brightness(0.48)`, transform: "scale(1.12)" })}
+      {sharpReady && inSharpFrame(sharpLayers)}
       {tint && <AbsoluteFill style={{ background: tint, mixBlendMode: "soft-light" }} />}
       <AbsoluteFill style={{ background: `linear-gradient(180deg, rgba(0,0,0,${dim * 0.5}) 0%, rgba(0,0,0,${dim}) 55%, rgba(0,0,0,${Math.min(0.85, dim + 0.35)}) 100%)` }} />
       {title && <TitleText title={title} />}
-      {cut && <ForegroundCut photo={photo} depth={depth} width={width} height={height} matte={title.matte} />}
+      {sharpReady && cut && inSharpFrame(foreground(title.matte))}
     </AbsoluteFill>
   );
 };

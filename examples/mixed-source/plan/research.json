@@ -1,0 +1,21 @@
+{
+  "topic": "从发射到月面的脚印",
+  "asOf": "2026-11",
+  "facts": [
+    {
+      "id": "launch",
+      "claim": "阿波罗十一号由土星五号运载火箭发射升空。",
+      "source": { "publisher": "NASA", "title": "Apollo 11", "url": "https://www.nasa.gov/mission/apollo-11/" }
+    },
+    {
+      "id": "bootprint",
+      "claim": "阿波罗十一号的宇航员拍下了留在月球土壤上的靴印。",
+      "source": { "publisher": "NASA", "title": "Astronaut bootprint on the lunar surface", "url": "https://images.nasa.gov/details/as11-40-5877" }
+    },
+    {
+      "id": "wind",
+      "claim": "月球只有极稀薄的外逸层，月面没有像地球这样的风。",
+      "source": { "publisher": "NASA", "title": "Moon Facts · Atmosphere", "url": "https://science.nasa.gov/moon/facts/" }
+    }
+  ]
+}

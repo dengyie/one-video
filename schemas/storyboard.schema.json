@@ -1481,6 +1481,13 @@
             "contain"
           ]
         },
+        "portraitFit": {
+          "description": "override fit in 9:16",
+          "enum": [
+            "cover",
+            "contain"
+          ]
+        },
         "dim": {
           "type": "number",
           "minimum": 0,
@@ -2248,6 +2255,12 @@
         "startFrom": {
           "type": "number",
           "minimum": 0
+        },
+        "portraitBackdropBlur": {
+          "description": "9:16 only: keep the full asset sharp over a blurred cover copy at the same source time",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 40
         },
         "ramp": {
           "type": "array",

@@ -1,0 +1,29 @@
+{
+  "items": [
+    {
+      "id": "launch",
+      "kind": "video",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/6/61/Apollo_11_launch%2C_video_of_engines_at_500_fps_%28camera_E-8%29.ogv",
+      "source": "https://commons.wikimedia.org/wiki/File:Apollo_11_launch,_video_of_engines_at_500_fps_(camera_E-8).ogv",
+      "clip": [103, 26],
+      "title": "Apollo 11 launch, camera E-8",
+      "author": "NASA/Kennedy Space Center",
+      "license": "Public domain"
+    },
+    {
+      "id": "bootprint",
+      "kind": "image",
+      "url": "https://images-assets.nasa.gov/image/as11-40-5877/as11-40-5877~orig.jpg",
+      "source": "https://images.nasa.gov/details/as11-40-5877",
+      "title": "Astronaut bootprint on the lunar surface",
+      "author": "NASA",
+      "license": "Public domain"
+    },
+    {
+      "id": "horizon",
+      "kind": "image",
+      "title": "Lunar horizon illustration",
+      "generate": "Landscape illustration for a restrained lunar documentary, designed to survive a tall center crop. Distinctly hand-painted editorial gouache on textured paper, not a historical photo or a photoreal rendering. Stack the two focal elements on the vertical centerline: a small blue Earth centered at 50% width and 28% height, and one understated astronaut bootprint directly below it at 50% width and 68% height. Keep their entire silhouettes inside the central 25% of the image width; the left and right sides are expendable negative space. A low, quiet ridge crosses the image between Earth and the bootprint; silvery powdered regolith in the foreground, ink-black sky above. Charcoal and pale silver with a subtle cold blue accent, late raking sunlight from the left. Rich soil texture, quiet atmosphere. No people, machines, flags, lettering or logos."
+    }
+  ]
+}

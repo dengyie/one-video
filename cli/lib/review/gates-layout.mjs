@@ -186,15 +186,18 @@ export function footageUpscaleGate(timeline, assets) {
     if (sc.type !== "footage") continue;
     const a = byId.get(sc.props.asset);
     if (a?.kind !== "video" || !(a.width > 0 && a.height > 0)) continue;
-    const cover = Math.max(timeline.width / a.width, timeline.height / a.height);
+    const fit = timeline.aspect === "9:16" && sc.props.portraitBackdropBlur ? "contain" : "cover";
+    const scales = [timeline.width / a.width, timeline.height / a.height];
+    const scaleToFrame = fit === "contain" ? Math.min(...scales) : Math.max(...scales);
     let peak = 0, peakFrame = 0;
     for (let frame = 0; frame < sc.durationInFrames + (sc.transitionOut?.tail ?? 0); frame++) {
-      const scale = cover * viewAt(sc.shots, frame / timeline.fps).zoom;
+      const scale = scaleToFrame * viewAt(sc.shots, frame / timeline.fps).zoom;
       if (scale > peak) { peak = scale; peakFrame = frame; }
     }
     if (peak < HEAVY_UPSCALE) continue;
     const from = sc.start + peakFrame / timeline.fps;
-    out.push(issue("warn", "assets", `scene "${sc.id}" footage "${a.id}": ${a.width}×${a.height} source enlarged up to ${peak.toFixed(2)}× by cover crop and shot zoom; use a higher-resolution or aspect-matched clip, or reduce the shot zoom`,
+    const framing = fit === "contain" ? "contain fit" : "cover crop";
+    out.push(issue("warn", "assets", `scene "${sc.id}" footage "${a.id}": ${a.width}×${a.height} source enlarged up to ${peak.toFixed(2)}× by ${framing} and shot zoom; use a higher-resolution or aspect-matched clip, or reduce the shot zoom`,
       { scene: sc.id, from, to: from + 1 / timeline.fps }));
   }
   return out;
