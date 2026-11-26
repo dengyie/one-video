@@ -80,7 +80,7 @@
       "props": {
         "inherit": true,
         "elements": [
-          { "id": "town", "to": [{ "cue": "all", "dur": 3.2, "lit": 1 }] },
+          { "id": "town", "to": [{ "cue": "all", "dur": 1.5, "lit": 1 }] },
           { "id": "snowfall", "to": [{ "cue": "valley", "dur": 3, "intensity": 0.45 }] },
           { "id": "fog", "to": [{ "cue": "valley", "dur": 3, "cover": 0.6, "h": 0.1 }] },
           { "id": "postman", "to": [{ "cue": "see", "dur": 0.6, "lantern": 0.8 }] }

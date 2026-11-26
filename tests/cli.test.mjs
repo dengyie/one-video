@@ -571,6 +571,26 @@ test("Postman pulls back to the valley before cutting attention back to the lant
   }
 });
 
+test("Postman's windows light up during the spoken lighting line", async () => {
+  const dir = join(ROOT, "examples", "postman");
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...json(join(dir, "onevideo.json")), aspect };
+    const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
+    assert.deepEqual(errors, []);
+    const { cues, lines, props } = timeline.scenes.find((scene) => scene.id === "lights");
+    const town = props.elements.find(({ id }) => id === "town");
+    const lit = (t) => stateAt(town, props.elements, t).lit;
+    const spoken = phraseTime(lines, "点亮了");
+    const line = lines.find(({ text }) => text.includes("点亮了"));
+    assert.ok(spoken > cues.all && line, `${aspect}: find the spoken lighting line`);
+    assert.equal(lit(cues.all), 0, `${aspect}: the windows start dark`);
+    assert.ok(lit((cues.all + spoken) / 2) >= 0.25, `${aspect}: the windows visibly start lighting within the line`);
+    assert.equal(lit(line.end), 1, `${aspect}: the town is lit before the line ends`);
+  }
+});
+
 test("Postman shows the whole illuminated town during the valley reveal", async () => {
   const dir = join(ROOT, "examples", "postman");
   const script = json(join(dir, "plan", "script.json"));
