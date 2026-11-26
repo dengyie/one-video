@@ -55,6 +55,28 @@ test("Promo Demo captures the detail page for the same card the storyboard taps"
   assert.deepEqual(result.click, [tappedSelector]);
 });
 
+test("Promo Demo opens the detail before the narrator describes the summary and downloads", async () => {
+  const dir = join(ROOT, "examples", "promo-demo");
+  const config = json(join(dir, "onevideo.json"));
+  const [storyboard, script, assets] = ["storyboard", "script", "assets"].map((name) => json(join(dir, "plan", `${name}.json`)));
+  for (const item of assets.items) {
+    item.file = `assets/${item.id}.png`;
+    item.rects = Object.fromEntries(Object.keys(item.capture.selectors).map((name) => [name, [0.1, 0.4, 0.8, 0.1]]));
+  }
+  const timings = await estimatedTimings(script, config);
+  for (const aspect of ["16:9", "9:16"]) {
+    const { timeline, errors } = compileTimeline({ config: { ...config, aspect }, script, storyboard, assets, timings });
+    assert.deepEqual(errors, []);
+    const { props, lines } = timeline.scenes.find((scene) => scene.id === "open");
+    const [tap, detail] = props.steps;
+    assert.ok(tap.tap && detail.screen === "detail" && detail.focus);
+    assert.ok(tap.t < detail.t && detail.t - tap.t <= 0.3, aspect + ": the card tap directly opens the detail");
+    const summary = phraseTime(lines, "简介"), download = phraseTime(lines, "下载");
+    assert.ok(summary !== null && detail.t + 0.4 <= summary, aspect + ": finish switching pages before the summary is spoken");
+    assert.ok(download !== null && detail.t + 0.8 <= download, aspect + ": settle the close-up before the download is spoken");
+  }
+});
+
 test("Keeper has the new lighthouse lamp framed when the narration reveals it", async () => {
   const dir = join(ROOT, "examples", "keeper");
   const base = json(join(dir, "onevideo.json"));
@@ -194,6 +216,25 @@ test("SpaceX Motion keeps a local scrim on featured words over the launch plume"
       const overlay = hook.overlays.find((o) => o.type === "word" && o.text === text);
       assert.ok(overlay?.scrim > 0, `${aspect}: ${text} needs backing even without luma sidecars`);
     }
+  }
+});
+
+test("SpaceX Motion shows connectivity revenue between the total and share callouts", () => {
+  const dir = join(ROOT, "examples", "spacex-motion");
+  const read = (p) => json(join(dir, p));
+  const script = read("plan/script.json"), storyboard = read("plan/storyboard.json"), assets = read("plan/assets.json");
+  for (const asset of assets.items) asset.file = `assets/${asset.id}`;
+  const timings = json(join(ROOT, "tests", "fixtures", "spacex-motion-timings.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const { timeline, errors } = compileTimeline({ config: { ...read("onevideo.json"), aspect }, script, storyboard, assets, timings });
+    assert.deepEqual(errors, []);
+    const { lines, overlays } = timeline.scenes.find((scene) => scene.id === "revenue");
+    const [total, connectivity, share] = overlays;
+    assert.equal(connectivity.text, "连接业务 $114亿");
+    const said = phraseTime(lines, "114亿");
+    assert.ok(said !== null && Math.abs(connectivity.t - (said - CUE_LEAD)) < 0.002, aspect + ": reveal the number on its spoken cue");
+    assert.ok(total.end <= connectivity.t && connectivity.end <= share.t, aspect + ": keep the three callouts separate");
+    assert.ok(connectivity.end - connectivity.t >= 1, aspect + ": keep the breakdown readable");
   }
 });
 

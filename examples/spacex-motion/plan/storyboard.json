@@ -358,6 +358,17 @@
         },
         {
           "type": "word",
+          "text": "连接业务 $114亿",
+          "style": "rise",
+          "at": "114亿",
+          "y": 0.42,
+          "size": 120,
+          "duration": 1.65,
+          "scrim": 0.85,
+          "sfx": null
+        },
+        {
+          "type": "word",
           "text": "星链 > 60%",
           "style": "slam",
           "at": "超过六成",
