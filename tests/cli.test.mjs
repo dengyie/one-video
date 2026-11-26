@@ -561,10 +561,31 @@ test("Postman pulls back to the valley before cutting attention back to the lant
     const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
     assert.deepEqual(errors, []);
     const lights = timeline.scenes.find((scene) => scene.id === "lights");
-    const wide = lights.props.camera.find(({ zoom }) => zoom === 1.05);
+    const wide = lights.props.camera.find(({ cue }) => cue === "wide");
     const lantern = lights.props.camera.at(-1);
     assert.ok(wide.t < lights.cues.valley, `${aspect}: pull back as the narrator introduces the whole town`);
     assert.ok(wide.t + wide.dur < lantern.t, `${aspect}: let the valley shot settle before moving to the lantern`);
+  }
+});
+
+test("Postman shows the whole illuminated town during the valley reveal", async () => {
+  const dir = join(ROOT, "examples", "postman");
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...json(join(dir, "onevideo.json")), aspect };
+    const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
+    assert.deepEqual(errors, []);
+    const { cues, props } = timeline.scenes.find((scene) => scene.id === "lights");
+    const frame = { W: timeline.width, H: timeline.height };
+    const { kx } = stageOf(frame.W, frame.H);
+    const town = props.elements.find(({ id }) => id === "town");
+    const lantern = props.camera.at(-1);
+    for (let t = cues.valley; t < lantern.t; t += 1 / timeline.fps) {
+      const { depth, box } = elementGeometry(stateAt(town, props.elements, t), frame);
+      const [left, top, right, bottom] = boxOnScreen(cameraAt(props.camera, t), depth, box, kx);
+      assert.ok(left >= 0.03 && right <= 0.97 && top >= 0.05 && bottom <= 0.8, aspect + " " + t.toFixed(2) + "s: keep the lit town in frame above the captions");
+    }
   }
 });
 
