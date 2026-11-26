@@ -190,6 +190,24 @@ test("SpaceX IPO lands chart details on their narration in both aspects", async 
   }
 });
 
+test("SpaceX IPO keeps the xAI valuation labeled after the IPO point arrives", async () => {
+  const { config: base, script, storyboard, fetchedAssets: assets } = example();
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...base, aspect };
+    const { timeline, errors } = compileTimeline({ config, script, storyboard, assets, timings: await estimatedTimings(script, config) });
+    assert.deepEqual(errors, []);
+    const scene = timeline.scenes.find(({ id }) => id === "valuation");
+    const { annotations, series, pointCues } = scene.props;
+    const i = series[0].points.findIndex(([date]) => date === "2026.02");
+    assert.ok(i >= 0 && i < series[0].points.length - 1);
+    const [date, value] = series[0].points[i];
+    const note = annotations.find(({ x }) => x === date);
+    assert.equal(note.cue, pointCues[i]);
+    assert.ok(note.label.includes("xAI") && note.label.includes(`${value / 1e12}万亿`));
+    assert.ok(scene.cues[note.cue] < scene.cues[pointCues.at(-1)]);
+  }
+});
+
 test("Graphics Demo keeps its final light-travel comparison compact in portrait", async () => {
   const dir = join(ROOT, "examples", "graphics-demo");
   const config = { ...json(join(dir, "onevideo.json")), aspect: "9:16" };
