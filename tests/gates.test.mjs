@@ -275,6 +275,9 @@ test("the layout gate checks the authored caption height instead of the default 
   assert.equal(isCollision(0.40), true);
   assert.equal(isCollision(0.44), false);
   assert.equal(isCollision(0.44, { text: "旁白".repeat(12) }), true);
+  const compound = "worldwide-worldwide-worldwide-worldwide";
+  assert.equal(isCollision(0.44, { text: compound, x: 0.15 }), true);
+  assert.equal(isCollision(0.44, { text: compound.replaceAll("-", "‑") }), false);
   assert.equal(isCollision(0.40, { x: 0.25 }), false);
   assert.equal(isCollision(0.80), false);
 });

@@ -31,15 +31,16 @@ export const captionPlateMetrics = (u, portrait) => ({
 export function authoredCaptionBox(text, y, width, height, portrait) {
   const { fontSize, lineHeight, padX, padY, letterSpacing } = captionPlateMetrics(Math.min(width, height) / 1080, portrait);
   const limit = width * captionWidth(portrait) - 2 * padX;
-  let rows = 1, row = 0, widest = 0, space = 0;
-  for (const token of text.trim().match(/[\u2e80-\uffef]|[^\s\u2e80-\uffef]+|\s+/gu) ?? []) {
+  let rows = 1, row = 0, space = 0;
+  const tokens = text.trim().match(/[\u2e80-\uffef]|[^\s\u2e80-\uffef]+|\s+/gu) ?? [];
+  for (const token of tokens.flatMap((run) => run.split(/(?<=[\p{L}\p{N}][-\u2010])(?=[\p{L}\p{N}])/u))) {
     const advance = textEms(token) * fontSize + [...token].length * letterSpacing;
     if (!token.trim()) { space = advance; continue; }
-    if (row && row + space + advance > limit) { widest = Math.max(widest, row); rows++; row = 0; }
+    if (row && row + space + advance > limit) { rows++; row = 0; }
     row += (row ? space : 0) + advance;
     space = 0;
   }
-  const half = (Math.min(limit, Math.max(widest, row)) + 2 * padX) / width / 2;
+  const half = ((rows > 1 ? limit : Math.min(limit, row)) + 2 * padX) / width / 2;
   return [0.5 - half, y, 0.5 + half, y + (rows * fontSize * lineHeight + 2 * padY) / height];
 }
 
