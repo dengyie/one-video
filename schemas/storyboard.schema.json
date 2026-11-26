@@ -1097,6 +1097,12 @@
             "pattern": "^(#[0-9A-Fa-f]{3,8}|[a-z]+)$"
           }
         },
+        "maxSwapDuration": {
+          "type": "number",
+          "minimum": 0.3,
+          "maximum": 1.6,
+          "description": "Maximum duration in seconds of each ranking swap (default 1.6)"
+        },
         "periodCues": {
           "type": "array",
           "items": {

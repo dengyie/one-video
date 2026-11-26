@@ -110,6 +110,7 @@
           "2010",
           "2026"
         ],
+        "maxSwapDuration": 0.45,
         "groupColors": {
           "美国": "#4F8CFF",
           "日本": "#F87171",
