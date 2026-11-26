@@ -30,7 +30,24 @@
           "player": ".player",
           "summary": ".summary",
           "chapters": ".chapters",
+          "chapter": ".chapters button[data-i=\"1\"]",
           "actions": ".actions"
+        }
+      }
+    },
+    {
+      "id": "chapter-result",
+      "kind": "image",
+      "title": "跳转后（守灯人第二章）",
+      "license": "own",
+      "capture": {
+        "url": "https://vedio.mangoqwq.com/w/promo-demo",
+        "device": "phone",
+        "wait": 7500,
+        "click": [".card:not([aria-current])", ".chapters button[data-i=\"1\"]"],
+        "selectors": {
+          "player": ".player",
+          "activeChapter": ".chapters button[data-i=\"1\"][aria-current=\"true\"]"
         }
       }
     }
