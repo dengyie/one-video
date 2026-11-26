@@ -8,6 +8,7 @@ import { Card } from "../components/Card";
 import { Stage, Title } from "./Stage";
 import { statCardColumns } from "../../../shared/safe-layout.mjs";
 import { linePointTimes, lineProgress } from "../../../shared/line-reveal.mjs";
+import { barRaceSwapDuration } from "../../../shared/bar-race.mjs";
 
 // Count-ups finish fast: the number should be readable while the voice is still saying it.
 const COUNT = 0.8;
@@ -144,8 +145,8 @@ export function periodTimes(n: number, duration: number, cueAt: (k: number) => n
   return out;
 }
 
-export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Format; top?: number; periods: string[]; series: Series[]; groupColors?: Record<string, string>; periodCues?: (string | null)[] }> = ({
-  title, unit, format, top = 10, periods, series, groupColors = {}, periodCues = [],
+export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Format; top?: number; periods: string[]; series: Series[]; groupColors?: Record<string, string>; periodCues?: (string | null)[]; maxSwapDuration?: number }> = ({
+  title, unit, format, top = 10, periods, series, groupColors = {}, periodCues = [], maxSwapDuration,
 }) => {
   const theme = useTheme();
   const scene = useScene();
@@ -161,7 +162,7 @@ export const BarRaceScene: React.FC<{ title?: string; unit?: string; format?: Fo
   const i = seg;
   const next = (i + 2 < periods.length ? T[i + 2] : scene.duration) - T[i + 1];
   // A short swap then a hold: crossing bars overlap, so keep the crossing brief and the ranking readable.
-  const p = easeInOut(clamp01((t - T[i + 1]) / Math.max(0.3, Math.min(1.6, next * 0.6))));
+  const p = easeInOut(clamp01((t - T[i + 1]) / barRaceSwapDuration(next, maxSwapDuration)));
   const pos = i + p;
   const rankAt = (k: number) => {
     const order = series.map((s, idx) => ({ idx, v: s.values[k] ?? -Infinity })).sort((a, b) => b.v - a.v);
