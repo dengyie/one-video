@@ -3,7 +3,7 @@ import { useCurrentFrame, useVideoConfig } from "remotion";
 import { useLayout, useTimeline } from "./context";
 import { clamp01, easeOut, easeOutBack, lerp } from "./motion";
 import type { Theme, Timeline } from "./types";
-import { deviceCaptionSlot } from "../../../shared/safe-layout.mjs";
+import { captionPlateMetrics, deviceCaptionSlot } from "../../../shared/safe-layout.mjs";
 import { captionAt, captionWindows } from "../../../shared/caption-timing.mjs";
 
 // Split into runs; numbers (with %/$/units glued on) and Latin words are the line's key tokens.
@@ -66,7 +66,8 @@ function captionPosition(item: Item, device: boolean, height: number, u: number,
   const slot = deviceCaptionSlot(height, u, portrait);
   const style: React.CSSProperties = device
     ? { top: slot.top, bottom: slot.bottom, alignItems: "center", overflow: "hidden" }
-    : item.top ? { top: (portrait ? 220 : 46) * u } : { bottom: (portrait ? 300 : 46) * u };
+    : item.y !== undefined ? { top: item.y * height }
+      : item.top ? { top: (portrait ? 220 : 46) * u } : { bottom: (portrait ? 300 : 46) * u };
   return { style, maxWidth: `${slot.width * 100}%` };
 }
 
@@ -86,6 +87,7 @@ export const Captions: React.FC = () => {
   const { item, fadeIn, opacity } = caption;
   const device = tl.scenes.some((s) => s.id === item.scene && s.type === "device");
   const position = captionPosition(item, device, height, u, portrait);
+  const { fontSize, lineHeight, padX, padY, letterSpacing } = captionPlateMetrics(u, portrait);
   const { colors, captionBg } = tl.theme;
   const progress = clamp01((t - item.start) / Math.max(0.1, item.end - item.start));
   const renderStyle = Object.hasOwn(CAPTION_STYLES, tl.captions.style) ? CAPTION_STYLES[tl.captions.style] : CAPTION_STYLES.line;
@@ -110,16 +112,16 @@ export const Captions: React.FC = () => {
           maxWidth: position.maxWidth,
           boxSizing: "border-box",
           pointerEvents: tl.probe ? "auto" : undefined,
-          fontSize: (portrait ? 54 : 42) * u,
-          lineHeight: 1.35,
+          fontSize,
+          lineHeight,
           textAlign: "center",
           color: colors.text,
           background: captionBg ?? "rgba(0,0,0,0.6)",
           fontWeight: 600,
-          padding: `${10 * u}px ${28 * u}px`,
+          padding: `${padY}px ${padX}px`,
           borderRadius: 12 * u,
           textShadow: "0 2px 6px rgba(0,0,0,0.75)",
-          letterSpacing: 0.5 * u,
+          letterSpacing,
           ...plate,
         }}
       >

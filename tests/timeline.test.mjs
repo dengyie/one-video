@@ -135,7 +135,10 @@ test("mixed-source scenes dissolve across the visual cut without shifting narrat
   assert.equal(portrait.timeline.scenes[0].props.portraitBackdropBlur, 34);
   assert.deepEqual(portrait.timeline.scenes.map((s) => s.transitionIn), scenes.map((s) => s.transitionIn));
   assert.deepEqual(portrait.timeline.narration, narration);
-  assert.deepEqual(portrait.timeline.captions, captions);
+  assert.deepEqual(portrait.timeline.captions, {
+    ...captions,
+    items: captions.items.map((item) => item.scene === "launch" ? item : { ...item, y: 0.36 }),
+  });
 
   delete assets.items.find((a) => a.id === "horizon").file;
   assert.deepEqual(compileTimeline({ config, script, storyboard, assets, timings }).errors, [
