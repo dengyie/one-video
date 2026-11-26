@@ -255,13 +255,16 @@ test("fitOverlays moves overlays placed for 16:9 out of a 9:16 caption band and 
 });
 
 test("the layout gate checks the authored caption height instead of the default band", () => {
-  const isCollision = (y) => layoutGate({
+  const isCollision = (y, { text = "旁白", x = 0.5 } = {}) => layoutGate({
     width: 1080, height: 1920,
-    captions: { enabled: true, items: [{ scene: "a", text: "旁白", start: 0, end: 4, y: 0.36 }] },
+    captions: { enabled: true, items: [{ scene: "a", text, start: 0, end: 4, y: 0.36 }] },
     scenes: [{ id: "a", type: "media", start: 0, duration: 4,
-      overlays: [{ type: "word", text: "脚印", x: 0.5, y, size: 100, t: 0, end: 4 }] }],
+      overlays: [{ type: "word", text: "脚印", x, y, size: 100, t: 0, end: 4 }] }],
   }, {}).some((i) => /caption band/.test(i.msg));
   assert.equal(isCollision(0.40), true);
+  assert.equal(isCollision(0.44), false);
+  assert.equal(isCollision(0.44, { text: "旁白".repeat(12) }), true);
+  assert.equal(isCollision(0.40, { x: 0.25 }), false);
   assert.equal(isCollision(0.80), false);
 });
 

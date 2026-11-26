@@ -107,14 +107,14 @@ export const cutBetween = (shots, a, b) => Boolean(shots?.some((s) => s.cut && s
 
 /** The caption band (screen) in the scene's own frame coordinates under the shot framing at t.
  * @param {ShotLike[] | undefined} shots @param {number} t @param {boolean} [portrait]
- * @param {{top:number, bottom:number, width:number, height:number}} [slot] @param {number} [y]
+ * @param {{top:number, bottom:number, width:number, height:number}} [slot] @param {[number, number, number, number]} [authored]
  * @returns {[number, number, number, number]} */
-export function captionBand(shots, t, portrait = false, slot, y) {
+export function captionBand(shots, t, portrait = false, slot, authored) {
   const sh = viewAt(shots, t);
   /** @param {number} v @param {number} c */
   const back = (v, c) => c + (v - 0.5) / sh.zoom;
   const [y0, y1] = slot ? [slot.top / slot.height, 1 - slot.bottom / slot.height]
-    : y !== undefined ? [y, y + 0.12] : portrait ? [0.74, 0.86] : [0.84, 0.96];
-  const [x0, x1] = slot ? [(1 - slot.width) / 2, (1 + slot.width) / 2] : [0.2, 0.8];
+    : authored ? [authored[1], authored[3]] : portrait ? [0.74, 0.86] : [0.84, 0.96];
+  const [x0, x1] = slot ? [(1 - slot.width) / 2, (1 + slot.width) / 2] : authored ? [authored[0], authored[2]] : [0.2, 0.8];
   return [back(x0, sh.x), back(y0, sh.y), back(x1, sh.x), back(y1, sh.y)];
 }
