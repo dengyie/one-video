@@ -78,6 +78,37 @@ test("Promo Demo opens the detail before the narrator describes the summary and 
   }
 });
 
+test("Promo Demo shows the player after tapping the same chapter it captures", async () => {
+  const dir = join(ROOT, "examples", "promo-demo");
+  const config = json(join(dir, "onevideo.json"));
+  const [storyboard, script, assets] = ["storyboard", "script", "assets"].map((name) => json(join(dir, "plan", `${name}.json`)));
+  const { screens, steps } = storyboard.scenes.find(({ id }) => id === "chapters").props;
+  const [tap, jump] = steps;
+  const capture = (screen) => assets.items.find(({ id }) => id === screen.asset).capture;
+  const before = capture(screens[0]), after = capture(screens.find(({ id }) => id === jump.screen));
+  const chapter = before.selectors[tap.tap];
+  assert.match(chapter, /^\.chapters button\[data-i="[1-9]\d*"\]$/);
+  assert.equal(after.url, before.url);
+  assert.deepEqual(after.click, [...before.click, chapter]);
+  assert.equal(after.selectors.activeChapter, chapter + '[aria-current="true"]');
+  assert.equal(after.selectors.player, before.selectors.player);
+  assert.equal(tap.expand, undefined);
+  for (const item of assets.items) {
+    item.file = `assets/${item.id}.png`;
+    item.rects = Object.fromEntries(Object.keys(item.capture.selectors).map((name) => [name, [0.1, 0.4, 0.8, 0.1]]));
+  }
+  const timings = await estimatedTimings(script, config);
+  for (const aspect of ["16:9", "9:16"]) {
+    const { timeline, errors } = compileTimeline({ config: { ...config, aspect }, script, storyboard, assets, timings });
+    assert.deepEqual(errors, []);
+    const scene = timeline.scenes.find(({ id }) => id === "chapters");
+    const [tapped, switched] = scene.props.steps;
+    assert.ok(tapped.t < switched.t && switched.t - tapped.t <= 0.3, `${aspect}: switch the player promptly after tapping`);
+    assert.ok(switched.t < phraseTime(scene.lines, "跳过去"), `${aspect}: show the seek as it is narrated`);
+    assert.ok(scene.duration - switched.t >= 1, `${aspect}: hold the new player time long enough to read`);
+  }
+});
+
 test("Keeper has the new lighthouse lamp framed when the narration reveals it", async () => {
   const dir = join(ROOT, "examples", "keeper");
   const base = json(join(dir, "onevideo.json"));
