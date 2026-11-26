@@ -66,7 +66,8 @@ function captionPosition(item: Item, device: boolean, height: number, u: number,
   const slot = deviceCaptionSlot(height, u, portrait);
   const style: React.CSSProperties = device
     ? { top: slot.top, bottom: slot.bottom, alignItems: "center", overflow: "hidden" }
-    : item.top ? { top: (portrait ? 220 : 46) * u } : { bottom: (portrait ? 300 : 46) * u };
+    : item.y !== undefined ? { top: item.y * height }
+      : item.top ? { top: (portrait ? 220 : 46) * u } : { bottom: (portrait ? 300 : 46) * u };
   return { style, maxWidth: `${slot.width * 100}%` };
 }
 

@@ -385,6 +385,12 @@
         "captions": {
           "type": "boolean"
         },
+        "captionY": {
+          "description": "Top edge of narration captions as a fraction of frame height, by aspect. Device scenes keep their reserved caption slot.",
+          "type": "object",
+          "propertyNames": { "enum": ["16:9", "9:16", "1:1", "4:5"] },
+          "additionalProperties": { "type": "number", "minimum": 0, "maximum": 0.85 }
+        },
         "intent": {
           "type": "string"
         },

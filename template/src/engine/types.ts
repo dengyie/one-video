@@ -103,7 +103,7 @@ export type Timeline = {
   duration: number;
   theme: Theme;
   watermark: Watermark | null;
-  captions: { enabled: boolean; style: "line" | "karaoke" | "kinetic" | "none"; items: { scene: string; text: string; start: number; end: number; top?: boolean }[] };
+  captions: { enabled: boolean; style: "line" | "karaoke" | "kinetic" | "none"; items: { scene: string; text: string; start: number; end: number; top?: boolean; y?: number }[] };
   narration: [number, number][];
   // `offset`: seconds into the track the video starts at.
   music: { src: string; offset?: number; volume: number; duckTo: number; fade: number; credit?: string | null } | null;

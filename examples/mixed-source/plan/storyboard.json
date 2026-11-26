@@ -12,6 +12,7 @@
     {
       "id": "bootprint",
       "type": "media",
+      "captionY": { "9:16": 0.36 },
       "intent": "档案照片：由完整鞋印缓缓推向月尘里的纹路。",
       "enter": { "type": "fade", "duration": 0.6 },
       "camera": "static",
@@ -26,6 +27,7 @@
     {
       "id": "horizon",
       "type": "media",
+      "captionY": { "9:16": 0.36 },
       "intent": "想象中的月面插画：从脚印的尺度拉开到寂静的地平线。",
       "enter": { "type": "fade", "duration": 0.7 },
       "camera": "static",

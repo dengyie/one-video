@@ -334,7 +334,9 @@ export function compileTimeline({ config, script, storyboard, timings, assets, r
       sc.shots = stillShots(shots, times, sc.durationInFrames / fps, config.gates?.maxStill ?? MAX_STILL);
     }
   }
-  const captions = compileCaptions(scenes, config.captions, { root, usedAssets, fps, width, height });
+  const aspect = config.aspect ?? "16:9";
+  const captionY = new Map(storyboard.scenes.map((sc) => [sc.id, sc.captionY?.[aspect]]));
+  const captions = compileCaptions(scenes, config.captions, { root, usedAssets, fps, width, height, captionY });
   const last = scenes[scenes.length - 1];
   if (last) last.transitionOut = { type: normTransition(last.exit)?.type === "cut" ? "cut" : "fade", frames: normTransition(last.exit)?.type === "cut" ? 0 : Math.round(0.6 * fps), tail: 0, direction: "left", nextOpaque: false };
   if (sfxCfg.motion === "auto") {

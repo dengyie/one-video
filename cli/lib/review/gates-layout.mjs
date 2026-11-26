@@ -61,7 +61,7 @@ export function layoutGate(timeline, config) {
       // The band is checked through the whole overlap: a push-in partway through can carry the overlay into it.
       const inBand = (c, bx = box) => {
         const a = Math.max(o.t, c.start - sc.start), b = Math.min(o.end, c.end - sc.start);
-        for (let t = a; t < b; t += 0.25) if (meets(bx, captionBand(sc.shots, t, portrait, slot))) return true;
+        for (let t = a; t < b; t += 0.25) if (meets(bx, captionBand(sc.shots, t, portrait, slot, c.y))) return true;
         return false;
       };
       const bandHit = (bx) => sc.captions !== false && spoken.find((c) => c.scene === sc.id && (slot || !c.top) && inBand(c, bx));
