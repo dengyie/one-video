@@ -6,7 +6,7 @@
       "intent": "档案实拍：从发射塔底部看火箭带着尾焰升起。",
       "enter": "cut",
       "camera": "static",
-      "props": { "asset": "launch", "dim": 0, "ramp": [{ "at": 0, "speed": 2 }, { "at": 4.3, "speed": 3, "snap": false }] },
+      "props": { "asset": "launch", "portraitBackdropBlur": 34, "dim": 0, "ramp": [{ "at": 0, "speed": 2 }, { "at": 4.3, "speed": 3, "snap": false }] },
       "hold": 0.25
     },
     {
@@ -15,7 +15,7 @@
       "intent": "档案照片：由完整鞋印缓缓推向月尘里的纹路。",
       "enter": { "type": "fade", "duration": 0.6 },
       "camera": "static",
-      "props": { "asset": "bootprint", "fit": "contain", "motion": "none", "dim": 0 },
+      "props": { "asset": "bootprint", "fit": "contain", "portraitFit": "cover", "motion": "none", "dim": 0 },
       "shots": [
         { "at": 0, "x": 0.5, "y": 0.5, "zoom": 1 },
         { "at": { "phrase": "浅浅的鞋纹" }, "x": 0.51, "y": 0.54, "zoom": 1.11 },
@@ -29,8 +29,8 @@
       "intent": "想象中的月面插画：从脚印的尺度拉开到寂静的地平线。",
       "enter": { "type": "fade", "duration": 0.7 },
       "camera": "static",
-      "props": { "asset": "horizon", "fit": "contain", "motion": "none", "dim": 0 },
-      "shots": [{ "at": 0, "x": 0.5, "y": 0.474, "zoom": 1.06 }, { "at": 8.2, "x": 0.5, "y": 0.5, "zoom": 1 }],
+      "props": { "asset": "horizon", "fit": "contain", "portraitFit": "cover", "motion": "none", "dim": 0 },
+      "shots": [{ "at": 0, "x": 0.5, "y": 0.5, "zoom": 1.04 }, { "at": 8.2, "x": 0.5, "y": 0.5, "zoom": 1 }],
       "hold": 0.65
     }
   ]

@@ -76,15 +76,16 @@ export const TimelineScene: React.FC<{ title?: string; events: Event[] }> = ({ t
   );
 };
 
-export const MediaScene: React.FC<{ asset: string; caption?: string; title?: string; subtitle?: string; motion?: Motion; fit?: "cover" | "contain"; dim?: number; startFrom?: number; muted?: boolean }> = ({
-  asset, caption, title, subtitle, motion, fit, dim, startFrom, muted,
+export const MediaScene: React.FC<{ asset: string; caption?: string; title?: string; subtitle?: string; motion?: Motion; fit?: "cover" | "contain"; portraitFit?: "cover" | "contain"; dim?: number; startFrom?: number; muted?: boolean }> = ({
+  asset, caption, title, subtitle, motion, fit, portraitFit, dim, startFrom, muted,
 }) => {
   const theme = useTheme();
+  const { aspect } = useTimeline();
   const { u, pad, portrait, bottom } = useLayout();
   const o = easeOut((useTime() - 0.4) / 0.7);
   return (
     <>
-      <MediaFill asset={asset} motion={motion} fit={fit} dim={dim ?? (title ? 0.5 : 0.25)} startFrom={startFrom} muted={muted} />
+      <MediaFill asset={asset} motion={motion} fit={aspect === "9:16" ? (portraitFit ?? fit) : fit} dim={dim ?? (title ? 0.5 : 0.25)} startFrom={startFrom} muted={muted} />
       <Credit asset={asset} />
       {(title || subtitle || caption) && (
         <div style={{ position: "absolute", left: pad, right: pad, bottom: bottom + 20 * u, opacity: o, transform: `translateY(${(1 - o) * 24 * u}px)` }}>

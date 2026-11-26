@@ -129,9 +129,10 @@ test("mixed-source scenes dissolve across the visual cut without shifting narrat
   });
   assert.deepEqual(portrait.errors, []);
   assert.deepEqual([portrait.timeline.width, portrait.timeline.height], [1080, 1920]);
-  assert.deepEqual(portrait.timeline.scenes.slice(1).map((s) => [s.type, s.props.fit]), [
-    ["media", "contain"], ["media", "contain"],
+  assert.deepEqual(portrait.timeline.scenes.slice(1).map((s) => [s.type, s.props.fit, s.props.portraitFit]), [
+    ["media", "contain", "cover"], ["media", "contain", "cover"],
   ]);
+  assert.equal(portrait.timeline.scenes[0].props.portraitBackdropBlur, 34);
   assert.deepEqual(portrait.timeline.scenes.map((s) => s.transitionIn), scenes.map((s) => s.transitionIn));
   assert.deepEqual(portrait.timeline.narration, narration);
   assert.deepEqual(portrait.timeline.captions, captions);

@@ -80,15 +80,17 @@ function screenState(screen: ScreenInsert, t: number) {
 // Background revealed through vertical windows that open behind the subject (depth matte).
 type Windows = { asset: string; count?: number; t?: number; stagger?: number; gap?: number; matte?: Matte };
 
-export const FootageScene: React.FC<{ asset: string; startFrom?: number; ramp?: Ramp; dim?: number; title?: Title; tint?: string; screen?: ScreenInsert; windows?: Windows }> = ({
-  asset, startFrom = 0, ramp, dim = 0.12, title, tint, screen, windows,
+export const FootageScene: React.FC<{ asset: string; startFrom?: number; ramp?: Ramp; portraitBackdropBlur?: number; dim?: number; title?: Title; tint?: string; screen?: ScreenInsert; windows?: Windows }> = ({
+  asset, startFrom = 0, ramp, portraitBackdropBlur, dim = 0.12, title, tint, screen, windows,
 }) => {
   const tl = useTimeline();
   const { width, height } = useVideoConfig();
+  const { u } = useLayout();
   const t = useTime();
   const a = tl.assets[asset];
   if (!a) throw new Error(`asset "${asset}" not in timeline.assets`);
   const s = startFrom + rampTime(Math.max(0, t), ramp, tl.fps);
+  const blur = tl.aspect === "9:16" ? portraitBackdropBlur : undefined;
   const style: React.CSSProperties = { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" };
   const photo = a.kind === "video" ? (a.seq ? seqSrc(a, s) : null) : staticFile(a.src);
   const depth = depthSrc(a, s);
@@ -102,7 +104,8 @@ export const FootageScene: React.FC<{ asset: string; startFrom?: number; ramp?: 
   const n = windows?.count ?? 4, gap = windows?.gap ?? 0.02;
   return (
     <AbsoluteFill style={{ backgroundColor: "#000", overflow: "hidden" }}>
-      {base()}
+      {blur && base({ filter: `blur(${blur * u}px) brightness(0.48)`, transform: "scale(1.12)" })}
+      {base(blur ? { objectFit: "contain" } : undefined)}
       {ins && insOn > 0 && (
         <div style={{ position: "absolute", left: 0, top: 0, width, height, transformOrigin: "0 0", transform: quadMatrix(screen.corners.map(([x, y]) => [x * width, y * height]), width, height), mixBlendMode: (screen.blend ?? "screen") === "screen" ? "screen" : "normal", opacity: (screen.opacity ?? 1) * insOn }}>
           {(() => {
