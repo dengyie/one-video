@@ -153,6 +153,24 @@ test("Keeper holds the opening title before fading it out for the lighthouse rev
   }
 });
 
+test("Keeper fits its closing production credit on one line in both aspects", async () => {
+  const dir = join(ROOT, "examples", "keeper");
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...json(join(dir, "onevideo.json")), aspect };
+    const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
+    assert.deepEqual(errors, []);
+    const { width, height } = timeline;
+    const { props: { subtitle } } = timeline.scenes.find(({ id }) => id === "credits");
+    const portrait = aspect === "9:16", u = Math.min(width, height) / 1080;
+    const subtitleWidth = textEms(subtitle, 0.62) * (portrait ? 42 : 38) * u;
+    const room = 0.85 * (width - 2 * (portrait ? 64 : 96) * u);
+    assert.match(subtitle, /^OneVideo · .*绘制.*配乐$/);
+    assert.ok(subtitleWidth <= room, `${aspect}: keep the production credit on one line`);
+  }
+});
+
 test("Keeper shows the boat reaching the visible shore before the lamp reveal", async () => {
   const dir = join(ROOT, "examples", "keeper");
   const base = json(join(dir, "onevideo.json"));
