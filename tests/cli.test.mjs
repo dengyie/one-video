@@ -312,6 +312,7 @@ test("SpaceX Motion shows connectivity revenue between the total and share callo
     const { lines, overlays } = timeline.scenes.find((scene) => scene.id === "revenue");
     const [total, connectivity, share] = overlays;
     assert.equal(connectivity.text, "连接业务 $114亿");
+    assert.equal(share.text, "连接业务 > 60%", aspect + ": attribute the share to the connectivity segment");
     const said = phraseTime(lines, "114亿");
     assert.ok(said !== null && Math.abs(connectivity.t - (said - CUE_LEAD)) < 0.002, aspect + ": reveal the number on its spoken cue");
     assert.ok(total.end <= connectivity.t && connectivity.end <= share.t, aspect + ": keep the three callouts separate");
