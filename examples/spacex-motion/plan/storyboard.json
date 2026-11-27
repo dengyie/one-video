@@ -46,6 +46,9 @@
         "q": "凭什么",
         "trillion": "一万多亿"
       },
+      "sfx": [
+        { "sound": "ui-pop", "at": "凭什么" }
+      ],
       "shots": [
         {
           "at": 0,
@@ -97,11 +100,12 @@
           "type": "word",
           "text": "凭什么？",
           "style": "rise",
-          "at": "凭什么",
+          "at": { "phrase": "一家造火箭", "offset": 0.55 },
           "y": 0.62,
           "size": 130,
           "scrim": 0.85,
-          "duration": 0.8
+          "sfx": null,
+          "duration": 1.73
         },
         {
           "type": "word",
