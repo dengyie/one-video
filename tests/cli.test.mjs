@@ -109,6 +109,23 @@ test("Promo Demo shows the player after tapping the same chapter it captures", a
   }
 });
 
+test("Keeper holds the opening title before fading it out for the lighthouse reveal", async () => {
+  const dir = join(ROOT, "examples", "keeper");
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...json(join(dir, "onevideo.json")), aspect };
+    const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
+    assert.deepEqual(errors, []);
+    const { cues, props } = timeline.scenes.find((scene) => scene.id === "hook");
+    const title = props.elements.find(({ id }) => id === "title");
+    const [fadeOut] = title.to;
+    assert.equal(fadeOut.t, cues.night);
+    assert.ok(fadeOut.t - (title.t + title.fade) >= 1, `${aspect}: hold the title at full opacity for at least one second`);
+    assert.ok(elementAt(title, cues.one).opacity < 0.01, `${aspect}: clear the title for the lighthouse reveal`);
+  }
+});
+
 test("Keeper shows the boat reaching the visible shore before the lamp reveal", async () => {
   const dir = join(ROOT, "examples", "keeper");
   const base = json(join(dir, "onevideo.json"));
