@@ -9,6 +9,8 @@ import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { CUE_LEAD, phraseTime } from "../cli/lib/timeline/cues.mjs";
 import { racePeriods } from "../cli/lib/timeline/events.mjs";
 import { barRaceSwapDuration } from "../shared/bar-race.mjs";
+import { viewAt } from "../shared/camera.mjs";
+import { textEms } from "../shared/labels.mjs";
 import { boxOnScreen, cameraAt, elementAt, elementGeometry, horizonAt, onScreen, ridgeTop, stageOf, stateAt } from "../shared/tableau.mjs";
 import { resolveApiKey, viaApiBase, requireApiKey } from "../cli/lib/core/http.mjs";
 import { reviewSubject } from "../cli/lib/core/state.mjs";
@@ -296,6 +298,40 @@ test("Graphics Demo settles the equator distance on its spoken cue in both aspec
     assert.ok(said !== null && settled <= said && said < fade, aspect + ": show the full distance on its spoken cue");
     assert.ok(fade - settled >= 1, aspect + ": hold the full distance for at least one second");
     assert.ok(distance.end <= laps.t, aspect + ": clear the distance for the lap count");
+  }
+});
+
+test("Graphics Demo frames the Sun distance without crossing the source or hugging the edge", async () => {
+  const dir = join(ROOT, "examples", "graphics-demo");
+  const base = json(join(dir, "onevideo.json"));
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  const timings = await estimatedTimings(script, base);
+  for (const aspect of ["16:9", "9:16"]) {
+    const { timeline, errors } = compileTimeline({ config: { ...base, aspect }, script, storyboard, timings });
+    assert.deepEqual(errors, []);
+    const { width, height } = timeline;
+    const scene = timeline.scenes.find(({ id }) => id === "distance");
+    assert.equal(scene.type, "scale-compare");
+    const { t, ease } = scene.shots.at(-1);
+    const view = viewAt(scene.shots, t + ease);
+    const portrait = aspect === "9:16", u = Math.min(width, height) / 1080;
+    const pad = (portrait ? 64 : 96) * u;
+    const radius = portrait ? ((width - 2 * pad) * 0.58 - 80 * u) / 2 : height * 0.33;
+    const cx = (portrait ? pad + radius : width * 0.4);
+    const cy = height * (portrait ? 0.62 : 0.74) - radius;
+    const x = width / 2 + (cx - view.x * width) * view.zoom;
+    const y = height / 2 + (cy - view.y * height) * view.zoom;
+    const r = radius * view.zoom;
+    if (portrait) {
+      assert.ok(x - r >= pad / 2, "leave a margin left of the largest circle");
+    } else {
+      const sourceRight = pad + textEms(scene.header.subtitle, 0.55) * 25 * u;
+      const sourceBottom = 158 * u;
+      const sourceToCenter = Math.hypot(Math.max(0, x - sourceRight), Math.max(0, y - sourceBottom));
+      assert.ok(sourceToCenter - r >= 12 * u, "leave clearance between the Sun circle and source attribution");
+    }
+    assert.ok(scene.duration - t - ease >= 1, aspect + ": hold the settled chart long enough to read");
   }
 });
 
