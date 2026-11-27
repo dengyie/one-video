@@ -11,7 +11,7 @@ import { racePeriods } from "../cli/lib/timeline/events.mjs";
 import { barRaceSwapDuration } from "../shared/bar-race.mjs";
 import { viewAt } from "../shared/camera.mjs";
 import { textEms } from "../shared/labels.mjs";
-import { boxOnScreen, cameraAt, elementAt, elementGeometry, horizonAt, onScreen, ridgeTop, stageOf, stateAt } from "../shared/tableau.mjs";
+import { boxOnScreen, cameraAt, elementAt, elementGeometry, horizonAt, onScreen, ridgeDepth, ridgeTop, stageOf, stateAt } from "../shared/tableau.mjs";
 import { resolveApiKey, viaApiBase, requireApiKey } from "../cli/lib/core/http.mjs";
 import { reviewSubject } from "../cli/lib/core/state.mjs";
 import { fixPlan } from "../cli/lib/review/fixes.mjs";
@@ -942,6 +942,48 @@ test("Postman shows the whole illuminated town during the valley reveal", async 
       const { depth, box } = elementGeometry(stateAt(town, props.elements, t), frame);
       const [left, top, right, bottom] = boxOnScreen(cameraAt(props.camera, t), depth, box, kx);
       assert.ok(left >= 0.03 && right <= 0.97 && top >= 0.05 && bottom <= 0.8, aspect + " " + t.toFixed(2) + "s: keep the lit town in frame above the captions");
+    }
+  }
+});
+
+test("Postman's dawn sun rises clear of the ridges before the credits", async () => {
+  const dir = join(ROOT, "examples", "postman");
+  const base = json(join(dir, "onevideo.json"));
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...base, aspect };
+    const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
+    assert.deepEqual(errors, []);
+    const { duration, props, transitionOut } = timeline.scenes.find(({ id }) => id === "dawn");
+    const { elements, camera } = props;
+    const frame = { W: timeline.width, H: timeline.height };
+    const { kx } = stageOf(frame.W, frame.H);
+    const sun = elements.find(({ id }) => id === "sun");
+    const hills = elements.find(({ type }) => type === "hills");
+    const sunAndCrest = (t) => {
+      const cam = cameraAt(camera, t);
+      const { depth, box } = elementGeometry(stateAt(sun, elements, t), frame);
+      const [left, top, right, bottom] = boxOnScreen(cam, depth, box, kx);
+      const ridge = stateAt(hills, elements, t);
+      const crest = Math.min(...Array.from({ length: ridge.layers }, (_, k) => {
+        const layer = ridgeDepth(ridge, k);
+        const [x0] = onScreen(cam, layer, [0, 0], kx);
+        const [x1] = onScreen(cam, layer, [1, 0], kx);
+        return Math.min(...[left, (left + right) / 2, right].map((x) => {
+          const worldX = (x - x0) / (x1 - x0);
+          return onScreen(cam, layer, [worldX, ridgeTop(ridge, k, worldX).y], kx)[1];
+        }));
+      }));
+      return { left, top, right, bottom, crest };
+    };
+    const opening = sunAndCrest(0);
+    assert.ok(opening.top > opening.crest, `${aspect}: begin behind the mountains`);
+    const dip = duration - (transitionOut.frames - transitionOut.tail) / timeline.fps;
+    for (let i = 1; i <= timeline.fps; i++) {
+      const { left, top, right, bottom, crest } = sunAndCrest(dip - i / timeline.fps);
+      assert.ok(left >= 0.05 && right <= 0.95 && top >= 0.05 && bottom < crest,
+        `${aspect}: keep the full sun above the mountains and in frame for one second before the dip`);
     }
   }
 });

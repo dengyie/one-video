@@ -108,7 +108,7 @@
           { "id": "pines", "wind": 0.2 },
           { "id": "pines2", "wind": 0.2 },
           { "id": "town", "lit": 0.5, "to": [{ "cue": "all", "dur": 3, "lit": 0.2 }] },
-          { "id": "sun", "type": "sun", "x": 0.3, "y": 0.62, "r": 0.05, "to": [{ "cue": "day", "dur": 8, "y": 0.42 }] },
+          { "id": "sun", "type": "sun", "x": 0.42, "y": 0.62, "r": 0.05, "to": [{ "cue": "day", "dur": 5.2, "y": 0.35 }] },
           { "id": "birds", "opacity": 1, "x": 0.7, "y": 0.3, "facing": -1, "cue": "all", "fade": 1 },
           { "id": "postman", "opacity": 0 },
           { "id": "zhou", "type": "figure", "x": 0.4, "y": 0.92, "size": 0.16, "depth": 0.8, "lantern": 0, "facing": 1, "to": [{ "cue": "in", "dur": 4, "x": 0.52 }] }
