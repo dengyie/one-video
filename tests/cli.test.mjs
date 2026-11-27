@@ -170,6 +170,11 @@ test("Keeper has the new lighthouse lamp framed when the narration reveals it", 
     assert.ok(reveal !== null);
     const lamp = props.elements.find((el) => el.id === "lamp2");
     assert.equal(lamp.t, cues.more);
+    const closeUp = props.camera.find(({ cue }) => cue === "after");
+    const pullback = props.camera.find(({ cue }) => cue === "hung");
+    const settled = Math.max(lamp.t + lamp.fade, closeUp.t + closeUp.dur);
+    assert.ok(settled <= reveal && reveal < pullback.t, `${aspect}: show the lit lamp in the settled close-up on cue`);
+    assert.ok(pullback.t - settled >= 1, `${aspect}: hold the fully lit close-up for at least one second`);
     for (const t of [reveal, reveal + 0.45]) {
       const { depth, box } = elementGeometry(stateAt(lamp, props.elements, t), frame);
       const [left, top, right, bottom] = boxOnScreen(cameraAt(props.camera, t), depth, box, stageOf(frame.W, frame.H).kx);

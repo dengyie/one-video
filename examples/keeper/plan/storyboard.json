@@ -645,7 +645,7 @@
       "cues": {
         "dawn": "天亮的时候",
         "after": "从那以后",
-        "more": "多了一盏灯",
+        "more": { "phrase": "多了一盏灯", "offset": -0.52 },
         "hung": "是船上的人"
       },
       "props": {
@@ -723,7 +723,7 @@
             "type": "fire",
             "r": 0.012,
             "cue": "more",
-            "fade": 1,
+            "fade": 0.32,
             "intensity": 0.7,
             "on": "lh",
             "anchor": "gallery",
@@ -742,7 +742,7 @@
           {
             "cue": "after",
             "zoom": 1.55,
-            "dur": 1.05,
+            "dur": 0.9,
             "on": "lamp2",
             "place": [0.59, 0.37]
           },
