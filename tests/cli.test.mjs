@@ -445,6 +445,28 @@ test("SpaceX Motion holds the opening question before revealing the valuation", 
   }
 });
 
+test("SpaceX Motion settles its closing market cap comparison on the spoken valuation", () => {
+  const dir = join(ROOT, "examples", "spacex-motion");
+  const read = (p) => json(join(dir, p));
+  const script = read("plan/script.json"), storyboard = read("plan/storyboard.json"), assets = read("plan/assets.json");
+  for (const asset of assets.items) asset.file = `assets/${asset.id}`;
+  const timings = json(join(ROOT, "tests", "fixtures", "spacex-motion-timings.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const { timeline, errors } = compileTimeline({ config: { ...read("onevideo.json"), aspect }, script, storyboard, assets, timings });
+    assert.deepEqual(errors, []);
+    const { duration, transitionOut, lines, props } = timeline.scenes.find((scene) => scene.id === "ipo");
+    const cap = props.items.find((item) => item.id === "cap");
+    const comparison = props.path.at(-1);
+    const said = phraseTime(lines, "2.1万亿");
+    const settled = Math.max(cap.t + 1.1, comparison.t + comparison.fly);
+    const fade = duration - (transitionOut.frames - transitionOut.tail) / timeline.fps;
+    assert.ok(comparison.focus.includes(cap.id));
+    assert.ok(cap.t > phraseTime(lines, "19%"), aspect + ": introduce market cap after the prior statistic");
+    assert.ok(said !== null && settled <= said, aspect + ": show the final bar and number on the spoken valuation");
+    assert.ok(fade - settled >= 1, aspect + ": keep the final valuation readable for at least one second");
+  }
+});
+
 test("SpaceX Motion shows connectivity revenue between the total and share callouts", () => {
   const dir = join(ROOT, "examples", "spacex-motion");
   const read = (p) => json(join(dir, p));
