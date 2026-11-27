@@ -89,7 +89,7 @@
           { "at": 0, "zoom": 1.7, "sway": 0.3, "on": "town" },
           { "cue": "people", "zoom": 2, "dur": 2, "sway": 0.3, "on": "town" },
           { "cue": "wide", "on": "town", "place": [0.5, 0.6], "zoom": 0.8, "dur": 2.15, "sway": 0.3 },
-          { "cue": "see", "zoom": 2, "dur": 2.2, "on": "postman" }
+          { "cue": "see", "zoom": 2, "dur": 0.4, "on": "postman" }
         ]
       },
       "hold": 1

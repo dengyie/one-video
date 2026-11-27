@@ -747,6 +747,30 @@ test("Postman's windows light up during the spoken lighting line", async () => {
   }
 });
 
+test("Postman holds on Zhou's reaction before dipping to dawn", async () => {
+  const dir = join(ROOT, "examples", "postman");
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...json(join(dir, "onevideo.json")), aspect };
+    const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
+    assert.deepEqual(errors, []);
+    const { duration, lines, props, transitionOut } = timeline.scenes.find(({ id }) => id === "lights");
+    const shot = props.camera.at(-1);
+    assert.equal(shot.cue, "see");
+    const settled = shot.t + shot.dur;
+    const dipStart = duration - (transitionOut.frames - transitionOut.tail) / timeline.fps;
+    assert.ok(settled <= lines.at(-1).end, `${aspect}: reach the close-up while the narrator says Zhou saw the town`);
+    assert.ok(dipStart - settled >= 1, `${aspect}: give the reaction one second before the dip starts`);
+    const frame = { W: timeline.width, H: timeline.height };
+    const postman = props.elements.find(({ id }) => id === "postman");
+    const { depth, box } = elementGeometry(stateAt(postman, props.elements, settled), frame);
+    const camera = cameraAt(props.camera, settled);
+    const [left, top, right, bottom] = boxOnScreen(camera, depth, box, stageOf(frame.W, frame.H).kx);
+    assert.ok(left >= 0.05 && right <= 0.95 && top >= 0.05 && bottom <= 0.75, `${aspect}: keep Zhou in frame above the caption`);
+  }
+});
+
 test("Postman shows the whole illuminated town during the valley reveal", async () => {
   const dir = join(ROOT, "examples", "postman");
   const script = json(join(dir, "plan", "script.json"));
