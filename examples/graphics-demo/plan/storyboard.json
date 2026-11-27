@@ -210,7 +210,8 @@
       "cues": {
         "moon": "月球过来",
         "sun": "太阳过来",
-        "wait": "要8分19秒"
+        "wait": "要8分19秒",
+        "comparison": { "phrase": "要8分19秒", "offset": 1.15 }
       },
       "props": {
         "items": [
@@ -239,7 +240,8 @@
             },
             "label": "太阳 → 地球",
             "color": "#FACC15",
-            "cue": "sun"
+            "cue": "sun",
+            "offset": -0.35
           },
           {
             "id": "bar-moon",
@@ -255,7 +257,8 @@
               "decimals": 1
             },
             "label": "月光",
-            "cue": "wait"
+            "cue": "comparison",
+            "offset": -0.4
           },
           {
             "id": "bar-sun",
@@ -271,8 +274,8 @@
             },
             "label": "阳光",
             "color": "#FACC15",
-            "cue": "wait",
-            "offset": 0.3
+            "cue": "comparison",
+            "offset": -0.1
           }
         ],
         "links": [
@@ -295,14 +298,15 @@
             "fly": 0.5
           },
           {
-            "cue": "wait",
+            "cue": "comparison",
             "focus": [
               "moon",
               "sun",
               "bar-moon",
               "bar-sun"
             ],
-            "fly": 1.1
+            "fly": 0.55,
+            "snap": false
           }
         ]
       },
@@ -319,9 +323,10 @@
           "snap": false
         },
         {
-          "cue": "wait",
+          "cue": "comparison",
           "zoom": 1.04,
-          "ease": 1.5
+          "ease": 0.55,
+          "snap": false
         }
       ],
       "overlays": [
