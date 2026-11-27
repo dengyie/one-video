@@ -276,7 +276,7 @@ test("Graphics Demo keeps the seconds conversion above the cards during the pull
   }
 });
 
-test("SpaceX Motion clears the opening title before the ticker lands", () => {
+test("SpaceX Motion clears the opening title and holds the ticker long enough to read", () => {
   const dir = join(ROOT, "examples", "spacex-motion");
   const read = (p) => json(join(dir, p));
   const script = read("plan/script.json"), storyboard = read("plan/storyboard.json"), assets = read("plan/assets.json");
@@ -289,6 +289,10 @@ test("SpaceX Motion clears the opening title before the ticker lands", () => {
     const title = hook.props.title;
     const ticker = hook.overlays.find((overlay) => overlay.text === "SPCX");
     assert.ok(title.t + title.duration + 0.3 <= ticker.t, `${aspect}: the title including its exit must end before SPCX`);
+    assert.equal(ticker.t, hook.cues.spcx, `${aspect}: land on the ticker's spoken cue`);
+    assert.ok(ticker.end - 0.3 - (ticker.t + 0.47) >= 1, `${aspect}: hold the ticker at full size and opacity for at least one second`);
+    const question = hook.overlays.find((overlay) => overlay.text === "凭什么？");
+    assert.ok(ticker.end <= question.t, `${aspect}: clear the ticker before the question`);
   }
 });
 
