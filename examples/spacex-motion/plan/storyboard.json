@@ -354,7 +354,8 @@
           "at": "187亿",
           "y": 0.42,
           "size": 200,
-          "duration": 1.6
+          "duration": 1.9,
+          "scrim": 1
         },
         {
           "type": "word",
