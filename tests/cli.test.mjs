@@ -320,6 +320,9 @@ test("SpaceX Motion shows connectivity revenue between the total and share callo
     assert.deepEqual(errors, []);
     const { lines, overlays } = timeline.scenes.find((scene) => scene.id === "revenue");
     const [total, connectivity, share] = overlays;
+    assert.equal(total.text, "$187亿");
+    assert.ok(total.scrim > 0, aspect + ": keep the total legible over the bright liftoff footage without luma sidecars");
+    assert.ok(total.end - 0.3 - (total.t + 0.47) >= 1, aspect + ": hold the total at full size and opacity for at least one second");
     assert.equal(connectivity.text, "连接业务 $114亿");
     assert.equal(share.text, "连接业务 > 60%", aspect + ": attribute the share to the connectivity segment");
     const said = phraseTime(lines, "114亿");
