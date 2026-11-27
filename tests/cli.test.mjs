@@ -368,11 +368,15 @@ test("SpaceX Motion shows connectivity revenue between the total and share callo
     assert.ok(total.scrim > 0, aspect + ": keep the total legible over the bright liftoff footage without luma sidecars");
     assert.ok(total.end - 0.3 - (total.t + 0.47) >= 1, aspect + ": hold the total at full size and opacity for at least one second");
     assert.equal(connectivity.text, "连接业务 $114亿");
+    assert.equal(connectivity.style, "rise");
     assert.equal(share.text, "连接业务 > 60%", aspect + ": attribute the share to the connectivity segment");
     const said = phraseTime(lines, "114亿");
-    assert.ok(said !== null && Math.abs(connectivity.t - (said - CUE_LEAD)) < 0.002, aspect + ": reveal the number on its spoken cue");
+    const settled = connectivity.t + 0.4;
+    const fade = connectivity.end - 0.3;
+    assert.ok(said !== null && settled <= said && said < fade, aspect + ": show the complete number on its spoken cue");
     assert.ok(total.end <= connectivity.t && connectivity.end <= share.t, aspect + ": keep the three callouts separate");
     assert.ok(connectivity.end - connectivity.t >= 1, aspect + ": keep the breakdown readable");
+    assert.ok(fade - settled >= 1, aspect + ": keep the breakdown fully visible for at least one second");
   }
 });
 
