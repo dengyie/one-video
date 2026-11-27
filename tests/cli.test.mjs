@@ -646,6 +646,27 @@ test("postman example: an inland world compiles clean, the walker keeps to the n
   ]);
 });
 
+test("Postman shows the town under a readable title while introducing it", async () => {
+  const dir = join(ROOT, "examples", "postman");
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...json(join(dir, "onevideo.json")), aspect };
+    const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
+    assert.deepEqual(errors, []);
+    const { lines, props } = timeline.scenes.find((scene) => scene.id === "hook");
+    const t = lines.find(({ text }) => text.includes("小镇")).end - 0.2;
+    const frame = { W: timeline.width, H: timeline.height };
+    const town = props.elements.find(({ id }) => id === "town");
+    const title = props.elements.find(({ id }) => id === "title");
+    const { depth, box } = elementGeometry(stateAt(town, props.elements, t), frame);
+    const [left, , right, bottom] = boxOnScreen(cameraAt(props.camera, t), depth, box, stageOf(frame.W, frame.H).kx);
+    const visibleWidth = Math.min(1, right) - Math.max(0, left);
+    assert.ok(visibleWidth >= 0.8 * (right - left) && bottom <= 0.76, aspect + ": frame the town above the captions during its introduction");
+    assert.ok(title.to[0].t - (title.t + title.fade) >= 1, aspect + ": hold the opening title at full opacity for at least one second");
+  }
+});
+
 test("Postman pulls back to the valley before cutting attention back to the lantern", async () => {
   const dir = join(ROOT, "examples", "postman");
   const script = json(join(dir, "plan", "script.json"));
