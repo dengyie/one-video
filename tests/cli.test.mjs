@@ -309,6 +309,29 @@ test("Graphics Demo keeps its final light-travel comparison compact in portrait"
   assert.ok(span <= 1350, "the portrait pullback should not shrink the comparison across a wide gap");
 });
 
+test("Graphics Demo starts the Moon card early enough to read before the Sun move", async () => {
+  const dir = join(ROOT, "examples", "graphics-demo");
+  const base = json(join(dir, "onevideo.json"));
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  const timings = await estimatedTimings(script, base);
+  for (const aspect of ["16:9", "9:16"]) {
+    const { timeline, errors } = compileTimeline({ config: { ...base, aspect }, script, storyboard, timings });
+    assert.deepEqual(errors, []);
+    const { props, lines } = timeline.scenes.find(({ id }) => id === "travel");
+    const moon = props.items.find(({ id }) => id === "moon");
+    const [opening, sun] = props.path;
+    assert.equal(opening.focus, moon.id);
+    assert.equal(moon.value, 1.3);
+    assert.equal(moon.t, 0, aspect + ": start counting as soon as the Moon close-up opens");
+    const settled = moon.t + 1.1;
+    const said = phraseTime(lines, "1.3秒");
+    assert.ok(said !== null && settled <= said && said < sun.t, aspect + ": show the settled card on its spoken cue");
+    assert.ok(Math.ceil(sun.t * timeline.fps) - Math.ceil(settled * timeline.fps) >= timeline.fps,
+      aspect + ": hold the fully counted card in close-up for at least one second of frames");
+  }
+});
+
 test("Graphics Demo keeps the seconds conversion above the cards during the pullback", async () => {
   const dir = join(ROOT, "examples", "graphics-demo");
   const script = json(join(dir, "plan", "script.json"));
