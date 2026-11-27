@@ -185,6 +185,27 @@ test("Keeper has the new lighthouse lamp framed when the narration reveals it", 
   }
 });
 
+test("Keeper's lighthouse is dark when the narrator says the lamp went out", async () => {
+  const dir = join(ROOT, "examples", "keeper");
+  const base = json(join(dir, "onevideo.json"));
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...base, aspect };
+    const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
+    assert.deepEqual(errors, []);
+    const storm = timeline.scenes.find(({ id }) => id === "storm");
+    const lamp = storm.props.elements.find(({ id }) => id === "lh");
+    const outage = phraseTime(storm.lines, "灭了");
+    assert.ok(outage !== null);
+    const { fps } = timeline;
+    assert.ok(elementAt(lamp, storm.cues.dark - 1 / fps).lit >= 0.8, `${aspect}: keep the lamp flickering before the outage`);
+    for (let frame = Math.floor(outage * fps); frame < storm.duration * fps; frame++) {
+      assert.equal(elementAt(lamp, frame / fps).lit, 0, `${aspect}: keep the lamp and its beam off from the spoken outage`);
+    }
+  }
+});
+
 test("Keeper lights the coat beside the keeper, not on the far side of the lighthouse", async () => {
   const dir = join(ROOT, "examples", "keeper");
   const base = json(join(dir, "onevideo.json"));
