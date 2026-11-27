@@ -22,7 +22,7 @@
             "camera": "page"
           },
           {
-            "at": 2.2,
+            "at": { "phrase": "页面里", "offset": 0.7 },
             "camera": "device"
           }
         ]

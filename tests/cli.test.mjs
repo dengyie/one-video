@@ -42,6 +42,31 @@ test("Promo Demo keeps its URL readable after the short CTA narration", async ()
   assert.ok(fadeStart - cta.lines[0].end >= 1, "leave the URL readable after the spoken CTA");
 });
 
+test("Promo Demo holds the opening page close-up through the spoken page cue", async () => {
+  const dir = join(ROOT, "examples", "promo-demo");
+  const config = json(join(dir, "onevideo.json"));
+  const [storyboard, script, assets] = ["storyboard", "script", "assets"].map((name) => json(join(dir, "plan", `${name}.json`)));
+  for (const item of assets.items) {
+    item.file = `assets/${item.id}.png`;
+    item.rects = Object.fromEntries(Object.keys(item.capture.selectors).map((name) => [name, [0.1, 0.4, 0.8, 0.1]]));
+  }
+  const timings = await estimatedTimings(script, config);
+  const cameraMove = 0.6;
+  for (const aspect of ["16:9", "9:16"]) {
+    const { timeline, errors } = compileTimeline({ config: { ...config, aspect }, storyboard, script, assets, timings });
+    assert.deepEqual(errors, []);
+    const hook = timeline.scenes.find(({ id }) => id === "hook");
+    const [closeUp, pullback] = hook.props.steps;
+    assert.equal(closeUp.camera, "page");
+    assert.equal(pullback.camera, "device");
+    const settled = closeUp.t + cameraMove;
+    const pageCue = phraseTime(hook.lines, "页面里");
+    assert.ok(pageCue !== null && settled <= pageCue && pullback.t >= pageCue + 0.4, `${aspect}: stay close on the spoken page cue`);
+    assert.ok(pullback.t - settled >= 1, `${aspect}: hold the settled close-up for at least one second`);
+    assert.ok(pullback.t + cameraMove <= hook.duration, `${aspect}: restore the full phone before the next scene`);
+  }
+});
+
 test("Promo Demo captures the detail page for the same card the storyboard taps", () => {
   const plan = join(ROOT, "examples", "promo-demo", "plan");
   const { props } = json(join(plan, "storyboard.json")).scenes.find((scene) => scene.id === "open");
