@@ -365,10 +365,10 @@
           "type": "word",
           "text": "连接业务 $114亿",
           "style": "rise",
-          "at": "114亿",
+          "at": { "phrase": "114亿", "offset": -0.23 },
           "y": 0.42,
           "size": 120,
-          "duration": 1.65,
+          "duration": 1.8,
           "scrim": 0.85,
           "sfx": null
         },
