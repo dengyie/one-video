@@ -100,10 +100,10 @@
           "type": "word",
           "text": "≈ 4 万公里 / 圈",
           "style": "rise",
-          "at": "4万公里",
+          "at": { "phrase": "4万公里", "offset": -0.33 },
           "y": 0.16,
           "size": 64,
-          "duration": 2.4
+          "duration": 2.73
         },
         {
           "type": "word",

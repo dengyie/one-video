@@ -272,6 +272,28 @@ test("SpaceX IPO keeps the xAI valuation labeled after the IPO point arrives", a
   }
 });
 
+test("Graphics Demo settles the equator distance on its spoken cue in both aspects", async () => {
+  const dir = join(ROOT, "examples", "graphics-demo");
+  const base = json(join(dir, "onevideo.json"));
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  const timings = await estimatedTimings(script, base);
+  for (const aspect of ["16:9", "9:16"]) {
+    const { timeline, errors } = compileTimeline({ config: { ...base, aspect }, script, storyboard, timings });
+    assert.deepEqual(errors, []);
+    const { lines, overlays } = timeline.scenes.find(({ id }) => id === "earth");
+    const distance = overlays.find(({ text }) => text === "≈ 4 万公里 / 圈");
+    const laps = overlays.find(({ text }) => text === "× 7.5");
+    assert.equal(distance.style, "rise");
+    const said = phraseTime(lines, "4万公里");
+    const settled = distance.t + 0.4;
+    const fade = distance.end - 0.3;
+    assert.ok(said !== null && settled <= said && said < fade, aspect + ": show the full distance on its spoken cue");
+    assert.ok(fade - settled >= 1, aspect + ": hold the full distance for at least one second");
+    assert.ok(distance.end <= laps.t, aspect + ": clear the distance for the lap count");
+  }
+});
+
 test("Graphics Demo keeps its final light-travel comparison compact in portrait", async () => {
   const dir = join(ROOT, "examples", "graphics-demo");
   const config = { ...json(join(dir, "onevideo.json")), aspect: "9:16" };
