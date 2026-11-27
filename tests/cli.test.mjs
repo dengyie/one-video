@@ -260,9 +260,18 @@ test("Graphics Demo keeps the seconds conversion above the cards during the pull
     const config = { ...json(join(dir, "onevideo.json")), aspect };
     const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
     assert.deepEqual(errors, []);
-    const { props, overlays } = timeline.scenes.find((scene) => scene.id === "travel");
+    const { props, cues, duration, overlays } = timeline.scenes.find((scene) => scene.id === "travel");
+    const sun = props.path.find(({ focus }) => focus === "sun");
+    const sunCard = props.items.find(({ id }) => id === "sun");
+    const pullback = props.path.at(-1);
+    const readable = Math.max(sun.t + sun.fly, sunCard.t + 1.1);
+    assert.ok(pullback.t - readable >= 1, aspect + ": hold the sharp, fully counted 499-second card for at least one second");
+    assert.ok(duration - (pullback.t + pullback.fly) >= 0.6, aspect + ": leave time to read the full comparison");
+    const barsSettled = Math.max(...props.items.filter(({ type }) => type === "bar").map(({ t }) => t + 1.1));
+    assert.ok(duration - barsSettled >= 0.5, aspect + ": let the bars settle on the same values as the cards before the scene turns");
     const conversion = overlays.find(({ text }) => text === "= 8 分 19 秒");
-    assert.equal(conversion.t, props.path.at(-1).t);
+    assert.equal(conversion.t, cues.wait);
+    assert.ok(conversion.t < pullback.t && conversion.end >= pullback.t + pullback.fly, aspect + ": keep the conversion visible from its spoken cue through the pullback");
     assert.ok(conversion.y >= 0.1 && conversion.y <= 0.15, aspect + ": keep the conversion in the upper band during the move");
   }
 });
