@@ -350,7 +350,8 @@
       },
       "intent": "极光缓缓流动，结论逐行浮现，最后一句落在“八分多钟前”",
       "cues": {
-        "sun": "太阳",
+        "sun": { "phrase": "太阳", "offset": -0.48 },
+        "agoText": { "phrase": "八分多钟前", "offset": -0.62 },
         "ago": "八分多钟前"
       },
       "props": {
@@ -364,7 +365,7 @@
           {
             "text": "早已是八分多钟前",
             "style": "blur",
-            "cue": "ago",
+            "cue": "agoText",
             "size": 0.95,
             "emphasis": [
               "八分多钟前"

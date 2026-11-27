@@ -361,6 +361,30 @@ test("Graphics Demo keeps the seconds conversion above the cards during the pull
   }
 });
 
+test("Graphics Demo settles both closing lines on their spoken cues", async () => {
+  const dir = join(ROOT, "examples", "graphics-demo");
+  const base = json(join(dir, "onevideo.json"));
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  const timings = await estimatedTimings(script, base);
+  const words = new Intl.Segmenter("zh", { granularity: "word" });
+  for (const aspect of ["16:9", "9:16"]) {
+    const { timeline, errors } = compileTimeline({ config: { ...base, aspect }, script, storyboard, timings });
+    assert.deepEqual(errors, []);
+    const scene = timeline.scenes.find(({ id }) => id === "outro");
+    const fade = scene.duration - (scene.transitionOut.frames - scene.transitionOut.tail) / timeline.fps;
+    for (const [i, phrase] of ["太阳", "八分多钟前"].entries()) {
+      const line = scene.props.lines[i];
+      assert.ok(line.text.includes(phrase));
+      assert.equal(line.style, i === 0 ? "rise" : "blur");
+      const spoken = phraseTime(scene.lines, phrase);
+      const settled = scene.cues[line.cue] + ([...words.segment(line.text)].length - 1) * 0.07 + 0.4;
+      assert.ok(spoken !== null && settled <= spoken, `${aspect}: show the full line on “${phrase}”`);
+      assert.ok(fade - settled >= 1, `${aspect}: hold the full line through the conclusion`);
+    }
+  }
+});
+
 test("SpaceX Motion clears the opening title and holds the ticker long enough to read", () => {
   const dir = join(ROOT, "examples", "spacex-motion");
   const read = (p) => json(join(dir, p));
