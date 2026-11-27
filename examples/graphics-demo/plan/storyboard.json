@@ -275,7 +275,7 @@
             "label": "阳光",
             "color": "#FACC15",
             "cue": "comparison",
-            "offset": -0.1
+            "offset": -0.35
           }
         ],
         "links": [

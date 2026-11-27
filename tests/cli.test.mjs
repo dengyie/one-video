@@ -267,6 +267,8 @@ test("Graphics Demo keeps the seconds conversion above the cards during the pull
     const readable = Math.max(sun.t + sun.fly, sunCard.t + 1.1);
     assert.ok(pullback.t - readable >= 1, aspect + ": hold the sharp, fully counted 499-second card for at least one second");
     assert.ok(duration - (pullback.t + pullback.fly) >= 0.6, aspect + ": leave time to read the full comparison");
+    const barsSettled = Math.max(...props.items.filter(({ type }) => type === "bar").map(({ t }) => t + 1.1));
+    assert.ok(duration - barsSettled >= 0.5, aspect + ": let the bars settle on the same values as the cards before the scene turns");
     const conversion = overlays.find(({ text }) => text === "= 8 分 19 秒");
     assert.equal(conversion.t, cues.wait);
     assert.ok(conversion.t < pullback.t && conversion.end >= pullback.t + pullback.fly, aspect + ": keep the conversion visible from its spoken cue through the pullback");
