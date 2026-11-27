@@ -198,6 +198,24 @@ test("Keeper lights the coat beside the keeper, not on the far side of the light
   }
 });
 
+test("SpaceX IPO holds the opening ticker fully visible on cue before the question", () => {
+  const { config, script, storyboard, fetchedAssets: assets, timings } = example();
+  for (const aspect of ["16:9", "9:16"]) {
+    const { timeline, errors } = compileTimeline({ config: { ...config, aspect }, script, storyboard, assets, timings });
+    assert.deepEqual(errors, []);
+    const { lines, overlays } = timeline.scenes.find(({ id }) => id === "hook");
+    const [ticker, question] = overlays;
+    assert.equal(ticker.text, "交易代码 SPCX");
+    assert.equal(ticker.style, "rise");
+    const said = phraseTime(lines, "代码SPCX");
+    const settled = ticker.t + 0.4;
+    const fade = ticker.end - 0.3;
+    assert.ok(said !== null && settled <= said && said < fade, `${aspect}: show the full ticker on its spoken cue`);
+    assert.ok(fade - settled >= 1, `${aspect}: hold the full ticker for at least one second`);
+    assert.ok(ticker.end <= question.t, `${aspect}: clear the ticker for the opening question`);
+  }
+});
+
 test("SpaceX IPO lands chart details on their narration in both aspects", async () => {
   const { config: base, script, storyboard, fetchedAssets: assets } = example();
   for (const aspect of ["16:9", "9:16"]) {
