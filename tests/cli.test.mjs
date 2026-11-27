@@ -9,7 +9,7 @@ import { compileTimeline } from "../cli/lib/timeline/index.mjs";
 import { CUE_LEAD, phraseTime } from "../cli/lib/timeline/cues.mjs";
 import { racePeriods } from "../cli/lib/timeline/events.mjs";
 import { barRaceSwapDuration } from "../shared/bar-race.mjs";
-import { boxOnScreen, cameraAt, elementAt, elementGeometry, ridgeTop, stageOf, stateAt } from "../shared/tableau.mjs";
+import { boxOnScreen, cameraAt, elementAt, elementGeometry, horizonAt, onScreen, ridgeTop, stageOf, stateAt } from "../shared/tableau.mjs";
 import { resolveApiKey, viaApiBase, requireApiKey } from "../cli/lib/core/http.mjs";
 import { reviewSubject } from "../cli/lib/core/state.mjs";
 import { fixPlan } from "../cli/lib/review/fixes.mjs";
@@ -106,6 +106,35 @@ test("Promo Demo shows the player after tapping the same chapter it captures", a
     assert.ok(tapped.t < switched.t && switched.t - tapped.t <= 0.3, `${aspect}: switch the player promptly after tapping`);
     assert.ok(switched.t < phraseTime(scene.lines, "跳过去"), `${aspect}: show the seek as it is narrated`);
     assert.ok(scene.duration - switched.t >= 1, `${aspect}: hold the new player time long enough to read`);
+  }
+});
+
+test("Keeper shows the boat reaching the visible shore before the lamp reveal", async () => {
+  const dir = join(ROOT, "examples", "keeper");
+  const base = json(join(dir, "onevideo.json"));
+  const script = json(join(dir, "plan", "script.json"));
+  const storyboard = json(join(dir, "plan", "storyboard.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...base, aspect };
+    const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
+    assert.deepEqual(errors, []);
+    const { lines, props } = timeline.scenes.find(({ id }) => id === "home");
+    const line = lines.find(({ text }) => text.includes("靠了岸"));
+    const shore = phraseTime(lines, "靠了岸");
+    assert.ok(line && shore !== null);
+    const frame = { W: timeline.width, H: timeline.height };
+    const { kx } = stageOf(frame.W, frame.H);
+    const state = (id, t) => stateAt(props.elements.find((el) => el.id === id), props.elements, t);
+    const gaps = [0.6, shore, line.end - 0.05].map((t) => {
+      const cam = cameraAt(props.camera, t);
+      const cliff = state("cliff", t);
+      const [shoreX] = onScreen(cam, cliff.depth, [cliff.x, cliff.y], kx);
+      const { depth, box } = elementGeometry(state("boat", t), { ...frame, horizon: horizonAt(props.elements, t) });
+      const [left, top, right, bottom] = boxOnScreen(cam, depth, box, kx);
+      assert.ok(shoreX >= 0.08 && left > shoreX && right <= 0.95 && top >= 0 && bottom <= 1, `${aspect} at ${t}: keep the boat and shore in frame`);
+      return left - shoreX;
+    });
+    assert.ok(gaps[0] - gaps[2] >= 0.035 && gaps[2] < 0.27, `${aspect}: move the boat close to shore before the line ends`);
   }
 });
 
