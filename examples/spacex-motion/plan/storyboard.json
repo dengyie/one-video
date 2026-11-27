@@ -224,8 +224,7 @@
             },
             "label": "首日收盘市值",
             "color": "#FBBF24",
-            "cue": "cap",
-            "offset": 0.3
+            "at": { "phrase": "2.1万亿", "offset": -0.95 }
           }
         ],
         "links": [
@@ -274,7 +273,7 @@
               "raise",
               "cap"
             ],
-            "fly": 1.1
+            "fly": 0.75
           }
         ]
       },
