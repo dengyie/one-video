@@ -261,6 +261,9 @@ test("Graphics Demo keeps the seconds conversion above the cards during the pull
     const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
     assert.deepEqual(errors, []);
     const { props, overlays } = timeline.scenes.find((scene) => scene.id === "travel");
+    const sun = props.path.find(({ focus }) => focus === "sun");
+    const pullback = props.path.at(-1);
+    assert.ok(pullback.t - (sun.t + sun.fly) >= 1 / 6, aspect + ": hold the sun card in focus before pulling back");
     const conversion = overlays.find(({ text }) => text === "= 8 分 19 秒");
     assert.equal(conversion.t, props.path.at(-1).t);
     assert.ok(conversion.y >= 0.1 && conversion.y <= 0.15, aspect + ": keep the conversion in the upper band during the move");

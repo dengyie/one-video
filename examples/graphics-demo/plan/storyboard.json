@@ -292,7 +292,7 @@
             "cue": "sun",
             "focus": "sun",
             "zoom": 1.4,
-            "fly": 1
+            "fly": 0.5
           },
           {
             "cue": "wait",
