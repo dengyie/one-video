@@ -330,6 +330,27 @@ test("SpaceX Motion keeps a local scrim on featured words over the launch plume"
   }
 });
 
+test("SpaceX Motion holds the opening question before revealing the valuation", () => {
+  const dir = join(ROOT, "examples", "spacex-motion");
+  const read = (p) => json(join(dir, p));
+  const script = read("plan/script.json"), storyboard = read("plan/storyboard.json"), assets = read("plan/assets.json");
+  for (const asset of assets.items) asset.file = `assets/${asset.id}`;
+  const timings = json(join(ROOT, "tests", "fixtures", "spacex-motion-timings.json"));
+  for (const aspect of ["16:9", "9:16"]) {
+    const { timeline, errors } = compileTimeline({ config: { ...read("onevideo.json"), aspect }, script, storyboard, assets, timings });
+    assert.deepEqual(errors, []);
+    const [{ cues, overlays }] = timeline.scenes;
+    const [ticker, question, valuation] = overlays;
+    assert.equal(question.text, "凭什么？");
+    assert.equal(question.style, "rise");
+    assert.equal(valuation.text, "$1T+");
+    assert.equal(valuation.t, cues.trillion, `${aspect}: keep the answer on its narration cue`);
+    assert.ok(ticker.end <= question.t && question.end <= valuation.t, `${aspect}: keep the three callouts separate`);
+    assert.ok(question.t + 0.4 <= cues.q && cues.q <= question.end - 0.3, `${aspect}: keep the question fully visible on its narration cue`);
+    assert.ok(question.end - 0.3 - (question.t + 0.4) >= 1, `${aspect}: hold the question fully visible for at least one second`);
+  }
+});
+
 test("SpaceX Motion shows connectivity revenue between the total and share callouts", () => {
   const dir = join(ROOT, "examples", "spacex-motion");
   const read = (p) => json(join(dir, p));
