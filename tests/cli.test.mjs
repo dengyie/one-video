@@ -348,6 +348,8 @@ test("SpaceX Motion holds the opening question before revealing the valuation", 
     assert.ok(ticker.end <= question.t && question.end <= valuation.t, `${aspect}: keep the three callouts separate`);
     assert.ok(question.t + 0.4 <= cues.q && cues.q <= question.end - 0.3, `${aspect}: keep the question fully visible on its narration cue`);
     assert.ok(question.end - 0.3 - (question.t + 0.4) >= 1, `${aspect}: hold the question fully visible for at least one second`);
+    const questionSounds = timeline.sfx.filter(({ at }) => at >= question.t && at < valuation.t);
+    assert.deepEqual(questionSounds.map(({ at, sound }) => ({ at, sound })), [{ at: cues.q, sound: "ui-pop" }], `${aspect}: preserve the spoken beat without adding a cut impact`);
   }
 });
 
