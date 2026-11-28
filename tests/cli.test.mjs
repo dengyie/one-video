@@ -67,6 +67,26 @@ test("Promo Demo holds the opening page close-up through the spoken page cue", a
   }
 });
 
+test("Promo Demo keeps the opening phone close-up clear of device labels without dropping narration captions", async () => {
+  const dir = join(ROOT, "examples", "promo-demo");
+  const base = json(join(dir, "onevideo.json"));
+  const [storyboard, script, assets] = ["storyboard", "script", "assets"].map((name) => json(join(dir, "plan", `${name}.json`)));
+  const hook = storyboard.scenes.find(({ id }) => id === "hook");
+  const home = assets.items.find(({ id }) => id === hook.props.screens[0].asset);
+  home.file = "assets/home.png";
+  home.rects = { player: [0.1, 0.1, 0.8, 0.3] };
+  const opening = { scenes: script.scenes.filter(({ id }) => id === hook.id) };
+  const timings = await estimatedTimings(opening, base);
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...base, aspect };
+    const { timeline, errors } = compileTimeline({ config, storyboard: { scenes: [hook] }, script: opening, assets: { items: [home] }, timings });
+    assert.deepEqual(errors, []);
+    const [scene] = timeline.scenes;
+    assert.equal(scene.props.caption, undefined, `${aspect}: no device label over the page`);
+    assert.ok(timeline.captions.enabled && scene.captions && phraseTime(scene.lines, "页面里") !== null);
+  }
+});
+
 test("Promo Demo captures the detail page for the same card the storyboard taps", () => {
   const plan = join(ROOT, "examples", "promo-demo", "plan");
   const { props } = json(join(plan, "storyboard.json")).scenes.find((scene) => scene.id === "open");

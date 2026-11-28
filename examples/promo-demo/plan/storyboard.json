@@ -8,7 +8,6 @@
       "props": {
         "device": "phone",
         "url": "vedio.mangoqwq.com",
-        "caption": "一个链接",
         "screens": [
           {
             "id": "home",
