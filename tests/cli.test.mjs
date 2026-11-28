@@ -365,6 +365,25 @@ test("SpaceX IPO keeps the xAI valuation labeled after the IPO point arrives", a
   }
 });
 
+test("SpaceX IPO lays out its narrated closing quote by clause in both aspects", async () => {
+  const { config: base, script, storyboard, fetchedAssets: assets } = example();
+  for (const aspect of ["16:9", "9:16"]) {
+    const config = { ...base, aspect };
+    const { timeline, errors } = compileTimeline({ config, script, storyboard, assets, timings: await estimatedTimings(script, config) });
+    assert.deepEqual(errors, []);
+    const { props, captions } = timeline.scenes.find(({ id }) => id === "landing");
+    const clauses = props.text.split("\n");
+    const narration = script.scenes.find(({ id }) => id === "landing").narration;
+    assert.deepEqual(clauses, narration.match(/[^，。]+[，。]/g));
+    assert.ok(clauses.length > 1 && !captions, `${aspect}: the quote still replaces its duplicate narration captions`);
+    const portrait = aspect === "9:16";
+    const u = Math.min(timeline.width, timeline.height) / 1080;
+    const width = (timeline.width - 2 * (portrait ? 64 : 96) * u) * 0.86;
+    assert.ok(clauses.every((clause) => textEms(clause) * (portrait ? 58 : 64) * u <= width),
+      `${aspect}: fit each authored clause on one line`);
+  }
+});
+
 test("Graphics Demo settles the equator distance on its spoken cue in both aspects", async () => {
   const dir = join(ROOT, "examples", "graphics-demo");
   const base = json(join(dir, "onevideo.json"));
