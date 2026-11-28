@@ -539,7 +539,7 @@
       "type": "quote",
       "hold": 1.2,
       "props": {
-        "text": "市场为它支付的，不是今天的利润，而是对太空互联网的想象。"
+        "text": "市场为它支付的，\n不是今天的利润，\n而是对太空互联网的想象。"
       },
       "backdrop": {
         "asset": "black-marble",
