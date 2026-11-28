@@ -10,7 +10,9 @@ import { CUE_LEAD, phraseTime } from "../cli/lib/timeline/cues.mjs";
 import { racePeriods } from "../cli/lib/timeline/events.mjs";
 import { barRaceSwapDuration } from "../shared/bar-race.mjs";
 import { viewAt } from "../shared/camera.mjs";
+import { captionWindows } from "../shared/caption-timing.mjs";
 import { textEms } from "../shared/labels.mjs";
+import { authoredCaptionBox } from "../shared/safe-layout.mjs";
 import { boxOnScreen, cameraAt, elementAt, elementGeometry, horizonAt, onScreen, ridgeDepth, ridgeTop, stageOf, stateAt } from "../shared/tableau.mjs";
 import { resolveApiKey, viaApiBase, requireApiKey } from "../cli/lib/core/http.mjs";
 import { reviewSubject } from "../cli/lib/core/state.mjs";
@@ -1080,7 +1082,7 @@ test("Postman stays in frame while he delivers the letters at dawn", async () =>
     const config = { ...json(join(dir, "onevideo.json")), aspect };
     const { timeline, errors } = compileTimeline({ config, script, storyboard, timings: await estimatedTimings(script, config) });
     assert.deepEqual(errors, []);
-    const { cues, duration, props } = timeline.scenes.find((scene) => scene.id === "dawn");
+    const { cues, duration, props, start } = timeline.scenes.find((scene) => scene.id === "dawn");
     const frame = { W: timeline.width, H: timeline.height };
     const { kx } = stageOf(frame.W, frame.H);
     const zhou = props.elements.find(({ id }) => id === "zhou");
@@ -1088,6 +1090,20 @@ test("Postman stays in frame while he delivers the letters at dawn", async () =>
       const { depth, box } = elementGeometry(stateAt(zhou, props.elements, t), frame);
       const [left, top, right, bottom] = boxOnScreen(cameraAt(props.camera, t), depth, box, kx);
       assert.ok(left >= 0.05 && right <= 0.95 && top >= 0.05 && bottom <= 0.95, aspect + " " + t.toFixed(2) + "s: keep Zhou inside the frame");
+    }
+    const portrait = aspect === "9:16";
+    const u = Math.min(frame.W, frame.H) / 1080;
+    const captions = timeline.captions.items.filter(({ scene }) => scene === "dawn");
+    assert.ok(timeline.captions.enabled && captions.length > 0);
+    for (const window of captionWindows(captions)) {
+      const [, , , plateHeight] = authoredCaptionBox(window.item.text, 0, frame.W, frame.H, portrait);
+      const captionTop = 1 - (portrait ? 300 : 46) * u / frame.H - plateHeight;
+      for (let f = Math.ceil(window.start * timeline.fps); f < window.end * timeline.fps; f++) {
+        const t = f / timeline.fps - start;
+        const { depth, box } = elementGeometry(stateAt(zhou, props.elements, t), frame);
+        const [, , , bottom] = boxOnScreen(cameraAt(props.camera, t), depth, box, kx);
+        assert.ok(bottom <= captionTop - 0.02, `${aspect} ${t.toFixed(2)}s: keep Zhou above the narration captions`);
+      }
     }
   }
 });
